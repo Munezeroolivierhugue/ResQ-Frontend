@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Polyline, Tooltip } from 'react-leaflet'
 import { Bot, CheckCircle, AlertTriangle, ChevronRight } from 'lucide-react'
+import FieldLabel from '../../components/ui/FieldLabel'
 import { useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../../store/themeStore'
 import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
@@ -149,7 +150,7 @@ export default function AIDispatchEngine() {
 
           {/* Alternatives */}
           <div className="mb-4">
-            <div className="text-[12px] font-bold text-(--text-muted) tracking-[0.08em] uppercase mb-2">Alternatives</div>
+            <FieldLabel className="mb-2">Alternatives</FieldLabel>
             {alternatives.map(alt => (
               <div key={alt.unit} className="bg-(--bg-elevated) border border-(--border) rounded-xl px-3.5 py-3 mb-2 flex items-center gap-3">
                 <div className="flex-1">

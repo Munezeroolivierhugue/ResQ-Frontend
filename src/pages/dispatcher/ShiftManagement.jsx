@@ -78,7 +78,7 @@ export default function ShiftManagement() {
               <thead>
                 <tr className="bg-(--bg-base)">
                   {['Officer', 'Role', 'Status', 'Incidents', 'Break'].map(col => (
-                    <th key={col} className="px-3.5 py-2 text-left text-[10px] font-bold text-(--text-muted) tracking-[0.08em] uppercase border-b border-(--border)" style={{ fontFamily: 'var(--font-display)' }}>{col}</th>
+                    <th key={col} className="px-3.5 py-2 text-left field-label border-b border-(--border)">{col}</th>
                   ))}
                 </tr>
               </thead>

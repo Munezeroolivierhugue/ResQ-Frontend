@@ -14,7 +14,7 @@ export default function MyProfile() {
   const handleSave = () => { setSaved(true); setTimeout(() => setSaved(false), 2000) }
 
   return (
-    <div className="p-6 max-w-[720px] mx-auto">
+    <div className="p-6">
 
       <div className="mb-6">
         <div className="flex items-center gap-1.5 mb-1">
@@ -62,7 +62,7 @@ export default function MyProfile() {
             { label: 'Station',       key: 'station' },
           ].map(f => (
             <div key={f.key}>
-              <label className="text-[11px] text-(--text-secondary) block mb-1.25 font-semibold tracking-[0.04em] uppercase">{f.label}</label>
+              <label className="field-label block mb-1.25">{f.label}</label>
               <input
                 className="h-10 w-full bg-(--bg-input) border border-(--border) rounded-lg px-3 text-[13px] text-(--text-primary) outline-none focus:border-(--accent) focus:shadow-[0_0_0_3px_var(--accent-ghost)] transition-all"
                 style={{ fontFamily: 'var(--font-body)' }}

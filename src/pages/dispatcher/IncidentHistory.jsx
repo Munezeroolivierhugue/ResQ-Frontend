@@ -80,7 +80,7 @@ export default function IncidentHistory() {
           <thead>
             <tr className="bg-(--bg-base)">
               {['ID', 'Severity', 'Type', 'District / Sector', 'Reported', 'Response Time', 'Resolution Time', 'Units', 'SLA'].map(col => (
-                <th key={col} className="px-3.5 py-2.5 text-left text-[11px] font-bold text-(--text-muted) tracking-[0.08em] uppercase border-b border-(--border) whitespace-nowrap">{col}</th>
+                <th key={col} className="px-3.5 py-2.5 text-left field-label border-b border-(--border) whitespace-nowrap">{col}</th>
               ))}
             </tr>
           </thead>
