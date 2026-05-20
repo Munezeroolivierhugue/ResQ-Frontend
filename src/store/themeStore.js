@@ -1,14 +1,23 @@
 import { create } from 'zustand'
 
-const saved = localStorage.getItem('resq-theme') || 'dark'
-document.documentElement.setAttribute('data-theme', saved)
+const applyTheme = (theme) => {
+  document.documentElement.setAttribute('data-theme', theme)
+  localStorage.setItem('resq-theme', theme)
+}
+
+const saved = localStorage.getItem('resq-theme') || 'light'
+applyTheme(saved)
 
 export const useThemeStore = create((set) => ({
   theme: saved,
+  setTheme: (theme) => {
+    if (theme !== 'light' && theme !== 'dark') return
+    applyTheme(theme)
+    set({ theme })
+  },
   toggle: () => set((s) => {
     const next = s.theme === 'dark' ? 'light' : 'dark'
-    document.documentElement.setAttribute('data-theme', next)
-    localStorage.setItem('resq-theme', next)
+    applyTheme(next)
     return { theme: next }
   }),
 }))
