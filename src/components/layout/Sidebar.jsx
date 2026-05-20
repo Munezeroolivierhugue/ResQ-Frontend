@@ -1,6 +1,6 @@
 import { useLocation, Link } from 'react-router-dom'
 import {
-  Map, Zap, Bot, ClipboardList, ScrollText, Users, User,
+  Map, Zap, Bot, Radio, ScrollText, Users, User,
   Settings, HelpCircle, LogOut, Siren, X,
 } from 'lucide-react'
 
@@ -8,13 +8,13 @@ const NAV_ITEMS = [
   { icon: Map,           label: 'Live Dispatch Map',  href: '/dispatcher' },
   { icon: Zap,           label: 'New Incident',        href: '/dispatcher/new-incident' },
   { icon: Bot,           label: 'AI Dispatch Engine',  href: '/dispatcher/ai-engine' },
-  { icon: ClipboardList, label: 'Incident Queue',      href: '/dispatcher/queue' },
+  { icon: Radio,         label: 'Active Incident',     href: '/dispatcher/active-incident' },
   { icon: ScrollText,    label: 'Incident History',    href: '/dispatcher/history' },
   { icon: Users,         label: 'Shift Management',    href: '/dispatcher/shifts' },
 ]
 
 const BOTTOM_ITEMS = [
-  { icon: Settings,   label: 'Settings', href: '#' },
+  { icon: Settings,   label: 'Settings', href: '/dispatcher/settings' },
   { icon: HelpCircle, label: 'Help',     href: '#' },
   { icon: LogOut,     label: 'Logout',   href: '/login', danger: true },
 ]
@@ -85,17 +85,26 @@ export default function Sidebar({ mobileOpen, onClose }) {
       <div className="sidebar-bottom">
         {BOTTOM_ITEMS.map(item => {
           const Icon = item.icon
+          const isSettings = item.href === '/dispatcher/settings'
+          const isActive = isSettings && location.pathname === '/dispatcher/settings'
           return (
-            <div key={item.label} className="sidebar-item-wrap">
-              <a
-                href={item.href}
-                className="sidebar-item"
+            <div key={item.label} className={`sidebar-item-wrap${isActive ? ' active' : ''}`}>
+              {isActive && (
+                <>
+                  <span className="sidebar-cutout sidebar-cutout-top" />
+                  <span className="sidebar-cutout sidebar-cutout-bottom" />
+                </>
+              )}
+              <Link
+                to={item.href}
+                className={`sidebar-item${isActive ? ' active' : ''}`}
                 title={item.label}
+                onClick={onClose}
                 style={{ color: item.danger ? 'var(--status-critical)' : undefined }}
               >
                 <span className="sidebar-icon"><Icon size={18} /></span>
                 <span className="sidebar-label">{item.label}</span>
-              </a>
+              </Link>
             </div>
           )
         })}

@@ -11,7 +11,13 @@ export default function AppShell({ user }) {
       {mobileOpen && <div className="sidebar-overlay" onClick={() => setMobileOpen(false)} />}
       <Sidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
       <div className="flex flex-col flex-1 overflow-hidden min-w-0">
-        <Navbar user={user} onMenuClick={() => setMobileOpen(v => !v)} />
+        <Navbar
+          user={user}
+          onMenuClick={() => setMobileOpen(v => !v)}
+          portalLabel="Dispatcher Portal"
+          profileHref="/dispatcher/profile"
+          settingsHref="/dispatcher/settings"
+        />
         <main className="flex-1 overflow-auto bg-(--bg-base)">
           <Outlet />
         </main>

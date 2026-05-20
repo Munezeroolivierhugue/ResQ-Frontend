@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Sun, Moon, Bell, Search, ChevronDown, User, LogOut, Settings, AlertTriangle, Cpu, RefreshCw, Menu } from 'lucide-react'
-import { useThemeStore } from '../../store/themeStore'
+import { Bell, Search, ChevronDown, User, LogOut, Settings, AlertTriangle, Cpu, RefreshCw, Menu } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 const notifications = [
   { id: 1, type: 'alert',  title: 'Critical Incident', desc: 'INC-2403 — Fire in Nyamirambo',   time: '2m ago',  read: false },
@@ -11,8 +11,13 @@ const notifications = [
 const notifIcon  = { alert: AlertTriangle, system: Cpu, update: RefreshCw }
 const notifColor = { alert: 'var(--status-critical)', system: 'var(--status-medium)', update: 'var(--status-info)' }
 
-export default function Navbar({ user = { name: 'Jean Bosco', role: 'DISPATCHER' }, onMenuClick }) {
-  const { theme, toggle } = useThemeStore()
+export default function Navbar({
+  user = { name: 'Jean Bosco', role: 'DISPATCHER' },
+  onMenuClick,
+  portalLabel = 'Dispatcher Portal',
+  profileHref = '/dispatcher/profile',
+  settingsHref = '/dispatcher/settings',
+}) {
   const [showNotif, setShowNotif] = useState(false)
   const [showUser,  setShowUser]  = useState(false)
   const unread = notifications.filter(n => !n.read).length
@@ -26,7 +31,7 @@ export default function Navbar({ user = { name: 'Jean Bosco', role: 'DISPATCHER'
 
       <div className="navbar-portal-label shrink-0">
         <span className="text-[13px] font-bold text-(--text-primary) tracking-[0.08em] uppercase" style={{ fontFamily: 'var(--font-display)' }}>
-          Dispatcher Portal
+          {portalLabel}
         </span>
       </div>
 
@@ -42,10 +47,6 @@ export default function Navbar({ user = { name: 'Jean Bosco', role: 'DISPATCHER'
       </div>
 
       <div className="flex items-center gap-0.5 ml-auto">
-
-        <button className="p-1.75 rounded-md bg-transparent border-none cursor-pointer flex items-center justify-center text-(--text-secondary) hover:bg-(--bg-elevated) hover:text-(--text-primary) transition-colors" onClick={toggle} aria-label="Toggle theme">
-          {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
-        </button>
 
         <div className="relative">
           <button
@@ -108,16 +109,16 @@ export default function Navbar({ user = { name: 'Jean Bosco', role: 'DISPATCHER'
           {showUser && (
             <div className="animate-fade-in-up absolute right-0 top-[46px] w-44 bg-(--bg-elevated) border border-(--border) rounded-[10px] z-[200] overflow-hidden shadow-[var(--shadow-dropdown)]">
               {[
-                { icon: <User size={14} />,    label: 'My Profile', href: '/dispatcher/profile' },
-                { icon: <Settings size={14} />, label: 'Settings',   href: '#' },
+                { icon: <User size={14} />,    label: 'My Profile', href: profileHref },
+                { icon: <Settings size={14} />, label: 'Settings',   href: settingsHref },
                 { icon: <LogOut size={14} />,   label: 'Logout',     href: '/login', danger: true },
               ].map(item => (
-                <a key={item.label} href={item.href}
+                <Link key={item.label} to={item.href}
                   className="flex items-center gap-2.25 px-3.5 py-2.5 text-[13px] font-medium no-underline hover:bg-(--bg-surface) transition-colors"
                   style={{ color: item.danger ? 'var(--status-critical)' : 'var(--text-primary)' }}
                 >
                   {item.icon} {item.label}
-                </a>
+                </Link>
               ))}
             </div>
           )}
