@@ -29,6 +29,39 @@ export const mockShiftOfficers = [
   { id: 'OFF-05', name: 'Eric Nshimiyimana', role: 'Dispatcher', status: 'offline', incidents: 0, onBreak: false },
 ]
 
+/** Recent calls shown on New Incident intake sidebar (demo). */
+export const mockRecentCalls = [
+  {
+    id: 'RSE-1102',
+    time: '14:02:11',
+    title: 'Cardiac Arrest',
+    summary: 'Elderly male, unconscious — Nyamirambo. Bystander CPR in progress.',
+    active: true,
+  },
+  {
+    id: 'RSE-1098',
+    time: '13:47:33',
+    title: 'MVA — Multi Vehicle',
+    summary: 'Three vehicles, possible injuries — KG 11 Ring Road. Smoke reported.',
+    active: false,
+  },
+  {
+    id: 'RSE-1095',
+    time: '13:22:01',
+    title: 'Water Main Burst',
+    summary: 'Flooding on main street; schools notified. Public works en route.',
+    active: false,
+  },
+  {
+    id: 'RSE-1088',
+    time: '12:15:44',
+    title: 'Cat in Tree (Resolved)',
+    summary: 'Low priority; owner on scene. Unit cleared without deployment.',
+    active: false,
+    resolved: true,
+  },
+]
+
 export const mockHistoryIncidents = [
   { id: 'INC-2380', type: 'Medical', severity: 'critical', district: 'Gasabo', sector: 'Kimironko', reported: '2025-01-14 08:12', resolutionTime: '18m', responseTime: '6m', target: '8m', units: ['AMB-07'], status: 'resolved' },
   { id: 'INC-2381', type: 'Fire', severity: 'high', district: 'Nyarugenge', sector: 'Muhima', reported: '2025-01-14 09:45', resolutionTime: '42m', responseTime: '11m', target: '10m', units: ['FTK-02', 'FTK-05'], status: 'resolved' },
