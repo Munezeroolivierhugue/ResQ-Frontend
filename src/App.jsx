@@ -6,7 +6,8 @@ import NewIncident from './pages/dispatcher/NewIncident'
 import AIDispatchEngine from './pages/dispatcher/AIDispatchEngine'
 import ActiveIncident from './pages/dispatcher/ActiveIncident'
 import IncidentHistory from './pages/dispatcher/IncidentHistory'
-import ShiftManagement from './pages/dispatcher/ShiftManagement'
+import IncidentClosure from './pages/dispatcher/IncidentClosure'
+import ShiftHandover from './pages/dispatcher/ShiftHandover'
 import MyProfile from './pages/dispatcher/MyProfile'
 import DispatcherSettings from './pages/dispatcher/Settings'
 import AdminSettings from './pages/admin/AdminSettings'
@@ -48,7 +49,9 @@ export default function App() {
           <Route path="active-incident" element={<ActiveIncident />} />
           <Route path="queue" element={<Navigate to="/dispatcher/active-incident" replace />} />
           <Route path="history" element={<IncidentHistory />} />
-          <Route path="shifts" element={<ShiftManagement />} />
+          <Route path="incident-report" element={<IncidentClosure />} />
+          <Route path="shift-handover" element={<ShiftHandover />} />
+          <Route path="shifts" element={<Navigate to="/dispatcher/shift-handover" replace />} />
           <Route path="profile" element={<MyProfile />} />
           <Route path="settings" element={<DispatcherSettings />} />
         </Route>

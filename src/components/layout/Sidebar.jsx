@@ -1,6 +1,6 @@
 import { useLocation, Link } from 'react-router-dom'
 import {
-  Map, Zap, Bot, Radio, ScrollText, Users, User,
+  Map, Zap, Bot, Radio, ScrollText, FileCheck, ClipboardList, User,
   Settings, HelpCircle, LogOut, Siren, X,
 } from 'lucide-react'
 
@@ -10,7 +10,8 @@ const NAV_ITEMS = [
   { icon: Bot,           label: 'AI Dispatch Engine',  href: '/dispatcher/ai-engine' },
   { icon: Radio,         label: 'Active Incident',     href: '/dispatcher/active-incident' },
   { icon: ScrollText,    label: 'Incident History',    href: '/dispatcher/history' },
-  { icon: Users,         label: 'Shift Management',    href: '/dispatcher/shifts' },
+  { icon: FileCheck,     label: 'Incident Report',     href: '/dispatcher/incident-report' },
+  { icon: ClipboardList, label: 'Shift Handover',      href: '/dispatcher/shift-handover' },
 ]
 
 const BOTTOM_ITEMS = [
