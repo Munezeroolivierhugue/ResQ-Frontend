@@ -7,7 +7,7 @@ export const ORGANIZATIONS = [
 
 export const ASSIGNED_ROLES = [
   { value: 'dispatcher', label: 'Dispatcher', portal: '/dispatcher' },
-  { value: 'operations_manager', label: 'Operations Manager', portal: '/dispatcher' },
+  { value: 'ops_manager', label: 'Operations Manager', portal: '/ops-manager/dashboard' },
   { value: 'emergency_planner', label: 'Emergency Planner', portal: '/dispatcher' },
   { value: 'field_responder', label: 'Field Responder', portal: '/dispatcher' },
   { value: 'analyst', label: 'Analyst', portal: '/dispatcher' },
@@ -55,7 +55,7 @@ export const mockInvitedUsers = [
     fullName: 'Patrick Nshimiyimana',
     email: 'p.nshimiyimana@rnp.gov.rw',
     phone: '+250788112233',
-    role: 'operations_manager',
+    role: 'ops_manager',
     status: 'active',
     invitedAt: '2026-05-12',
   },

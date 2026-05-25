@@ -1,11 +1,26 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Siren, ArrowRight, ShieldCheck } from 'lucide-react'
+import { setDemoRole } from '../../utils/authSession'
 import signupImage from '../../assets/signup_Image.png'
+
+const DEMO_PORTALS = [
+  { label: 'Dispatcher', value: 'dispatcher', href: '/dispatcher' },
+  { label: 'Operations Manager', value: 'ops_manager', href: '/ops-manager/dashboard' },
+  { label: 'Super Admin', value: 'admin', href: '/admin' },
+]
 
 /** Login-only demo portal switcher — remove when backend is wired. */
 export function DemoPortalDropdown({ inline = false }) {
   const [open, setOpen] = useState(false)
+  const navigate = useNavigate()
+
+  const enterPortal = (portal) => {
+    setDemoRole(portal.value)
+    sessionStorage.setItem('resq-trusted-device', 'true')
+    setOpen(false)
+    navigate(portal.href)
+  }
 
   return (
     <div className={`auth-demo-dropdown relative${inline ? ' auth-demo-dropdown--inline' : ''}`}>
@@ -30,20 +45,16 @@ export function DemoPortalDropdown({ inline = false }) {
             onClick={() => setOpen(false)}
           />
           <div className="auth-demo-dropdown-menu" role="listbox">
-            <Link
-              to="/admin"
-              className="auth-demo-dropdown-item"
-              onClick={() => setOpen(false)}
-            >
-              Admin portal
-            </Link>
-            <Link
-              to="/dispatcher"
-              className="auth-demo-dropdown-item auth-demo-dropdown-item--accent"
-              onClick={() => setOpen(false)}
-            >
-              Dispatcher portal
-            </Link>
+            {DEMO_PORTALS.map((portal) => (
+              <button
+                key={portal.value}
+                type="button"
+                className={`auth-demo-dropdown-item w-full text-left${portal.value === 'dispatcher' ? ' auth-demo-dropdown-item--accent' : ''}`}
+                onClick={() => enterPortal(portal)}
+              >
+                {portal.label}
+              </button>
+            ))}
           </div>
         </>
       )}
