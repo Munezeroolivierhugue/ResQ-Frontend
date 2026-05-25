@@ -1,6 +1,6 @@
 import { useLocation, Link } from 'react-router-dom'
 import {
-  Map, Zap, Bot, Radio, ScrollText, FileCheck, ClipboardList, User,
+  Map, Zap, Bot, Radio, ScrollText, FileCheck, ClipboardList,
   Settings, HelpCircle, LogOut, Siren, X,
 } from 'lucide-react'
 import SidebarToggle from './SidebarToggle'
@@ -47,7 +47,6 @@ function NavItem({ item, isActive, onClose }) {
 
 export default function Sidebar({ mobileOpen, onClose }) {
   const location = useLocation()
-  const isProfileActive = location.pathname === '/dispatcher/profile'
   const sidebarClasses = useSidebarClasses(mobileOpen)
 
   return (
@@ -74,13 +73,6 @@ export default function Sidebar({ mobileOpen, onClose }) {
           return <NavItem key={item.href} item={item} isActive={isActive} onClose={onClose} />
         })}
 
-        <div className="sidebar-section-label" style={{ paddingTop: 14 }}>Account</div>
-
-        <NavItem
-          item={{ icon: User, label: 'My Profile', href: '/dispatcher/profile' }}
-          isActive={isProfileActive}
-          onClose={onClose}
-        />
       </nav>
 
       {/* Bottom pinned */}
@@ -88,7 +80,7 @@ export default function Sidebar({ mobileOpen, onClose }) {
         {BOTTOM_ITEMS.map(item => {
           const Icon = item.icon
           const isSettings = item.href === '/dispatcher/settings'
-          const isActive = isSettings && location.pathname === '/dispatcher/settings'
+          const isActive = isSettings && location.pathname.startsWith('/dispatcher/settings')
           return (
             <div key={item.label} className={`sidebar-item-wrap${isActive ? ' active' : ''}`}>
               {isActive && (

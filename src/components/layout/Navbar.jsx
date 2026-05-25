@@ -7,7 +7,7 @@ export default function Navbar({
   user = { name: 'Jean Bosco', role: 'DISPATCHER' },
   onMenuClick,
   portalLabel = 'Dispatcher Portal',
-  profileHref = '/dispatcher/profile',
+  profileHref = '/dispatcher/settings/profile',
   settingsHref = '/dispatcher/settings',
 }) {
   const [showNotif, setShowNotif] = useState(false)

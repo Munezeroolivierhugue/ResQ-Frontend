@@ -15,8 +15,8 @@ export default function AppShell({ user }) {
           user={user}
           onMenuClick={() => setMobileOpen(v => !v)}
           portalLabel="Dispatcher Portal"
-          profileHref="/dispatcher/profile"
-          settingsHref="/dispatcher/settings"
+          profileHref="/dispatcher/settings/profile"
+          settingsHref="/dispatcher/settings/profile"
         />
         <main className="flex-1 overflow-auto bg-(--bg-base)">
           <Outlet />
