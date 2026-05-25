@@ -10,6 +10,9 @@ import IncidentClosure from './pages/dispatcher/IncidentClosure'
 import ShiftHandover from './pages/dispatcher/ShiftHandover'
 import MyProfile from './pages/dispatcher/MyProfile'
 import DispatcherSettings from './pages/dispatcher/Settings'
+import DispatchImmediate from './pages/dispatcher/DispatchImmediate'
+import Notifications from './pages/dispatcher/Notifications'
+import DispatcherRoute from './components/layout/DispatcherRoute'
 import AdminSettings from './pages/admin/AdminSettings'
 import Login from './pages/auth/Login'
 import LoginMfa from './pages/auth/LoginMfa'
@@ -54,6 +57,10 @@ export default function App() {
           <Route path="shifts" element={<Navigate to="/dispatcher/shift-handover" replace />} />
           <Route path="profile" element={<MyProfile />} />
           <Route path="settings" element={<DispatcherSettings />} />
+          <Route path="notifications" element={<Notifications />} />
+          <Route element={<DispatcherRoute />}>
+            <Route path="dispatch-immediate/:incidentId" element={<DispatchImmediate />} />
+          </Route>
         </Route>
 
         <Route path="/" element={<Navigate to="/login" replace />} />
