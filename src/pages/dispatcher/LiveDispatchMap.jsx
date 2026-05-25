@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { MapContainer, TileLayer, CircleMarker, Tooltip } from 'react-leaflet'
 import { useThemeStore } from '../../store/themeStore'
-import { Radio, Ambulance, Truck, ShieldCheck, Bus } from 'lucide-react'
+import { Radio, Ambulance, Truck, ShieldCheck, Bus, Zap } from 'lucide-react'
+import { getCriticalUnassignedIncident } from '../../data/mockDispatchImmediateData'
 import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
 import { RWANDA_CENTER, RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../components/map/rwandaConstants'
 import { mockIncidents, mockUnits } from '../../data/mockData'
@@ -73,9 +75,10 @@ export default function LiveDispatchMap() {
   const deployed      = mockUnits.filter(u => u.status === 'deployed').length
   const available     = mockUnits.filter(u => u.status === 'available').length
   const filteredUnits = (unitFilter === 'All' ? mockUnits : mockUnits.filter(u => u.status === unitFilter.toLowerCase())).slice(0, 5)
+  const criticalIncident = getCriticalUnassignedIncident()
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
 
       {/* Status bar */}
       <div className="h-[46px] bg-(--bg-surface) border-b border-(--border) flex items-center px-1.5 shrink-0">
@@ -183,6 +186,26 @@ export default function LiveDispatchMap() {
           </div>
         </div>
       </div>
+
+      {criticalIncident && (
+        <Link
+          to={`/dispatcher/dispatch-immediate/${criticalIncident.id}`}
+          className="dispatch-immediate-fab fixed z-50 inline-flex items-center gap-2 no-underline font-bold text-[12px] uppercase tracking-wide transition-opacity hover:opacity-90"
+          style={{
+            bottom: '2rem',
+            right: '1.5rem',
+            padding: '0.75rem 1.25rem',
+            borderRadius: 8,
+            background: 'var(--status-critical)',
+            color: 'var(--text-on-accent)',
+            boxShadow: '0 4px 20px color-mix(in srgb, var(--status-critical) 40%, transparent)',
+            fontFamily: 'var(--font-display)',
+          }}
+        >
+          <Zap size={16} />
+          Dispatch Immediate
+        </Link>
+      )}
     </div>
   )
 }

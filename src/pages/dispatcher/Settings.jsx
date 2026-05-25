@@ -1,5 +1,5 @@
-import SettingsView from '../../components/settings/SettingsView'
+import DispatcherSettingsView from '../../components/settings/DispatcherSettingsView'
 
 export default function DispatcherSettings() {
-  return <SettingsView portalLabel="Dispatcher" breadcrumbParent="Dispatcher" />
+  return <DispatcherSettingsView />
 }

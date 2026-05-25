@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Phone, Mic } from 'lucide-react'
+import { useNavigate, Link } from 'react-router-dom'
+import { Phone, Mic, Zap } from 'lucide-react'
+import { DEFAULT_IMMEDIATE_INCIDENT_ID } from '../../data/mockDispatchImmediateData'
 import { useThemeStore } from '../../store/themeStore'
 import {
   mockActiveCall,
@@ -30,7 +31,7 @@ import FieldLabel from '../../components/ui/FieldLabel'
 const PRIORITIES = [
   { id: 'critical', label: 'CRITICAL', color: 'var(--status-critical)' },
   { id: 'high', label: 'HIGH', color: 'var(--status-high)' },
-  { id: 'medium', label: 'MID', color: 'var(--status-info)' },
+  { id: 'medium', label: 'MID', color: 'var(--status-medium)' },
 ]
 
 export default function NewIncident() {
@@ -38,7 +39,7 @@ export default function NewIncident() {
   const { theme } = useThemeStore()
 
   const [category] = useState(INCIDENT_CATEGORIES[0])
-  const [priority] = useState('high')
+  const [priority, setPriority] = useState('high')
   const [notes, setNotes] = useState(mockLiveNotesPlaceholder)
 
   const handleApproveDispatch = (e) => {
@@ -92,9 +93,11 @@ export default function NewIncident() {
                 {PRIORITIES.map((p) => {
                   const active = priority === p.id
                   return (
-                    <div
+                    <button
                       key={p.id}
-                      className="flex-1 min-h-10 px-1 py-2 rounded-lg text-[9px] font-bold tracking-wide uppercase border flex items-center justify-center"
+                      type="button"
+                      onClick={() => setPriority(p.id)}
+                      className="flex-1 min-h-10 px-1 py-2 rounded-lg text-[9px] font-bold tracking-wide uppercase border flex items-center justify-center cursor-pointer"
                       style={{
                         fontFamily: 'var(--font-display)',
                         borderColor: active ? p.color : 'var(--border)',
@@ -103,10 +106,10 @@ export default function NewIncident() {
                           ? `color-mix(in srgb, ${p.color} 14%, transparent)`
                           : 'var(--bg-input)',
                       }}
-                      aria-current={active ? 'true' : undefined}
+                      aria-pressed={active}
                     >
                       {p.label}
-                    </div>
+                    </button>
                   )
                 })}
               </div>
@@ -142,6 +145,21 @@ export default function NewIncident() {
               >
                 Cancel
               </button>
+              {priority === 'critical' && (
+                <Link
+                  to={`/dispatcher/dispatch-immediate/${DEFAULT_IMMEDIATE_INCIDENT_ID}`}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg border-none text-[12px] font-bold uppercase tracking-wide no-underline transition-opacity hover:opacity-90"
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    background: 'var(--status-critical)',
+                    color: 'var(--text-on-accent)',
+                    boxShadow: '0 4px 20px color-mix(in srgb, var(--status-critical) 40%, transparent)',
+                  }}
+                >
+                  <Zap size={14} />
+                  Dispatch Immediate
+                </Link>
+              )}
               <button
                 type="submit"
                 className="flex-1 min-w-[140px] px-4 py-2 rounded-lg border-none bg-(--accent) text-(--text-on-accent) text-[12px] font-bold uppercase tracking-wide cursor-pointer hover:bg-(--accent-dim)"
