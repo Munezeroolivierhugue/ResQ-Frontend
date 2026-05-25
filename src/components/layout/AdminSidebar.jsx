@@ -1,6 +1,6 @@
 import { useLocation, Link } from 'react-router-dom'
 import {
-  UserPlus, Users, User, Settings, HelpCircle, LogOut, Siren, X,
+  UserPlus, Users, Settings, HelpCircle, LogOut, Siren, X,
 } from 'lucide-react'
 import SidebarToggle from './SidebarToggle'
 import { useSidebarClasses } from '../../hooks/useSidebarClasses'
@@ -67,20 +67,13 @@ export default function AdminSidebar({ mobileOpen, onClose }) {
           return <NavItem key={item.href} item={item} isActive={isActive} onClose={onClose} />
         })}
 
-        <div className="sidebar-section-label" style={{ paddingTop: 14 }}>Account</div>
-
-        <NavItem
-          item={{ icon: User, label: 'Admin profile', href: '/admin/profile' }}
-          isActive={location.pathname === '/admin/profile'}
-          onClose={onClose}
-        />
       </nav>
 
       <div className="sidebar-bottom">
         {BOTTOM_ITEMS.map((item) => {
           const Icon = item.icon
           const isSettings = item.href === '/admin/settings'
-          const isActive = isSettings && location.pathname === '/admin/settings'
+          const isActive = isSettings && location.pathname.startsWith('/admin/settings')
           return (
             <div key={item.label} className={`sidebar-item-wrap${isActive ? ' active' : ''}`}>
               {isActive && (

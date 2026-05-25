@@ -1,5 +1,5 @@
-import SettingsView from '../../components/settings/SettingsView'
+import AdminPortalSettingsView from '../../components/settings/AdminPortalSettingsView'
 
 export default function AdminSettings() {
-  return <SettingsView portalLabel="Administration" breadcrumbParent="Administration" />
+  return <AdminPortalSettingsView />
 }
