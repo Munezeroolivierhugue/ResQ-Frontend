@@ -8,6 +8,7 @@ import {
   PrimaryButton,
   DemoPortalDropdown,
 } from '../../components/auth/AuthShared'
+import { getDemoRole, getPortalForRole } from '../../utils/authSession'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -20,8 +21,7 @@ export default function Login() {
   const handleSubmit = (e) => {
     e.preventDefault()
     if (deviceRecognized) {
-      const role = sessionStorage.getItem('resq-demo-role') || 'dispatcher'
-      navigate(role === 'admin' ? '/admin' : '/dispatcher')
+      navigate(getPortalForRole(getDemoRole()))
       return
     }
     sessionStorage.setItem('resq-login-email', email || 'user@rnp.gov.rw')
