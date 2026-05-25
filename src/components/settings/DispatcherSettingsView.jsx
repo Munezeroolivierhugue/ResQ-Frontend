@@ -1,12 +1,17 @@
 import { useState } from 'react'
+import { useParams } from 'react-router-dom'
 import {
-  ChevronRight, Sun, Moon, Palette, Check, Bell, Map, Send, Clock, Languages,
-  Volume2, ShieldCheck, Monitor, Smartphone, Info, Play,
+  Sun, Moon, Palette, Check, Bell, Map, Send, Clock, Languages,
+  Volume2, ShieldCheck, Monitor, Smartphone, Info, Play, UserCircle,
 } from 'lucide-react'
 import { useThemeStore } from '../../store/themeStore'
 import StatusBadge from '../dispatcher/StatusBadge'
 import { SettingsToggleRow, SettingsGroup } from './SettingsToggle'
 import SettingsPasswordSection from './SettingsPasswordSection'
+import SettingsProfileSection from './SettingsProfileSection'
+import SettingsNavLayout from './SettingsNavLayout'
+import SettingsToast from './SettingsToast'
+import SettingsShiftManagementSection from './SettingsShiftManagementSection'
 
 const THEME_OPTIONS = [
   { id: 'light', label: 'Light mode', description: 'High-contrast command interface optimized for daylight operations centers.', icon: Sun },
@@ -14,6 +19,7 @@ const THEME_OPTIONS = [
 ]
 
 const NAV = [
+  { id: 'profile', label: 'Profile', icon: UserCircle },
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'map', label: 'Map Preferences', icon: Map },
@@ -33,25 +39,10 @@ const OVERRIDE_REASONS = [
   'Priority re-assessment',
 ]
 
-function SettingsToast({ show }) {
-  if (!show) return null
-  return (
-    <div
-      className="fixed bottom-6 right-6 z-[300] flex items-center gap-2 px-4 py-3 rounded-lg shadow-[var(--shadow-dropdown)]"
-      style={{
-        background: 'var(--status-low-bg)',
-        border: '1px solid var(--status-low)',
-      }}
-    >
-      <Check size={16} style={{ color: 'var(--status-low)' }} />
-      <span className="text-[13px] font-medium text-(--text-primary)">Settings saved</span>
-    </div>
-  )
-}
-
 export default function DispatcherSettingsView() {
+  const { section: sectionParam } = useParams()
+  const section = sectionParam || 'profile'
   const { theme, setTheme } = useThemeStore()
-  const [section, setSection] = useState('appearance')
   const [toast, setToast] = useState(false)
 
   const [toggles, setToggles] = useState({
@@ -75,9 +66,6 @@ export default function DispatcherSettingsView() {
   const [mapDistrict, setMapDistrict] = useState('all')
   const [mapZoom, setMapZoom] = useState(12)
   const [unitLabels, setUnitLabels] = useState('always')
-  const [shiftStart, setShiftStart] = useState('08:00')
-  const [shiftEnd, setShiftEnd] = useState('16:00')
-  const [handoverReminder, setHandoverReminder] = useState('30')
   const [language, setLanguage] = useState('en')
   const [volume, setVolume] = useState(75)
   const [toneCritical, setToneCritical] = useState('siren')
@@ -106,45 +94,21 @@ export default function DispatcherSettingsView() {
   }
 
   return (
-    <div className="settings-page p-6 w-full">
-      <div className="mb-6">
-        <div className="flex items-center gap-1.5 mb-1">
-          <span className="text-[12px] text-(--text-muted)">Dispatcher</span>
-          <ChevronRight size={12} className="text-(--text-muted)" />
-          <span className="text-[12px] text-(--text-secondary)">Settings</span>
-        </div>
-        <h1 className="text-[26px] font-bold m-0 tracking-[0.04em]" style={{ fontFamily: 'var(--font-display)' }}>
-          SETTINGS
-        </h1>
-        <p className="text-[13px] text-(--text-secondary) mt-2 m-0">
-          Configure your dispatcher workspace preferences. Changes apply immediately on this terminal.
-        </p>
-      </div>
+    <SettingsNavLayout
+      breadcrumbParent="Dispatcher"
+      portalLabel="Configure your dispatcher workspace preferences. Changes apply immediately on this terminal."
+      basePath="/dispatcher/settings"
+      navItems={NAV}
+      toast={<SettingsToast show={toast} />}
+    >
+          {section === 'profile' && (
+            <SettingsProfileSection
+              initials="JB"
+              roleLabel="DISPATCHER"
+              badge="DSP-0042"
+            />
+          )}
 
-      <div className="settings-page-wrapper settings-layout w-full">
-        <nav className="settings-left-nav settings-nav flex md:flex-col gap-0.5 overflow-x-auto md:overflow-visible pb-2 md:pb-0">
-          {NAV.map((item) => {
-            const Icon = item.icon
-            const active = section === item.id
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setSection(item.id)}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg border-none cursor-pointer whitespace-nowrap text-left text-[13px] font-medium transition-colors shrink-0"
-                style={{
-                  background: active ? 'var(--accent-ghost)' : 'transparent',
-                  color: active ? 'var(--accent)' : 'var(--text-secondary)',
-                }}
-              >
-                <Icon size={16} />
-                {item.label}
-              </button>
-            )
-          })}
-        </nav>
-
-        <div className="settings-content-panel settings-section-content w-full min-w-0 flex-1">
           {section === 'appearance' && (
             <div className="settings-section-card dispatcher-surface p-5 w-full">
               <div className="flex items-center gap-2 mb-1">
@@ -255,32 +219,7 @@ export default function DispatcherSettingsView() {
           )}
 
           {section === 'shift' && (
-            <div className="settings-section-card dispatcher-surface p-5 w-full">
-              <h2 className="text-base font-bold m-0 mb-1" style={{ fontFamily: 'var(--font-display)' }}>Shift Settings</h2>
-              <p className="text-[13px] text-(--text-secondary) m-0 mb-4">Configure your shift schedule and reminders.</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                <label className="settings-form-field dispatcher-field">
-                  <span className="field-label">My shift start time</span>
-                  <input type="time" className="dispatcher-input dispatcher-text-input w-full" value={shiftStart} onChange={(e) => setShiftStart(e.target.value)} />
-                </label>
-                <label className="settings-form-field dispatcher-field">
-                  <span className="field-label">My shift end time</span>
-                  <input type="time" className="dispatcher-input dispatcher-text-input w-full" value={shiftEnd} onChange={(e) => setShiftEnd(e.target.value)} />
-                </label>
-              </div>
-              <label className="settings-form-field dispatcher-field mb-4 block">
-                <span className="field-label">Handover reminder timing</span>
-                <select className="dispatcher-input dispatcher-select w-full" value={handoverReminder} onChange={(e) => { setHandoverReminder(e.target.value); flashToast() }}>
-                  <option value="15">15 minutes before shift end</option>
-                  <option value="30">30 minutes before shift end</option>
-                  <option value="45">45 minutes before shift end</option>
-                  <option value="60">60 minutes before shift end</option>
-                  <option value="0">No reminder</option>
-                </select>
-              </label>
-              <SettingsToggleRow label="Auto-prepare handover draft" description="System begins populating your handover summary 1 hour before shift end" on={toggles.handoverDraft} onChange={(v) => setToggle('handoverDraft', v)} />
-              <button type="button" className="dispatcher-btn-primary mt-4" onClick={flashToast}>Save changes</button>
-            </div>
+            <SettingsShiftManagementSection variant="dispatcher" onSave={flashToast} />
           )}
 
           {section === 'language' && (
@@ -397,10 +336,6 @@ export default function DispatcherSettingsView() {
               </div>
             </div>
           )}
-        </div>
-      </div>
-
-      <SettingsToast show={toast} />
-    </div>
+    </SettingsNavLayout>
   )
 }
