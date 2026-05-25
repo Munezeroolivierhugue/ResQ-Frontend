@@ -2,6 +2,7 @@ const HINT_TONES = {
   positive: 'dispatcher-metric-hint--positive',
   neutral: 'dispatcher-metric-hint--neutral',
   warning: 'dispatcher-metric-hint--warning',
+  critical: 'dispatcher-metric-hint--critical',
 }
 
 export default function MetricCard({ icon: Icon, label, value, hint, hintTone = 'neutral', className = '', children }) {
