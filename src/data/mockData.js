@@ -17,6 +17,8 @@ export const mockUnits = [
   { id: 'FTK-02', type: 'Fire Truck', status: 'deployed', location: 'Nyamirambo', assignment: 'INC-2403', lat: -1.9659, lng: 30.0444 },
   { id: 'FTK-05', type: 'Fire Truck', status: 'available', location: 'Kacyiru', assignment: null, lat: -1.9355, lng: 30.0944 },
   { id: 'P-07', type: 'Police Van', status: 'available', location: 'Kacyiru', assignment: null, lat: -1.9486, lng: 30.0986 },
+  { id: 'P-03', type: 'Police Van', status: 'available', location: 'Gasabo HQ', assignment: null, lat: -1.9355, lng: 30.0944 },
+  { id: 'P-19', type: 'Police Van', status: 'available', location: 'Gasabo', assignment: null, lat: -1.928, lng: 30.102 },
   { id: 'POL-12', type: 'Police', status: 'available', location: 'Muhoza', assignment: null, lat: -1.4994, lng: 29.6340 },
   { id: 'POL-08', type: 'Police', status: 'idle', location: 'Gisenyi', assignment: null, lat: -1.6977, lng: 29.2567 },
   { id: 'DST-01', type: 'Disaster', status: 'deployed', location: 'Gisenyi', assignment: 'INC-2406', lat: -1.6977, lng: 29.2567 },
