@@ -2,6 +2,8 @@ import { useLocation, Link } from 'react-router-dom'
 import {
   UserPlus, Users, User, Settings, HelpCircle, LogOut, Siren, X,
 } from 'lucide-react'
+import SidebarToggle from './SidebarToggle'
+import { useSidebarClasses } from '../../hooks/useSidebarClasses'
 
 const NAV_ITEMS = [
   { icon: UserPlus, label: 'Invite users', href: '/admin' },
@@ -39,15 +41,17 @@ function NavItem({ item, isActive, onClose }) {
 
 export default function AdminSidebar({ mobileOpen, onClose }) {
   const location = useLocation()
+  const sidebarClasses = useSidebarClasses(mobileOpen)
 
   return (
-    <aside className={`sidebar${mobileOpen ? ' mobile-open' : ''}`}>
+    <aside className={sidebarClasses}>
       <div className="sidebar-header">
-        <span className="sidebar-icon"><Siren size={28} /></span>
+        <span className="sidebar-logo-icon"><Siren size={28} /></span>
         <div className="sidebar-brand-text">
           <span className="sidebar-brand-name">RESQ</span>
           <span className="sidebar-brand-sub">VIGILANT SENTINEL</span>
         </div>
+        <SidebarToggle />
         <button className="sidebar-close-btn btn-ghost" onClick={onClose} aria-label="Close menu">
           <X size={18} />
         </button>

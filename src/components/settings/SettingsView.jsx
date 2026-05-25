@@ -82,8 +82,8 @@ export default function SettingsView({ portalLabel, breadcrumbParent }) {
           })}
         </div>
 
-        <p className="text-[11px] text-(--text-muted) m-0 mt-4" style={{ fontFamily: 'var(--font-mono)' }}>
-          Active theme: {theme.toUpperCase()} · Stored locally on this device
+        <p className="settings-theme-status">
+          Active theme: <strong>{theme.toUpperCase()}</strong> · Stored locally on this device
         </p>
       </div>
     </div>
