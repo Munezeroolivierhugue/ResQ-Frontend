@@ -1,0 +1,139 @@
+import { useState } from 'react'
+import { MessageSquare, ArrowLeftRight } from 'lucide-react'
+import MetricCard from '../../components/dispatcher/MetricCard'
+import StatusBadge from '../../components/dispatcher/StatusBadge'
+import {
+  OPS_DISPATCHERS,
+  OPS_SUPERVISOR_MESSAGES,
+  OPS_JEAN_BOSCO_INCIDENTS,
+  getWorkloadVariant,
+  getWorkloadLabel,
+} from '../../data/mockOpsManagerData'
+
+function AiRateBar({ rate }) {
+  const color = rate >= 85 ? 'var(--status-low)' : rate >= 60 ? 'var(--status-medium)' : 'var(--status-critical)'
+  return (
+    <div className="flex items-center gap-2 min-w-[100px]">
+      <div className="flex-1 h-[5px] rounded-full bg-(--bg-input) overflow-hidden">
+        <div className="h-full" style={{ width: `${rate}%`, background: color }} />
+      </div>
+      <span className="text-[11px] font-mono">{rate}%</span>
+    </div>
+  )
+}
+
+export default function OpsManagerDispatchers() {
+  const [redistributeId, setRedistributeId] = useState(null)
+  const [selectedIncidents, setSelectedIncidents] = useState([])
+  const [transferTo, setTransferTo] = useState('')
+  const [msg, setMsg] = useState('')
+
+  const overloaded = OPS_DISPATCHERS.filter((d) => d.workload === 'overload').length
+  const avgAi = Math.round(OPS_DISPATCHERS.reduce((s, d) => s + d.aiRate, 0) / OPS_DISPATCHERS.length)
+  const totalIncidents = OPS_DISPATCHERS.reduce((s, d) => s + d.incidents, 0)
+
+  const toggleIncident = (id) => {
+    setSelectedIncidents((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }
+
+  return (
+    <div className="p-6">
+      <h1 className="dispatcher-page-title">Dispatcher Supervision</h1>
+      <p className="dispatcher-page-subtitle">Monitor workload, AI acceptance, and redistribute active queues.</p>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 my-6">
+        <MetricCard label="Active Dispatchers" value={String(OPS_DISPATCHERS.length)} />
+        <MetricCard label="Avg AI Acceptance" value={`${avgAi}%`} />
+        <MetricCard label="Overloaded" value={String(overloaded)} hintTone={overloaded ? 'critical' : 'positive'} />
+        <MetricCard label="Total Active Incidents" value={String(totalIncidents)} />
+      </div>
+
+      <div className="dispatcher-surface overflow-x-auto">
+        <table className="w-full text-left text-[13px] border-collapse min-w-[800px]">
+          <thead>
+            <tr className="border-b border-(--border) text-[11px] uppercase tracking-wider text-(--text-muted)" style={{ fontFamily: 'var(--font-display)' }}>
+              <th className="p-3">Dispatcher</th>
+              <th className="p-3">Workload</th>
+              <th className="p-3">Active Incidents</th>
+              <th className="p-3">Handled Today</th>
+              <th className="p-3">AI Acceptance</th>
+              <th className="p-3">Status</th>
+              <th className="p-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {OPS_DISPATCHERS.map((d) => (
+              <tr key={d.id} className="border-b border-(--border-subtle) hover:bg-(--bg-elevated) group">
+                <td className="p-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold" style={{ background: 'var(--accent-ghost)', color: 'var(--accent)' }}>{d.initials}</span>
+                    <div>
+                      <div className="font-semibold">{d.name}</div>
+                      <div className="font-mono text-[10px] text-(--text-muted)">{d.id}</div>
+                    </div>
+                  </div>
+                </td>
+                <td className="p-3"><StatusBadge label={getWorkloadLabel(d.workload)} variant={getWorkloadVariant(d.workload)} /></td>
+                <td className="p-3 font-bold" style={{ color: d.incidents > 6 ? 'var(--status-critical)' : undefined }}>{d.incidents}</td>
+                <td className="p-3">{d.handledToday}</td>
+                <td className="p-3"><AiRateBar rate={d.aiRate} /></td>
+                <td className="p-3"><StatusBadge label={d.status} variant={d.status === 'ON DUTY' ? 'resolved' : 'info'} /></td>
+                <td className="p-3">
+                  <div className="flex gap-1 opacity-70 group-hover:opacity-100">
+                    <button type="button" className="dispatcher-btn-icon" aria-label="Message"><MessageSquare size={14} /></button>
+                    <button type="button" className="dispatcher-btn-icon" aria-label="Redistribute" onClick={() => setRedistributeId(d.id)}><ArrowLeftRight size={14} /></button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {redistributeId === 'DSP-0042' && (
+        <div className="dispatcher-surface p-4 mt-4">
+          <h3 className="font-bold m-0 mb-3">Redistribute Jean Bosco&apos;s Queue</h3>
+          {OPS_JEAN_BOSCO_INCIDENTS.map((inc) => (
+            <label key={inc.id} className="flex items-center gap-2 text-[13px] mb-2 cursor-pointer">
+              <input type="checkbox" checked={selectedIncidents.includes(inc.id)} onChange={() => toggleIncident(inc.id)} className="accent-(--accent)" />
+              {inc.id} — {inc.type}
+            </label>
+          ))}
+          <label className="dispatcher-field mt-3 max-w-xs">
+            <span className="field-label">Transfer to</span>
+            <select className="dispatcher-input dispatcher-select" value={transferTo} onChange={(e) => setTransferTo(e.target.value)}>
+              <option value="">Select dispatcher</option>
+              {OPS_DISPATCHERS.filter((d) => d.id !== 'DSP-0042').map((d) => (
+                <option key={d.id} value={d.id}>{d.name} — {d.incidents} active</option>
+              ))}
+            </select>
+          </label>
+          <div className="flex gap-2 mt-3">
+            <button type="button" className="dispatcher-btn-primary text-[12px]">Confirm Transfer</button>
+            <button type="button" className="dispatcher-btn-ghost text-[12px]" onClick={() => setRedistributeId(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      <div className="dispatcher-surface p-4 mt-6">
+        <h3 className="font-bold m-0 mb-3">Supervisor Channel</h3>
+        <div className="max-h-[160px] overflow-y-auto mb-3 flex flex-col gap-2">
+          {OPS_SUPERVISOR_MESSAGES.map((m, i) => (
+            <div key={i} className="text-[12px] border-b border-(--border-subtle) pb-2">
+              <span className="font-mono text-(--text-muted)">{m.time}</span>
+              <span className="font-semibold text-(--accent) ml-2">{m.from}</span>
+              <p className="m-0 mt-0.5 text-(--text-secondary)">{m.text}</p>
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <select className="dispatcher-input dispatcher-select flex-1 min-w-[140px]">
+            {OPS_DISPATCHERS.map((d) => <option key={d.id}>{d.name}</option>)}
+          </select>
+          <input className="dispatcher-input dispatcher-text-input flex-[2] min-w-[200px]" placeholder="Supervisor message…" value={msg} onChange={(e) => setMsg(e.target.value)} />
+          <button type="button" className="dispatcher-btn-primary text-[12px]">Send</button>
+        </div>
+      </div>
+    </div>
+  )
+}
