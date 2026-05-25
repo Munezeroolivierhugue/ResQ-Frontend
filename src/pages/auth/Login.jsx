@@ -68,10 +68,10 @@ export default function Login() {
 
         <div className="auth-field--full flex justify-between items-center text-[12px]">
           <label className="flex items-center gap-2 cursor-pointer text-(--text-secondary)">
-            <input type="checkbox" className="accent-(--accent)" defaultChecked={deviceRecognized} />
+            <input type="checkbox" defaultChecked={deviceRecognized} />
             Remember this device
           </label>
-          <a href="#" className="text-(--accent) font-semibold no-underline hover:underline">
+          <a href="#" className="auth-recover-link">
             Recover access
           </a>
         </div>

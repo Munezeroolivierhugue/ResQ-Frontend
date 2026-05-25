@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Siren, ArrowRight, Shield } from 'lucide-react'
+import { Siren, ArrowRight, ShieldCheck } from 'lucide-react'
+import signupImage from '../../assets/signup_Image.png'
 
 /** Login-only demo portal switcher — remove when backend is wired. */
 export function DemoPortalDropdown({ inline = false }) {
@@ -53,11 +54,15 @@ export function DemoPortalDropdown({ inline = false }) {
 export function AuthBrandPanel() {
   return (
     <div className="auth-brand-panel">
-      <div className="auth-brand-panel-bg" aria-hidden />
+      <div
+        className="auth-brand-panel-bg"
+        aria-hidden
+        style={{ '--auth-brand-photo': `url(${signupImage})` }}
+      />
       <div className="auth-brand-content auth-brand-content--centered">
         <div className="auth-logo-row">
           <span className="auth-logo-icon">
-            <Siren size={36} strokeWidth={1.75} />
+            <Siren size={44} strokeWidth={1.75} />
           </span>
           <div>
             <span className="auth-logo-text">RESQ</span>
@@ -93,7 +98,7 @@ export function AuthFormFooter() {
   return (
     <div className="auth-form-mini-footer">
       <span className="flex items-center gap-1.5">
-        <Shield size={12} />
+        <ShieldCheck size={14} strokeWidth={2} aria-hidden />
         Secured by RESQ
       </span>
       <span>
