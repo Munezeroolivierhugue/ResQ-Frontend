@@ -1,0 +1,38 @@
+export const mockNotifications = [
+  {
+    id: 'n1',
+    type: 'critical',
+    title: 'INC-2407 escalated to Operations Manager',
+    desc: 'Armed robbery in Kicukiro — awaiting command decision',
+    time: '2m ago',
+    read: false,
+    href: '/dispatcher/active-incident',
+  },
+  {
+    id: 'n2',
+    type: 'system',
+    title: 'AI Dispatch Engine — recommendation ready',
+    desc: 'New dispatch recommendation for INC-2408 — Medical Emergency, Gasabo',
+    time: '5m ago',
+    read: false,
+    href: '/dispatcher/ai-engine',
+  },
+  {
+    id: 'n3',
+    type: 'info',
+    title: 'Unit FTK-05 has gone offline',
+    desc: 'Fire unit FTK-05 lost GPS signal at 14:18. Last known: Nyarugenge.',
+    time: '18m ago',
+    read: true,
+    href: '/dispatcher',
+  },
+  {
+    id: 'n4',
+    type: 'system',
+    title: 'Shift handover reminder',
+    desc: 'Your shift ends in 45 minutes. Begin handover report.',
+    time: '32m ago',
+    read: true,
+    href: '/dispatcher/shift-handover',
+  },
+]
