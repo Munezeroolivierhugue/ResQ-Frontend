@@ -21,6 +21,18 @@ import VerifyOtp from './pages/auth/VerifyOtp'
 import MfaSetup from './pages/auth/MfaSetup'
 import AdminInviteUser from './pages/admin/AdminInviteUser'
 import AdminUsers from './pages/admin/AdminUsers'
+import OpsManagerShell from './components/ops-manager/OpsManagerShell'
+import OpsManagerRoute from './components/layout/OpsManagerRoute'
+import OpsManagerDashboard from './pages/ops-manager/OpsManagerDashboard'
+import OpsManagerMap from './pages/ops-manager/OpsManagerMap'
+import OpsManagerEscalations from './pages/ops-manager/OpsManagerEscalations'
+import OpsManagerEscalation from './pages/ops-manager/OpsManagerEscalation'
+import OpsManagerResources from './pages/ops-manager/OpsManagerResources'
+import OpsManagerMultiAgency from './pages/ops-manager/OpsManagerMultiAgency'
+import OpsManagerDispatchers from './pages/ops-manager/OpsManagerDispatchers'
+import OpsManagerShift from './pages/ops-manager/OpsManagerShift'
+import OpsManagerProfile from './pages/ops-manager/OpsManagerProfile'
+import OpsManagerSettings from './pages/ops-manager/OpsManagerSettings'
 
 const dispatcher = { name: 'Jean Bosco', role: 'DISPATCHER' }
 const admin = { name: 'Super Admin', role: 'SUPER ADMIN' }
@@ -41,7 +53,27 @@ export default function App() {
         <Route path="/admin" element={<AdminShell user={admin} />}>
           <Route index element={<AdminInviteUser />} />
           <Route path="users" element={<AdminUsers />} />
-          <Route path="settings" element={<AdminSettings />} />
+          <Route path="profile" element={<Navigate to="/admin/settings/profile" replace />} />
+          <Route path="settings" element={<Navigate to="/admin/settings/profile" replace />} />
+          <Route path="settings/:section" element={<AdminSettings />} />
+        </Route>
+
+        {/* Operations Manager portal */}
+        <Route path="/ops-manager" element={<OpsManagerRoute />}>
+          <Route element={<OpsManagerShell />}>
+            <Route path="dashboard" element={<OpsManagerDashboard />} />
+            <Route path="map" element={<OpsManagerMap />} />
+            <Route path="escalations" element={<OpsManagerEscalations />} />
+            <Route path="escalations/:incidentId" element={<OpsManagerEscalation />} />
+            <Route path="resources" element={<OpsManagerResources />} />
+            <Route path="multi-agency" element={<OpsManagerMultiAgency />} />
+            <Route path="dispatchers" element={<OpsManagerDispatchers />} />
+            <Route path="shift" element={<OpsManagerShift />} />
+            <Route path="profile" element={<OpsManagerProfile />} />
+            <Route path="settings" element={<Navigate to="/ops-manager/settings/profile" replace />} />
+            <Route path="settings/:section" element={<OpsManagerSettings />} />
+            <Route index element={<Navigate to="/ops-manager/dashboard" replace />} />
+          </Route>
         </Route>
 
         {/* Dispatcher portal */}
@@ -56,7 +88,8 @@ export default function App() {
           <Route path="shift-handover" element={<ShiftHandover />} />
           <Route path="shifts" element={<Navigate to="/dispatcher/shift-handover" replace />} />
           <Route path="profile" element={<MyProfile />} />
-          <Route path="settings" element={<DispatcherSettings />} />
+          <Route path="settings" element={<Navigate to="/dispatcher/settings/profile" replace />} />
+          <Route path="settings/:section" element={<DispatcherSettings />} />
           <Route path="notifications" element={<Notifications />} />
           <Route element={<DispatcherRoute />}>
             <Route path="dispatch-immediate/:incidentId" element={<DispatchImmediate />} />
