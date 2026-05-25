@@ -7,6 +7,7 @@ export const mockIncidents = [
   { id: 'INC-2406', type: 'Disaster', severity: 'high', district: 'Rubavu', sector: 'Gisenyi', reported: '13:20', elapsed: '82m', unit: 'DST-01', status: 'active', lat: -1.6977, lng: 29.2567 },
   { id: 'INC-2407', type: 'Traffic', severity: 'low', district: 'Rwamagana', sector: 'Kigabiro', reported: '14:45', elapsed: '1m', unit: null, status: 'pending', lat: -1.9494, lng: 30.4344 },
   { id: 'INC-2408', type: 'Medical', severity: 'medium', district: 'Nyagatare', sector: 'Karama', reported: '14:10', elapsed: '32m', unit: 'AMB-11', status: 'resolved', lat: -1.2994, lng: 30.3244 },
+  { id: 'INC-2409', type: 'Armed Robbery', severity: 'critical', district: 'Kicukiro', sector: 'Gikondo', reported: '14:50', elapsed: '1m', unit: null, status: 'pending', lat: -1.9586, lng: 30.0926 },
 ]
 
 export const mockUnits = [
@@ -15,6 +16,7 @@ export const mockUnits = [
   { id: 'AMB-11', type: 'Ambulance', status: 'available', location: 'Nyagatare', assignment: null, lat: -1.2994, lng: 30.3244 },
   { id: 'FTK-02', type: 'Fire Truck', status: 'deployed', location: 'Nyamirambo', assignment: 'INC-2403', lat: -1.9659, lng: 30.0444 },
   { id: 'FTK-05', type: 'Fire Truck', status: 'available', location: 'Kacyiru', assignment: null, lat: -1.9355, lng: 30.0944 },
+  { id: 'P-07', type: 'Police Van', status: 'available', location: 'Kacyiru', assignment: null, lat: -1.9486, lng: 30.0986 },
   { id: 'POL-12', type: 'Police', status: 'available', location: 'Muhoza', assignment: null, lat: -1.4994, lng: 29.6340 },
   { id: 'POL-08', type: 'Police', status: 'idle', location: 'Gisenyi', assignment: null, lat: -1.6977, lng: 29.2567 },
   { id: 'DST-01', type: 'Disaster', status: 'deployed', location: 'Gisenyi', assignment: 'INC-2406', lat: -1.6977, lng: 29.2567 },
