@@ -34,6 +34,29 @@ const PRIORITIES = [
   { id: 'medium', label: 'MID', color: 'var(--status-medium)' },
 ]
 
+const RWANDA_DISTRICT_GROUPS = [
+  {
+    label: '── Kigali City ──',
+    districts: ['Nyarugenge', 'Kicukiro', 'Gasabo'],
+  },
+  {
+    label: '── Northern Province ──',
+    districts: ['Musanze', 'Burera', 'Gakenke', 'Rulindo', 'Gicumbi'],
+  },
+  {
+    label: '── Southern Province ──',
+    districts: ['Huye', 'Nyamagabe', 'Gisagara', 'Nyaruguru', 'Muhanga', 'Kamonyi', 'Ruhango', 'Nyanza'],
+  },
+  {
+    label: '── Eastern Province ──',
+    districts: ['Rwamagana', 'Bugesera', 'Gatsibo', 'Kayonza', 'Kirehe', 'Ngoma', 'Nyagatare'],
+  },
+  {
+    label: '── Western Province ──',
+    districts: ['Rubavu', 'Karongi', 'Ngororero', 'Nyabihu', 'Nyamasheke', 'Rusizi', 'Rutsiro'],
+  },
+]
+
 export default function NewIncident() {
   const navigate = useNavigate()
   const { theme } = useThemeStore()
@@ -41,9 +64,28 @@ export default function NewIncident() {
   const [category] = useState(INCIDENT_CATEGORIES[0])
   const [priority, setPriority] = useState('high')
   const [notes, setNotes] = useState(mockLiveNotesPlaceholder)
+  const [district, setDistrict] = useState('')
+  const [districtError, setDistrictError] = useState(false)
 
   const handleApproveDispatch = (e) => {
     e.preventDefault()
+    if (!district) {
+      setDistrictError(true)
+      return
+    }
+    const incident = {
+      category,
+      priority,
+      notes,
+      district,
+      sector: mockLocationSharing.sector,
+      location: {
+        lat: mockLocationSharing.lat,
+        lng: mockLocationSharing.lng,
+      },
+      caller: mockAutoCaller,
+    }
+    console.log('New incident submitted:', incident)
     navigate('/dispatcher/ai-engine')
   }
 
@@ -66,9 +108,12 @@ export default function NewIncident() {
       <div className="flex-1 min-h-0 max-w-[1800px] w-full mx-auto px-5 md:px-6 py-4 flex flex-col gap-4">
         <LiveEmergencyBanner call={mockActiveCall} />
 
-        <form onSubmit={handleApproveDispatch} className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-12 gap-4 xl:gap-5">
-          {/* LEFT — caller, classification, notes, AI */}
-          <div className="xl:col-span-3 flex flex-col gap-4 min-w-0 xl:max-h-[calc(100vh-11rem)] xl:overflow-y-auto">
+        <form
+          onSubmit={handleApproveDispatch}
+          className="w-full flex flex-col xl:flex-row items-start gap-4 xl:gap-5"
+        >
+          {/* LEFT — caller, classification, notes */}
+          <div className="w-full xl:flex-[3] min-w-0 flex flex-col gap-4">
             <IntakePanel className="p-4 md:p-5">
               <PanelHeader
                 icon={Phone}
@@ -134,54 +179,120 @@ export default function NewIncident() {
               />
               <p className="text-[10px] text-(--text-muted) m-0 mt-2">Auto-save active · synced from live transcript</p>
             </IntakePanel>
-
-            <AiDispatchRecommendation data={mockAiRecommendation} />
-
-            <div className="flex flex-wrap gap-2 pt-1 sticky bottom-0 bg-(--bg-base) pb-1">
-              <button
-                type="button"
-                onClick={() => navigate('/dispatcher')}
-                className="px-4 py-2 rounded-lg border border-(--border) bg-transparent text-(--text-primary) text-[12px] font-semibold cursor-pointer hover:bg-(--bg-elevated)"
-              >
-                Cancel
-              </button>
-              {priority === 'critical' && (
-                <Link
-                  to={`/dispatcher/dispatch-immediate/${DEFAULT_IMMEDIATE_INCIDENT_ID}`}
-                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg border-none text-[12px] font-bold uppercase tracking-wide no-underline transition-opacity hover:opacity-90"
-                  style={{
-                    fontFamily: 'var(--font-display)',
-                    background: 'var(--status-critical)',
-                    color: 'var(--text-on-accent)',
-                    boxShadow: '0 4px 20px color-mix(in srgb, var(--status-critical) 40%, transparent)',
-                  }}
-                >
-                  <Zap size={14} />
-                  Dispatch Immediate
-                </Link>
-              )}
-              <button
-                type="submit"
-                className="flex-1 min-w-[140px] px-4 py-2 rounded-lg border-none bg-(--accent) text-(--text-on-accent) text-[12px] font-bold uppercase tracking-wide cursor-pointer hover:bg-(--accent-dim)"
-                style={{ fontFamily: 'var(--font-display)' }}
-              >
-                Approve & dispatch
-              </button>
-            </div>
           </div>
 
-          {/* CENTER — dominant live map */}
-          <div className="xl:col-span-6 flex flex-col gap-4 min-w-0 min-h-[480px] xl:min-h-0">
-            <div className="flex-1 flex flex-col min-h-[480px]">
-              <LiveLocationMap location={mockLocationSharing} />
-            </div>
+          {/* CENTER — location confirmation + live map */}
+          <div className="w-full xl:flex-[6] min-w-0 flex flex-col gap-4">
+            <IntakePanel className="p-4 md:p-5 shrink-0">
+              <FieldLabel className="mb-3">Location confirmation</FieldLabel>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <ReadonlyField label="Sector / location" value={mockLocationSharing.sector} />
+                <label className="dispatcher-field m-0">
+                  <span className="field-label">District *</span>
+                  <select
+                    className="dispatcher-input dispatcher-select"
+                    value={district}
+                    onChange={(e) => {
+                      setDistrict(e.target.value)
+                      setDistrictError(false)
+                    }}
+                    required
+                    aria-invalid={districtError}
+                    aria-describedby={districtError ? 'district-error' : 'district-helper'}
+                    style={{
+                      appearance: 'none',
+                      ...(districtError
+                        ? {
+                            border: '1px solid var(--status-critical)',
+                            boxShadow: '0 0 0 3px var(--status-critical-bg)',
+                          }
+                        : {}),
+                    }}
+                  >
+                    <option value="" disabled>
+                      Select district — confirm with caller
+                    </option>
+                    {RWANDA_DISTRICT_GROUPS.map((group) => (
+                      <optgroup key={group.label} label={group.label}>
+                        {group.districts.map((d) => (
+                          <option key={d} value={d}>
+                            {d}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                  <p
+                    id="district-helper"
+                    className="m-0 mt-1.5"
+                    style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}
+                  >
+                    Confirm the caller&apos;s location before selecting. District determines which Operations
+                    Manager receives this incident.
+                  </p>
+                  {districtError && (
+                    <p
+                      id="district-error"
+                      className="m-0 mt-1"
+                      style={{ fontSize: '11px', color: 'var(--status-critical)' }}
+                    >
+                      District is required. Confirm location with caller before submitting.
+                    </p>
+                  )}
+                </label>
+              </div>
+            </IntakePanel>
+            <LiveLocationMap location={mockLocationSharing} />
             <LandmarkAssistPanel data={mockLandmarkAssist} />
+            <div className="w-full shrink-0">
+              <div
+                className="flex flex-col rounded-xl border border-(--border) bg-(--bg-surface) shadow-[var(--shadow-card)] overflow-hidden"
+                style={{ fontFamily: 'var(--font-body)' }}
+              >
+                <div className="min-h-0 [&>div]:rounded-none [&>div]:border-0 [&>div]:shadow-none">
+                  <AiDispatchRecommendation data={mockAiRecommendation} />
+                </div>
+                <div className="p-3 border-t border-(--border-subtle) shrink-0 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/dispatcher')}
+                    className="px-4 py-2 rounded-lg border border-(--border) bg-transparent text-(--text-primary) text-[12px] font-semibold cursor-pointer hover:bg-(--bg-elevated)"
+                  >
+                    Cancel
+                  </button>
+                  {priority === 'critical' && (
+                    <Link
+                      to={`/dispatcher/dispatch-immediate/${DEFAULT_IMMEDIATE_INCIDENT_ID}`}
+                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg border-none text-[12px] font-bold uppercase tracking-wide no-underline transition-opacity hover:opacity-90"
+                      style={{
+                        fontFamily: 'var(--font-display)',
+                        background: 'var(--status-critical)',
+                        color: 'var(--text-on-accent)',
+                        boxShadow: '0 4px 20px color-mix(in srgb, var(--status-critical) 40%, transparent)',
+                      }}
+                    >
+                      <Zap size={14} />
+                      Dispatch Immediate
+                    </Link>
+                  )}
+                  <button
+                    type="submit"
+                    className="flex-1 min-w-[140px] px-4 py-2 rounded-lg border-none bg-(--accent) text-(--text-on-accent) text-[12px] font-bold uppercase tracking-wide cursor-pointer hover:bg-(--accent-dim)"
+                    style={{ fontFamily: 'var(--font-display)' }}
+                  >
+                    Approve & dispatch
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* RIGHT — timeline + queue */}
-          <div className="xl:col-span-3 flex flex-col gap-4 min-w-0 xl:max-h-[calc(100vh-11rem)] xl:overflow-y-auto">
+          <div className="w-full xl:flex-[3] min-w-0 flex flex-col gap-4">
             <IncidentTimeline steps={mockIncidentTimeline} />
-            <RecentIncidentsQueue incidents={mockDispatchQueue} theme={theme} />
+            <div className="w-full xl:sticky xl:top-4 xl:self-start">
+              <RecentIncidentsQueue incidents={mockDispatchQueue} theme={theme} />
+            </div>
           </div>
         </form>
       </div>
