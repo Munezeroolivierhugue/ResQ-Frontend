@@ -6,6 +6,35 @@ import FieldLabel from '../../components/ui/FieldLabel'
 
 const RECENT_LIMIT = 5
 
+const ROLES_REQUIRING_DISTRICT = ['ops_manager', 'district_commander', 'emergency_planner']
+
+const RWANDA_DISTRICT_GROUPS = [
+  {
+    label: '── Kigali City ──',
+    districts: ['Nyarugenge', 'Kicukiro', 'Gasabo'],
+  },
+  {
+    label: '── Northern Province ──',
+    districts: ['Musanze', 'Burera', 'Gakenke', 'Rulindo', 'Gicumbi'],
+  },
+  {
+    label: '── Southern Province ──',
+    districts: ['Huye', 'Nyamagabe', 'Gisagara', 'Nyaruguru', 'Muhanga', 'Kamonyi', 'Ruhango', 'Nyanza'],
+  },
+  {
+    label: '── Eastern Province ──',
+    districts: ['Rwamagana', 'Bugesera', 'Gatsibo', 'Kayonza', 'Kirehe', 'Ngoma', 'Nyagatare'],
+  },
+  {
+    label: '── Western Province ──',
+    districts: ['Rubavu', 'Karongi', 'Ngororero', 'Nyabihu', 'Nyamasheke', 'Rusizi', 'Rutsiro'],
+  },
+]
+
+function roleRequiresDistrict(role) {
+  return ROLES_REQUIRING_DISTRICT.includes(role)
+}
+
 function RecentProvisionedPanel() {
   const recent = [...mockInvitedUsers]
     .sort((a, b) => (b.invitedAt > a.invitedAt ? 1 : -1))
@@ -64,10 +93,23 @@ export default function AdminInviteUser() {
     email: '',
     phone: '',
     role: 'dispatcher',
+    district: '',
   })
   const [sent, setSent] = useState(null)
+  const [districtError, setDistrictError] = useState('')
+
+  const showDistrictField = roleRequiresDistrict(form.role)
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+
+  const handleRoleChange = (role) => {
+    setDistrictError('')
+    setForm((f) => ({
+      ...f,
+      role,
+      district: roleRequiresDistrict(role) ? f.district : '',
+    }))
+  }
 
   const inviteLink = sent
     ? `${window.location.origin}/register?invite=1&email=${encodeURIComponent(sent.email)}`
@@ -75,12 +117,29 @@ export default function AdminInviteUser() {
 
   const handleSubmit = (e) => {
     e.preventDefault()
+    if (showDistrictField && !form.district) {
+      setDistrictError('Please assign a district for this role.')
+      return
+    }
+    const payload = {
+      fullName: form.fullName,
+      email: form.email,
+      phone: form.phone,
+      role: form.role,
+      ...(showDistrictField ? { district: form.district } : {}),
+    }
+    console.log('Invitation payload:', payload)
     sessionStorage.setItem('resq-invite-email', form.email)
     sessionStorage.setItem('resq-invite-name', form.fullName)
     sessionStorage.setItem('resq-invite-phone', form.phone)
     sessionStorage.setItem('resq-invite-role', form.role)
     sessionStorage.setItem('resq-demo-role', form.role)
-    setSent({ ...form })
+    if (payload.district) {
+      sessionStorage.setItem('resq-invite-district', payload.district)
+    } else {
+      sessionStorage.removeItem('resq-invite-district')
+    }
+    setSent(payload)
   }
 
   const copyLink = () => {
@@ -184,7 +243,7 @@ export default function AdminInviteUser() {
                   <select
                     className="auth-input auth-select"
                     value={form.role}
-                    onChange={(e) => set('role', e.target.value)}
+                    onChange={(e) => handleRoleChange(e.target.value)}
                   >
                     {ASSIGNED_ROLES.map((r) => (
                       <option key={r.value} value={r.value}>{r.label}</option>
@@ -192,6 +251,62 @@ export default function AdminInviteUser() {
                   </select>
                 </label>
               </div>
+
+              <div
+                aria-hidden={!showDistrictField}
+                style={{
+                  maxHeight: showDistrictField ? '100px' : 0,
+                  opacity: showDistrictField ? 1 : 0,
+                  overflow: 'hidden',
+                  transition: 'max-height 200ms ease, opacity 200ms ease',
+                }}
+              >
+                <label className="auth-field block m-0">
+                  <span className="auth-field-label">Assigned District</span>
+                  <select
+                    className="auth-input auth-select"
+                    value={form.district}
+                    onChange={(e) => {
+                      setDistrictError('')
+                      set('district', e.target.value)
+                    }}
+                    required={showDistrictField}
+                    style={{
+                      height: '44px',
+                      border: '1px solid var(--border)',
+                      background: 'var(--bg-input)',
+                      borderRadius: '8px',
+                      width: '100%',
+                    }}
+                  >
+                    <option value="">Select district…</option>
+                    {RWANDA_DISTRICT_GROUPS.map((group) => (
+                      <optgroup key={group.label} label={group.label}>
+                        {group.districts.map((d) => (
+                          <option key={d} value={d}>
+                            {d}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                  <p
+                    className="m-0 mt-1.5"
+                    style={{ fontSize: '11px', color: 'var(--text-muted)' }}
+                  >
+                    This district will filter all data visible to this user after login.
+                  </p>
+                  {districtError && (
+                    <p
+                      className="m-0 mt-1"
+                      style={{ fontSize: '11px', color: 'var(--status-critical)' }}
+                    >
+                      {districtError}
+                    </p>
+                  )}
+                </label>
+              </div>
+
               <button
                 type="submit"
                 className="auth-primary-btn"
