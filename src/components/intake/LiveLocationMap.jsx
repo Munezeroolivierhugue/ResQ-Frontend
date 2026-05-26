@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
-import { MapContainer, TileLayer, Marker } from 'react-leaflet'
+import { useEffect, useMemo } from 'react'
+import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import { MapPin, Radio } from 'lucide-react'
 import RwandaBoundsEnforcer from '../map/RwandaBoundsEnforcer'
@@ -9,6 +9,22 @@ import 'leaflet/dist/leaflet.css'
 
 const MAP_TILES =
   'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+
+const MAP_HEIGHT_PX = 280
+
+function MapInvalidateSize() {
+  const map = useMap()
+  useEffect(() => {
+    const invalidate = () => map.invalidateSize()
+    const t = setTimeout(invalidate, 0)
+    window.addEventListener('resize', invalidate)
+    return () => {
+      clearTimeout(t)
+      window.removeEventListener('resize', invalidate)
+    }
+  }, [map])
+  return null
+}
 
 function livePinIcon() {
   return L.divIcon({
@@ -24,7 +40,7 @@ export default function LiveLocationMap({ location }) {
   const isConnected = location.state === 'connected'
 
   return (
-    <IntakePanel className="flex flex-col flex-1 min-h-[420px] overflow-hidden">
+    <IntakePanel className="flex flex-col overflow-visible">
       <div className="px-4 py-3 border-b border-(--border-subtle) shrink-0">
         <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
           <div className="flex items-center gap-2">
@@ -68,7 +84,15 @@ export default function LiveLocationMap({ location }) {
         </div>
       </div>
 
-      <div className="relative flex-1 min-h-[360px] map-natural">
+      <div
+        className="relative map-natural"
+        style={{
+          height: `${MAP_HEIGHT_PX}px`,
+          width: '100%',
+          minHeight: `${MAP_HEIGHT_PX}px`,
+          display: 'block',
+        }}
+      >
         <MapContainer
           center={position}
           zoom={14}
@@ -76,7 +100,7 @@ export default function LiveLocationMap({ location }) {
           maxZoom={RWANDA_MAX_ZOOM}
           maxBounds={RWANDA_BOUNDS}
           maxBoundsViscosity={1.0}
-          style={{ width: '100%', height: '100%', background: '#E8EAED' }}
+          style={{ height: `${MAP_HEIGHT_PX}px`, width: '100%', background: '#E8EAED' }}
           zoomControl={false}
         >
           <TileLayer
@@ -84,6 +108,7 @@ export default function LiveLocationMap({ location }) {
             attribution='&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/">OSM</a>'
           />
           <RwandaBoundsEnforcer />
+          <MapInvalidateSize />
           <Marker position={position} icon={icon} />
         </MapContainer>
 
