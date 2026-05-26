@@ -9,6 +9,8 @@ import {
   getWorkloadVariant,
   getWorkloadLabel,
 } from '../../data/mockOpsManagerData'
+import OpsManagerDistrictLabel from '../../components/ops-manager/OpsManagerDistrictLabel'
+import { getOpsManagerDistrict } from '../../utils/opsManagerDistrict'
 
 function AiRateBar({ rate }) {
   const color = rate >= 85 ? 'var(--status-low)' : rate >= 60 ? 'var(--status-medium)' : 'var(--status-critical)'
@@ -28,9 +30,11 @@ export default function OpsManagerDispatchers() {
   const [transferTo, setTransferTo] = useState('')
   const [msg, setMsg] = useState('')
 
-  const overloaded = OPS_DISPATCHERS.filter((d) => d.workload === 'overload').length
-  const avgAi = Math.round(OPS_DISPATCHERS.reduce((s, d) => s + d.aiRate, 0) / OPS_DISPATCHERS.length)
-  const totalIncidents = OPS_DISPATCHERS.reduce((s, d) => s + d.incidents, 0)
+  const omDistrict = getOpsManagerDistrict()
+  const dispatchers = OPS_DISPATCHERS.filter((d) => d.district === omDistrict)
+  const overloaded = dispatchers.filter((d) => d.workload === 'overload').length
+  const avgAi = Math.round(dispatchers.reduce((s, d) => s + d.aiRate, 0) / dispatchers.length)
+  const totalIncidents = dispatchers.reduce((s, d) => s + d.incidents, 0)
 
   const toggleIncident = (id) => {
     setSelectedIncidents((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
@@ -38,11 +42,12 @@ export default function OpsManagerDispatchers() {
 
   return (
     <div className="p-6">
-      <h1 className="dispatcher-page-title">Dispatcher Supervision</h1>
-      <p className="dispatcher-page-subtitle">Monitor workload, AI acceptance, and redistribute active queues.</p>
+      <h1 className="dispatcher-page-title m-0">Dispatcher Supervision</h1>
+      <OpsManagerDistrictLabel />
+      <p className="dispatcher-page-subtitle mt-2">Monitor workload, AI acceptance, and redistribute active queues.</p>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 my-6">
-        <MetricCard label="Active Dispatchers" value={String(OPS_DISPATCHERS.length)} />
+        <MetricCard label="Active Dispatchers" value={String(dispatchers.length)} />
         <MetricCard label="Avg AI Acceptance" value={`${avgAi}%`} />
         <MetricCard label="Overloaded" value={String(overloaded)} hintTone={overloaded ? 'critical' : 'positive'} />
         <MetricCard label="Total Active Incidents" value={String(totalIncidents)} />
@@ -62,7 +67,7 @@ export default function OpsManagerDispatchers() {
             </tr>
           </thead>
           <tbody>
-            {OPS_DISPATCHERS.map((d) => (
+            {dispatchers.map((d) => (
               <tr key={d.id} className="border-b border-(--border-subtle) hover:bg-(--bg-elevated) group">
                 <td className="p-3">
                   <div className="flex items-center gap-2">
@@ -103,7 +108,7 @@ export default function OpsManagerDispatchers() {
             <span className="field-label">Transfer to</span>
             <select className="dispatcher-input dispatcher-select" value={transferTo} onChange={(e) => setTransferTo(e.target.value)}>
               <option value="">Select dispatcher</option>
-              {OPS_DISPATCHERS.filter((d) => d.id !== 'DSP-0042').map((d) => (
+              {dispatchers.filter((d) => d.id !== 'DSP-0042').map((d) => (
                 <option key={d.id} value={d.id}>{d.name} — {d.incidents} active</option>
               ))}
             </select>
@@ -128,7 +133,7 @@ export default function OpsManagerDispatchers() {
         </div>
         <div className="flex flex-wrap gap-2">
           <select className="dispatcher-input dispatcher-select flex-1 min-w-[140px]">
-            {OPS_DISPATCHERS.map((d) => <option key={d.id}>{d.name}</option>)}
+            {dispatchers.map((d) => <option key={d.id}>{d.name}</option>)}
           </select>
           <input className="dispatcher-input dispatcher-text-input flex-[2] min-w-[200px]" placeholder="Supervisor message…" value={msg} onChange={(e) => setMsg(e.target.value)} />
           <button type="button" className="dispatcher-btn-primary text-[12px]">Send</button>

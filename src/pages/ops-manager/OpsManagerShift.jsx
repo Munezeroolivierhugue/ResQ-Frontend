@@ -11,6 +11,8 @@ import {
   OPS_RESOURCE_EVENTS,
   OPS_SHIFT_HANDOVER,
 } from '../../data/mockOpsManagerData'
+import OpsManagerDistrictLabel from '../../components/ops-manager/OpsManagerDistrictLabel'
+import { getOpsManagerDistrict } from '../../utils/opsManagerDistrict'
 
 export default function OpsManagerShift() {
   const [tab, setTab] = useState('performance')
@@ -21,6 +23,10 @@ export default function OpsManagerShift() {
 
   return (
     <div className="p-6">
+      <div className="mb-4">
+        <h1 className="dispatcher-page-title m-0">Shift Performance</h1>
+        <OpsManagerDistrictLabel />
+      </div>
       <div className="flex gap-2 mb-6 border-b border-(--border) pb-2">
         {['performance', 'handover'].map((t) => (
           <button
@@ -42,10 +48,14 @@ export default function OpsManagerShift() {
         <>
           <div className="flex flex-wrap justify-between gap-4 mb-6">
             <div>
-              <h1 className="dispatcher-page-title m-0">Shift Performance Report</h1>
+              <h2 className="text-lg font-bold text-(--text-primary) m-0" style={{ fontFamily: 'var(--font-display)' }}>
+                Shift Performance Report
+              </h2>
               <p className="dispatcher-page-subtitle m-0 mt-1">Auto-generated from shift data. Review and submit to District Commander.</p>
             </div>
-            <span className="text-[11px] font-mono text-(--text-muted) self-start">Shift: 08:00 – 16:00 · May 25 2026</span>
+            <span className="text-[11px] font-mono text-(--text-muted) self-start">
+              Shift: 08:00 – 16:00 · May 25 2026 · District: {getOpsManagerDistrict()}
+            </span>
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">

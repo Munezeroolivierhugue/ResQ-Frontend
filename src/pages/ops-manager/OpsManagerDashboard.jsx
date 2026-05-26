@@ -16,6 +16,9 @@ import {
   getWorkloadVariant,
   getWorkloadLabel,
 } from '../../data/mockOpsManagerData'
+import OpsManagerDistrictLabel from '../../components/ops-manager/OpsManagerDistrictLabel'
+import OpsManagerMissedCallsPanel from '../../components/ops-manager/OpsManagerMissedCallsPanel'
+import { getOpsManagerDistrict } from '../../utils/opsManagerDistrict'
 
 function FleetBar({ type, available, total }) {
   const pct = Math.round((available / total) * 100)
@@ -43,9 +46,16 @@ export default function OpsManagerDashboard() {
   }, [handoverBannerDismissed, handoverRead])
 
   const fleetShortage = OPS_FLEET.some((f) => f.available / f.total < 0.5)
+  const omDistrict = getOpsManagerDistrict()
+  const districtDispatchers = OPS_DISPATCHERS.filter((d) => d.district === omDistrict)
 
   return (
     <div className="p-6 flex flex-col gap-5">
+      <div>
+        <h1 className="dispatcher-page-title m-0">Command Overview</h1>
+        <OpsManagerDistrictLabel />
+      </div>
+
       {showBanner && (
         <div className="dispatcher-surface p-4 flex flex-wrap items-start gap-4 relative">
           <button
@@ -147,7 +157,7 @@ export default function OpsManagerDashboard() {
         <div className="flex-1 min-w-[240px] flex flex-col gap-3">
           <SectionTitle title="Active Dispatchers" />
           <div className="dispatcher-surface p-3 flex flex-col gap-2">
-            {OPS_DISPATCHERS.slice(0, 3).map((d) => (
+            {districtDispatchers.slice(0, 3).map((d) => (
               <div key={d.id} className="flex items-center gap-2 py-2 border-b border-(--border-subtle) last:border-0">
                 <span
                   className="w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
@@ -173,6 +183,7 @@ export default function OpsManagerDashboard() {
               View All Dispatchers →
             </Link>
           </div>
+          <OpsManagerMissedCallsPanel />
         </div>
       </div>
 

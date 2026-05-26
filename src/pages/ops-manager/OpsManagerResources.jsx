@@ -3,6 +3,7 @@ import ResourceReallocationFlow from '../../components/ops-manager/ResourceReall
 import SectionTitle from '../../components/dispatcher/SectionTitle'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import { OPS_MUTUAL_AID_HISTORY } from '../../data/mockOpsManagerData'
+import OpsManagerDistrictLabel from '../../components/ops-manager/OpsManagerDistrictLabel'
 
 export default function OpsManagerResources() {
   const [tab, setTab] = useState('recommendations')
@@ -16,6 +17,10 @@ export default function OpsManagerResources() {
 
   return (
     <div className="p-6">
+      <div className="mb-4">
+        <h1 className="dispatcher-page-title m-0">Resource Reallocation</h1>
+        <OpsManagerDistrictLabel />
+      </div>
       <div className="flex flex-wrap gap-2 mb-6 border-b border-(--border) pb-2">
         {['recommendations', 'mutual-aid'].map((t) => (
           <button

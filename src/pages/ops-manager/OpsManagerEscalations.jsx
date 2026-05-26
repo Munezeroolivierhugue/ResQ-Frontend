@@ -2,12 +2,14 @@ import { Link } from 'react-router-dom'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import { OPS_ESCALATIONS } from '../../data/mockOpsManagerData'
+import OpsManagerDistrictLabel from '../../components/ops-manager/OpsManagerDistrictLabel'
 
 export default function OpsManagerEscalations() {
   return (
     <div className="p-6">
-      <h1 className="dispatcher-page-title">Escalation Command</h1>
-      <p className="dispatcher-page-subtitle">Active escalations requiring operations manager oversight.</p>
+      <h1 className="dispatcher-page-title m-0">Escalation Command</h1>
+      <OpsManagerDistrictLabel />
+      <p className="dispatcher-page-subtitle mt-2">Active escalations requiring operations manager oversight.</p>
       <div className="mt-6 flex flex-col gap-3">
         <SectionTitle title="Active Escalations" badge={<StatusBadge label={String(OPS_ESCALATIONS.length)} variant="critical" />} />
         {OPS_ESCALATIONS.map((esc) => (

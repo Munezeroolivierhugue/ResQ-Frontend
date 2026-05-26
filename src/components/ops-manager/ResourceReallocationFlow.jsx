@@ -22,7 +22,6 @@ import {
   formatAuditStamp,
   formatAuditTime,
 } from '../../data/mockResourceReallocationData'
-
 const FILTERS = ['All', 'Pending', 'Approved', 'Rejected']
 const EXEC_STEPS = [
   { key: 'sent', label: 'Order sent to mobile device' },
@@ -246,8 +245,7 @@ export default function ResourceReallocationFlow() {
 
       <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
         <div>
-          <h1 className="dispatcher-page-title m-0">Resource Reallocation</h1>
-          <p className="dispatcher-page-subtitle m-0 mt-1">
+          <p className="dispatcher-page-subtitle m-0">
             Review each AI recommendation — execute, modify and approve, or reject with reason. All decisions are audit-logged.
           </p>
         </div>

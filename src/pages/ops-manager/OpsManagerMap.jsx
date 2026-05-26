@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Circle, Tooltip } from 'react-leaflet'
 import { Megaphone } from 'lucide-react'
+import OpsManagerDistrictLabel from '../../components/ops-manager/OpsManagerDistrictLabel'
+import { getOpsManagerDistrict } from '../../utils/opsManagerDistrict'
 import { useThemeStore } from '../../store/themeStore'
 import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
 import { RWANDA_CENTER, RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../components/map/rwandaConstants'
@@ -25,10 +27,30 @@ export default function OpsManagerMap() {
 
   const standbyUnits = mockUnits.filter((u) => u.status === 'available' || u.status === 'idle')
 
+  const omDistrict = getOpsManagerDistrict()
+
   return (
     <div className="flex flex-col h-full min-h-[calc(100vh-56px)]">
+      <div className="shrink-0 px-4 pt-4 pb-2 border-b border-(--border) bg-(--bg-surface)">
+        <h1 className="dispatcher-page-title m-0">Live Operational Map</h1>
+        <OpsManagerDistrictLabel />
+      </div>
       <div className="shrink-0 px-4 py-3 border-b border-(--border) bg-(--bg-surface) flex flex-wrap items-center gap-3 justify-between">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
+          <span
+            className="inline-flex items-center shrink-0"
+            style={{
+              background: 'var(--accent-ghost)',
+              border: '1px solid var(--accent)',
+              color: 'var(--accent)',
+              borderRadius: '6px',
+              padding: '0.25rem 0.65rem',
+              fontSize: '11px',
+              fontWeight: 600,
+            }}
+          >
+            📍 {omDistrict} District
+          </span>
           {LAYERS.map((name) => (
             <button
               key={name}

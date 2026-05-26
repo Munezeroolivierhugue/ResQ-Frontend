@@ -6,6 +6,7 @@ import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
 import { RWANDA_CENTER, RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../components/map/rwandaConstants'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import { OPS_ESCALATIONS, OPS_AGENCIES, OPS_AGENCY_OPTIONS } from '../../data/mockOpsManagerData'
+import OpsManagerDistrictLabel from '../../components/ops-manager/OpsManagerDistrictLabel'
 import { mockUnits } from '../../data/mockData'
 import 'leaflet/dist/leaflet.css'
 
@@ -31,6 +32,10 @@ export default function OpsManagerMultiAgency() {
 
   return (
     <div className="p-6 flex flex-col gap-4">
+      <div>
+        <h1 className="dispatcher-page-title m-0">Multi-Agency Control</h1>
+        <OpsManagerDistrictLabel />
+      </div>
       <label className="dispatcher-field max-w-md">
         <span className="field-label">Select incident to coordinate</span>
         <select className="dispatcher-input dispatcher-select" value={incidentId} onChange={(e) => setIncidentId(e.target.value)}>
