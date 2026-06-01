@@ -26,8 +26,19 @@ export default function Navbar({
         </span>
       </div>
 
-      <div className="navbar-search flex-1 flex items-center justify-center">
-        <div className="relative w-90">
+      <div className="navbar-search navbar-search--compact flex-1 flex items-center justify-center min-w-0 md:hidden">
+        <div className="navbar-search-inner relative w-full max-w-[10rem]">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-(--text-muted)" />
+          <input
+            placeholder="Search…"
+            className="w-full h-9 bg-(--bg-input) border border-(--border) rounded-full pl-[34px] pr-3 text-[13px] text-(--text-primary) outline-none focus:border-(--accent) focus:shadow-[0_0_0_3px_var(--accent-ghost)] placeholder:text-(--text-muted)"
+            style={{ fontFamily: 'var(--font-body)' }}
+          />
+        </div>
+      </div>
+
+      <div className="navbar-search hidden md:flex flex-1 items-center justify-center min-w-0">
+        <div className="relative w-full max-w-md">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-(--text-muted)" />
           <input
             placeholder="Search incidents, units, districts…"

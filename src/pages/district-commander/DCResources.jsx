@@ -37,14 +37,14 @@ export default function DCResources() {
   }
 
   return (
-    <div className="p-6">
+    <div className="portal-page">
       <DCPageHeader
         title="Resource Requests"
         subtitle="Request additional units or resources from RNP Headquarters."
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-5 dispatcher-surface p-5">
+      <div className="dc-resources-layout gap-6">
+        <div className="dispatcher-surface p-5">
           <SectionTitle title="Submit New Request" className="mb-4" />
           <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
             <label className="dispatcher-field">
@@ -118,7 +118,7 @@ export default function DCResources() {
           </form>
         </div>
 
-        <div className="lg:col-span-7 dispatcher-surface p-5">
+        <div className="dispatcher-surface p-5">
           <h2 className="text-[14px] font-bold m-0 mb-3">Request History</h2>
           <div className="flex flex-wrap gap-2 mb-4">
             {FILTERS.map((f) => (

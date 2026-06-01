@@ -22,7 +22,7 @@ export default function OpsManagerShift() {
   const { markHandoverRead } = useOpsManagerStore()
 
   return (
-    <div className="p-6">
+    <div className="portal-page">
       <div className="mb-4">
         <h1 className="dispatcher-page-title m-0">Shift Performance</h1>
         <OpsManagerDistrictLabel />
@@ -67,7 +67,7 @@ export default function OpsManagerShift() {
             <MetricCard label="AI Acceptance Rate" value="86%" hint="✓" hintTone="positive" />
           </div>
 
-          <div className="dispatcher-surface p-4 mb-6 overflow-x-auto">
+          <div className="dispatcher-surface p-4 mb-6 table-scroll">
             <SectionTitle title="Significant Incidents" className="mb-3" />
             <table className="w-full text-[13px] min-w-[640px]">
               <thead>

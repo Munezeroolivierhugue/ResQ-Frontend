@@ -38,10 +38,10 @@ export default function DCDashboard() {
   const lineColor = theme === 'dark' ? ACCENT.dark : ACCENT.light
 
   return (
-    <div className="p-6 flex flex-col gap-6">
+    <div className="portal-page flex flex-col gap-6">
       <DCPageHeader title="District Command" subtitle="Performance overview · May 2026" />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="portal-grid-kpi">
         <MetricCard icon={AlertCircle} label="Total Incidents (This Month)" value="312" hint="↑ 8% vs last month" hintTone="warning" />
         <MetricCard icon={Clock} label="Avg Response Time" value="7.4m" hint="Target: 8 min ✓" hintTone="positive" />
         <MetricCard icon={MapPin} label="Coverage Score" value="91%" hint="↑ 2% this month" hintTone="positive" />
@@ -50,7 +50,7 @@ export default function DCDashboard() {
         <MetricCard icon={Car} label="Units Assigned" value="18" hint="2 units in maintenance" hintTone="neutral" />
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-4">
+      <div className="portal-grid-2">
         <div className="dispatcher-surface p-4 flex-1 min-w-0">
           <h2 className="text-[13px] font-bold text-(--text-primary) m-0 mb-3">Response Time — 12 Months</h2>
           <div style={{ height: 200, width: '100%' }}>
@@ -82,7 +82,7 @@ export default function DCDashboard() {
         </div>
       </div>
 
-      <div className="dispatcher-surface p-4 overflow-x-auto">
+      <div className="dispatcher-surface p-4 table-scroll">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
           <SectionTitle title="Recent Shift Reports" className="mb-0" />
           <Link to="/district-commander/shift-reports" className="text-[12px] font-semibold text-(--accent) no-underline hover:underline">

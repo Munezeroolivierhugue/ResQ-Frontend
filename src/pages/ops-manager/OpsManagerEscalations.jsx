@@ -6,7 +6,7 @@ import OpsManagerDistrictLabel from '../../components/ops-manager/OpsManagerDist
 
 export default function OpsManagerEscalations() {
   return (
-    <div className="p-6">
+    <div className="portal-page">
       <h1 className="dispatcher-page-title m-0">Escalation Command</h1>
       <OpsManagerDistrictLabel />
       <p className="dispatcher-page-subtitle mt-2">Active escalations requiring operations manager oversight.</p>

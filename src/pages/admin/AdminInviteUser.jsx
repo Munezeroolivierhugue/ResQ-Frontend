@@ -147,7 +147,7 @@ export default function AdminInviteUser() {
   }
 
   return (
-    <div className="p-6">
+    <div className="portal-page">
       <h1 className="text-2xl font-bold m-0 mb-1" style={{ fontFamily: 'var(--font-display)' }}>
         Create user & send invitation
       </h1>

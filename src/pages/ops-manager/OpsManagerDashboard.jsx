@@ -50,7 +50,7 @@ export default function OpsManagerDashboard() {
   const districtDispatchers = OPS_DISPATCHERS.filter((d) => d.district === omDistrict)
 
   return (
-    <div className="p-6 flex flex-col gap-5">
+    <div className="portal-page flex flex-col gap-5">
       <div>
         <h1 className="dispatcher-page-title m-0">Command Overview</h1>
         <OpsManagerDistrictLabel />
@@ -79,7 +79,7 @@ export default function OpsManagerDashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="portal-grid-4">
         <MetricCard icon={Clock} label="Avg Response Time" value="7.2m" hint="↓ 0.8m vs target" hintTone="positive">
           <div className="dispatcher-metric-target">Target: 8 min</div>
         </MetricCard>
@@ -97,8 +97,8 @@ export default function OpsManagerDashboard() {
         />
       </div>
 
-      <div className="flex flex-col xl:flex-row gap-4 min-h-0">
-        <div className="flex-[1.8] min-w-0 flex flex-col gap-3">
+      <div className="om-dashboard-row min-h-0">
+        <div className="om-dashboard-col--wide flex flex-col gap-3">
           <SectionTitle
             title="Escalation Queue"
             badge={<StatusBadge label={`${OPS_ESCALATIONS.length} live`} variant="critical" />}
@@ -132,7 +132,7 @@ export default function OpsManagerDashboard() {
           )}
         </div>
 
-        <div className="flex-[1.4] min-w-0 flex flex-col gap-3">
+        <div className="om-dashboard-col--mid flex flex-col gap-3">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <SectionTitle title="AI Resource Recommendations" accent />
             <span className="text-[10px] text-(--text-muted) font-mono">15m refresh</span>
@@ -154,7 +154,7 @@ export default function OpsManagerDashboard() {
           ))}
         </div>
 
-        <div className="flex-1 min-w-[240px] flex flex-col gap-3">
+        <div className="om-dashboard-col--side flex flex-col gap-3">
           <SectionTitle title="Active Dispatchers" />
           <div className="dispatcher-surface p-3 flex flex-col gap-2">
             {districtDispatchers.slice(0, 3).map((d) => (

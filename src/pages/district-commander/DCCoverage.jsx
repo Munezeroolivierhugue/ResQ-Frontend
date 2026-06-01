@@ -41,14 +41,14 @@ export default function DCCoverage() {
   )
 
   return (
-    <div className="p-6 flex flex-col gap-4">
+    <div className="portal-page flex flex-col gap-4">
       <DCPageHeader
         title="Coverage Analysis"
         subtitle={`Sector coverage map and gap recommendations for ${district} District.`}
       />
 
-      <div className="flex flex-col lg:flex-row gap-4 min-h-[520px]">
-        <div className="lg:w-[60%] flex flex-col min-w-0">
+      <div className="dc-coverage-layout min-h-[520px]">
+        <div className="flex flex-col min-w-0">
           <div className="shrink-0 flex flex-wrap gap-2 mb-2">
             {Object.keys(layers).map((name) => (
               <button
@@ -67,7 +67,7 @@ export default function DCCoverage() {
               </button>
             ))}
           </div>
-          <div className="dispatcher-surface flex-1 min-h-[440px] relative overflow-hidden">
+          <div className="dispatcher-surface flex-1 map-panel-full relative overflow-hidden">
             <div
               className="absolute top-3 left-3 z-[1000] px-3 py-2 rounded-lg border border-(--border) bg-(--bg-surface) text-[10px] space-y-1"
             >
@@ -118,7 +118,7 @@ export default function DCCoverage() {
           </div>
         </div>
 
-        <div className="lg:w-[40%] flex flex-col gap-4 min-w-0">
+        <div className="flex flex-col gap-4 min-w-0">
           <div className="dispatcher-surface p-4">
             <h2 className="text-[13px] font-bold m-0 mb-3">Coverage Summary</h2>
             <div className="space-y-2 text-[13px]">

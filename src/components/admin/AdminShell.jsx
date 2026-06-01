@@ -18,7 +18,7 @@ export default function AdminShell({ user }) {
           profileHref="/admin/settings/profile"
           settingsHref="/admin/settings/profile"
         />
-        <main className="flex-1 overflow-auto bg-(--bg-base)">
+        <main className="portal-main flex-1 overflow-auto bg-(--bg-base)">
           <Outlet />
         </main>
       </div>

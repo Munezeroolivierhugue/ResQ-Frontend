@@ -20,7 +20,7 @@ export default function OpsManagerShell() {
           profileHref="/ops-manager/settings/profile"
           settingsHref="/ops-manager/settings/profile"
         />
-        <main className="flex-1 overflow-auto bg-(--bg-base) min-w-[1024px]">
+        <main className="portal-main flex-1 overflow-auto bg-(--bg-base)">
           <Outlet />
         </main>
       </div>

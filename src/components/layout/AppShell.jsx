@@ -18,7 +18,7 @@ export default function AppShell({ user }) {
           profileHref="/dispatcher/settings/profile"
           settingsHref="/dispatcher/settings/profile"
         />
-        <main className="flex-1 overflow-auto bg-(--bg-base)">
+        <main className="portal-main flex-1 overflow-auto bg-(--bg-base)">
           <Outlet />
         </main>
       </div>

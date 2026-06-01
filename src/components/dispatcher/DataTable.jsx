@@ -1,6 +1,6 @@
 export default function DataTable({ columns, rows, footer }) {
   return (
-    <div className="dispatcher-table-wrap overflow-x-auto">
+    <div className="dispatcher-table-wrap table-scroll">
       <table className="dispatcher-table w-full border-collapse">
         <thead>
           <tr>

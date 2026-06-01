@@ -48,10 +48,10 @@ export default function AIDispatchEngine() {
   ]
 
   return (
-    <div className="flex h-full">
+    <div className="ai-engine-layout h-full min-h-0">
 
       {/* Map — left 55% */}
-      <div className="relative" style={{ flex: '0 0 55%' }}>
+      <div className="relative min-h-[280px] lg:min-h-0">
         <MapContainer center={[incident.lat, incident.lng]}
           zoom={11} minZoom={RWANDA_MIN_ZOOM} maxZoom={RWANDA_MAX_ZOOM}
           maxBounds={RWANDA_BOUNDS} maxBoundsViscosity={1.0}
@@ -87,7 +87,7 @@ export default function AIDispatchEngine() {
       </div>
 
       {/* Recommendation panel — right 45% */}
-      <div className="bg-(--bg-surface) border-l border-(--border) flex flex-col overflow-hidden" style={{ flex: '0 0 45%' }}>
+      <div className="bg-(--bg-surface) flex flex-col overflow-hidden min-h-0">
         <div className="flex-1 overflow-y-auto p-5">
 
           {/* Incident summary */}

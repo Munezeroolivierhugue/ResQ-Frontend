@@ -29,8 +29,8 @@ export default function OpsManagerEscalation() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4 p-4 md:p-5 min-h-full">
-      <div className="lg:w-[55%] flex flex-col gap-4 min-w-0">
+    <div className="portal-page portal-split-60-40 min-h-full">
+      <div className="flex flex-col gap-4 min-w-0">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="text-(--accent) font-mono font-bold text-[14px]">COMMANDING: {detail.id}</div>
@@ -100,7 +100,7 @@ export default function OpsManagerEscalation() {
         </div>
       </div>
 
-      <div className="lg:w-[45%] flex flex-col gap-4 min-w-0">
+      <div className="flex flex-col gap-4 min-w-0">
         <div className="dispatcher-surface p-4">
           <div className="text-[10px] font-mono text-(--text-muted) uppercase tracking-wider mb-2">
             AI REASSESSMENT — UPDATED {detail.reassessment.updated}

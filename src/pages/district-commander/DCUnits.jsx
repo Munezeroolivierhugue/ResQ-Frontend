@@ -20,7 +20,7 @@ export default function DCUnits() {
   }
 
   return (
-    <div className="p-6 flex flex-col gap-6">
+    <div className="portal-page flex flex-col gap-6">
       <DCPageHeader title="Unit Performance" subtitle={`All units assigned to ${district} District.`} />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -34,7 +34,7 @@ export default function DCUnits() {
         />
       </div>
 
-      <div className="dispatcher-surface overflow-x-auto">
+      <div className="dispatcher-surface table-scroll">
         <table className="w-full min-w-[960px] text-left border-collapse text-[12px]">
           <thead>
             <tr className="text-[10px] uppercase tracking-wide text-(--text-muted) border-b border-(--border-subtle)">

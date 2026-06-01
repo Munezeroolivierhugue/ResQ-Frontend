@@ -55,7 +55,7 @@ export default function DCShiftReports() {
   }
 
   return (
-    <div className="p-6 relative">
+    <div className="portal-page relative">
       <DCPageHeader
         title="Shift Reports"
         subtitle="Submitted by Operations Managers assigned to this district."
@@ -63,8 +63,8 @@ export default function DCShiftReports() {
 
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <input
-          className="dispatcher-input dispatcher-text-input"
-          style={{ width: '280px', height: '40px' }}
+          className="dispatcher-input dispatcher-text-input w-full max-w-xs sm:max-w-sm flex-1 min-w-[12rem]"
+          style={{ height: '40px' }}
           placeholder="Search by report ID or OM name..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -88,7 +88,7 @@ export default function DCShiftReports() {
         </div>
       </div>
 
-      <div className="dispatcher-surface overflow-x-auto">
+      <div className="dispatcher-surface table-scroll">
         <table className="w-full min-w-[900px] text-left border-collapse text-[12px]">
           <thead>
             <tr className="text-[10px] uppercase tracking-wide text-(--text-muted) border-b border-(--border-subtle)">
@@ -140,7 +140,7 @@ export default function DCShiftReports() {
         <>
           <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setSelectedId(null)} aria-hidden />
           <aside
-            className="fixed top-0 right-0 h-full w-full max-w-md z-50 flex flex-col border-l border-(--border) bg-(--bg-surface) shadow-xl"
+            className="dc-drawer fixed top-0 right-0 h-full z-50 flex flex-col border-l border-(--border) bg-(--bg-surface) shadow-xl"
             style={{ fontFamily: 'var(--font-body)' }}
           >
             <div className="flex items-start justify-between gap-2 p-4 border-b border-(--border-subtle) shrink-0">

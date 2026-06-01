@@ -28,7 +28,7 @@ export default function IncidentHistory() {
   const paged      = filtered.slice((page - 1) * perPage, page * perPage)
 
   return (
-    <div className="p-6">
+    <div className="portal-page">
 
       <div className="flex items-center justify-between mb-5">
         <div>
@@ -75,8 +75,8 @@ export default function IncidentHistory() {
         </div>
       </div>
 
-      <div className="bg-(--bg-surface) border border-(--border) rounded-xl overflow-hidden">
-        <table className="w-full border-collapse">
+      <div className="bg-(--bg-surface) border border-(--border) rounded-xl table-scroll">
+        <table className="w-full border-collapse min-w-[720px]">
           <thead>
             <tr className="bg-(--bg-base)">
               {['ID', 'Severity', 'Type', 'District / Sector', 'Reported', 'Response Time', 'Resolution Time', 'Units', 'SLA'].map(col => (

@@ -16,7 +16,7 @@ export default function OpsManagerResources() {
   })
 
   return (
-    <div className="p-6">
+    <div className="portal-page">
       <div className="mb-4">
         <h1 className="dispatcher-page-title m-0">Resource Reallocation</h1>
         <OpsManagerDistrictLabel />

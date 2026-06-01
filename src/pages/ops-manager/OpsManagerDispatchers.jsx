@@ -41,19 +41,19 @@ export default function OpsManagerDispatchers() {
   }
 
   return (
-    <div className="p-6">
+    <div className="portal-page">
       <h1 className="dispatcher-page-title m-0">Dispatcher Supervision</h1>
       <OpsManagerDistrictLabel />
       <p className="dispatcher-page-subtitle mt-2">Monitor workload, AI acceptance, and redistribute active queues.</p>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 my-6">
+      <div className="portal-grid-4 my-6">
         <MetricCard label="Active Dispatchers" value={String(dispatchers.length)} />
         <MetricCard label="Avg AI Acceptance" value={`${avgAi}%`} />
         <MetricCard label="Overloaded" value={String(overloaded)} hintTone={overloaded ? 'critical' : 'positive'} />
         <MetricCard label="Total Active Incidents" value={String(totalIncidents)} />
       </div>
 
-      <div className="dispatcher-surface overflow-x-auto">
+      <div className="dispatcher-surface table-scroll">
         <table className="w-full text-left text-[13px] border-collapse min-w-[800px]">
           <thead>
             <tr className="border-b border-(--border) text-[11px] uppercase tracking-wider text-(--text-muted)" style={{ fontFamily: 'var(--font-display)' }}>

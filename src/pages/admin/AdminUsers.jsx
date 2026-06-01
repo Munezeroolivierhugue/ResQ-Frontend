@@ -9,7 +9,7 @@ const statusStyle = {
 
 export default function AdminUsers() {
   return (
-    <div className="p-6">
+    <div className="portal-page">
       <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-2xl font-bold m-0" style={{ fontFamily: 'var(--font-display)' }}>
@@ -24,8 +24,8 @@ export default function AdminUsers() {
         </Link>
       </div>
 
-      <div className="rounded-xl border border-(--border) bg-(--bg-surface) overflow-hidden shadow-[var(--shadow-card)]">
-        <table className="w-full border-collapse text-[13px]">
+      <div className="rounded-xl border border-(--border) bg-(--bg-surface) table-scroll shadow-[var(--shadow-card)]">
+        <table className="w-full border-collapse text-[13px] min-w-[640px]">
           <thead>
             <tr className="bg-(--bg-base) border-b border-(--border)">
               {['Name', 'Email', 'Phone', 'Role', 'Status', 'Invited'].map((h) => (

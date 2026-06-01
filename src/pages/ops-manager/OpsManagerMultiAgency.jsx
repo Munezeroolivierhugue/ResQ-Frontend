@@ -31,7 +31,7 @@ export default function OpsManagerMultiAgency() {
   }))
 
   return (
-    <div className="p-6 flex flex-col gap-4">
+    <div className="portal-page flex flex-col gap-4">
       <div>
         <h1 className="dispatcher-page-title m-0">Multi-Agency Control</h1>
         <OpsManagerDistrictLabel />
@@ -45,8 +45,8 @@ export default function OpsManagerMultiAgency() {
         </select>
       </label>
 
-      <div className="flex flex-col lg:flex-row gap-4 min-h-[560px]">
-        <div className="lg:w-[55%] dispatcher-surface overflow-hidden relative min-h-[400px]">
+      <div className="multi-agency-layout min-h-[560px]">
+        <div className="dispatcher-surface overflow-hidden relative min-h-[400px] map-panel-full">
           <MapContainer
             center={RWANDA_CENTER}
             zoom={12}
@@ -90,7 +90,7 @@ export default function OpsManagerMultiAgency() {
           </div>
         </div>
 
-        <div className="lg:w-[45%] flex flex-col gap-4 min-w-0">
+        <div className="flex flex-col gap-4 min-w-0">
           <SectionBlock title="Active Agencies">
             {agencies.map((a) => (
               <div key={a.id} className="dispatcher-surface p-3 mb-2">

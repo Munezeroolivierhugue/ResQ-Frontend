@@ -20,7 +20,7 @@ export default function DistrictCommanderShell() {
           profileHref="/district-commander/profile"
           settingsHref="/district-commander/settings/profile"
         />
-        <main className="flex-1 overflow-auto bg-(--bg-base) min-w-[1024px]">
+        <main className="portal-main flex-1 overflow-auto bg-(--bg-base)">
           <Outlet />
         </main>
       </div>

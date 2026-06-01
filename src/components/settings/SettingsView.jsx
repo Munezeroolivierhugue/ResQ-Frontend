@@ -20,7 +20,7 @@ export default function SettingsView({ portalLabel, breadcrumbParent }) {
   const { theme, setTheme } = useThemeStore()
 
   return (
-    <div className="p-6">
+    <div className="portal-page">
       <div className="mb-6">
         <div className="flex items-center gap-1.5 mb-1">
           <span className="text-[12px] text-(--text-muted)">{breadcrumbParent}</span>

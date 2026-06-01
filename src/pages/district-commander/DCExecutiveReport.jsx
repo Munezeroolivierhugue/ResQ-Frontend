@@ -21,7 +21,7 @@ export default function DCExecutiveReport() {
   const canSubmit = assessmentOk && recommendationsOk && !submitted
 
   return (
-    <div className="p-6">
+    <div className="portal-page">
       <DCPageHeader
         title="Executive Report"
         subtitle="Monthly performance report for RNP Headquarters."
@@ -106,7 +106,7 @@ export default function DCExecutiveReport() {
             </div>
           </section>
 
-          <section className="dispatcher-surface p-4 overflow-x-auto">
+          <section className="dispatcher-surface p-4 table-scroll">
             <h2 className="text-[13px] font-bold m-0 mb-3">Incident Analysis</h2>
             <table className="w-full min-w-[520px] text-[12px] border-collapse">
               <thead>
@@ -192,7 +192,7 @@ export default function DCExecutiveReport() {
       )}
 
       {tab === 'archive' && (
-        <div className="dispatcher-surface overflow-x-auto">
+        <div className="dispatcher-surface table-scroll">
           <table className="w-full min-w-[480px] text-[12px] border-collapse">
             <thead>
               <tr className="text-[10px] uppercase text-(--text-muted) border-b border-(--border-subtle)">

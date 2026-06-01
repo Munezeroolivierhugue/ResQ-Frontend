@@ -38,7 +38,7 @@ export default function Notifications() {
   ]
 
   return (
-    <div className="p-6">
+    <div className="portal-page">
       <div className="mb-5">
         <div className="flex items-center gap-1.5 mb-1">
           <span className="text-[12px] text-(--text-muted)">Dispatcher</span>

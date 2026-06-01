@@ -35,7 +35,7 @@ export default function IncidentClosure() {
   }
 
   return (
-    <div className="p-6 dispatcher-page">
+    <div className="portal-page dispatcher-page">
       <PageHeader
         breadcrumbCurrent="Incident report"
         title="Incident outcome & closure"

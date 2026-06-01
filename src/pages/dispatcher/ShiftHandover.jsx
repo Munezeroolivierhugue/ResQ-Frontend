@@ -43,7 +43,7 @@ export default function ShiftHandover() {
   ]
 
   return (
-    <div className="p-6 dispatcher-page">
+    <div className="portal-page dispatcher-page">
       <PageHeader
         breadcrumbCurrent="Shift handover"
         title="Shift handover summary"

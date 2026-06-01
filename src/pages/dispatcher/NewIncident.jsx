@@ -110,10 +110,10 @@ export default function NewIncident() {
 
         <form
           onSubmit={handleApproveDispatch}
-          className="w-full flex flex-col xl:flex-row items-start gap-4 xl:gap-5"
+          className="w-full intake-three-col items-start"
         >
           {/* LEFT — caller, classification, notes */}
-          <div className="w-full xl:flex-[3] min-w-0 flex flex-col gap-4">
+          <div className="intake-col--left flex flex-col gap-4">
             <IntakePanel className="p-4 md:p-5">
               <PanelHeader
                 icon={Phone}
@@ -182,7 +182,7 @@ export default function NewIncident() {
           </div>
 
           {/* CENTER — location confirmation + live map */}
-          <div className="w-full xl:flex-[6] min-w-0 flex flex-col gap-4">
+          <div className="intake-col--center flex flex-col gap-4">
             <IntakePanel className="p-4 md:p-5 shrink-0">
               <FieldLabel className="mb-3">Location confirmation</FieldLabel>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -288,7 +288,7 @@ export default function NewIncident() {
           </div>
 
           {/* RIGHT — timeline + queue */}
-          <div className="w-full xl:flex-[3] min-w-0 flex flex-col gap-4">
+          <div className="intake-col--right flex flex-col gap-4">
             <IncidentTimeline steps={mockIncidentTimeline} />
             <div className="w-full xl:sticky xl:top-4 xl:self-start">
               <RecentIncidentsQueue incidents={mockDispatchQueue} theme={theme} />

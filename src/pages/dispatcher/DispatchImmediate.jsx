@@ -62,7 +62,7 @@ export default function DispatchImmediate() {
 
   if (!baseIncident) {
     return (
-      <div className="p-6 text-(--text-secondary)">
+      <div className="portal-page text-(--text-secondary)">
         Incident not found.{' '}
         <Link to="/dispatcher" className="text-(--accent)">Return to map</Link>
       </div>
