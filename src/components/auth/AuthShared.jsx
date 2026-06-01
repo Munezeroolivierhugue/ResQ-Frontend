@@ -2,11 +2,13 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Siren, ArrowRight, ShieldCheck } from 'lucide-react'
 import { setDemoRole } from '../../utils/authSession'
+import { setDistrictCommanderSession } from '../../utils/districtCommanderSession'
 import signupImage from '../../assets/signup_Image.png'
 
 const DEMO_PORTALS = [
   { label: 'Dispatcher', value: 'dispatcher', href: '/dispatcher' },
   { label: 'Operations Manager', value: 'ops_manager', href: '/ops-manager/dashboard' },
+  { label: 'District Commander', value: 'district_commander', href: '/district-commander/dashboard' },
   { label: 'Super Admin', value: 'admin', href: '/admin' },
 ]
 
@@ -17,6 +19,9 @@ export function DemoPortalDropdown({ inline = false }) {
 
   const enterPortal = (portal) => {
     setDemoRole(portal.value)
+    if (portal.value === 'district_commander') {
+      setDistrictCommanderSession('Nyarugenge')
+    }
     sessionStorage.setItem('resq-trusted-device', 'true')
     setOpen(false)
     navigate(portal.href)

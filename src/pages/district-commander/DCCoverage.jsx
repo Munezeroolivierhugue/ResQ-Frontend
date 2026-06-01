@@ -1,0 +1,180 @@
+import { useState } from 'react'
+import { MapContainer, TileLayer, Circle, Tooltip } from 'react-leaflet'
+import { ArrowUp } from 'lucide-react'
+import { useThemeStore } from '../../store/themeStore'
+import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
+import { RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../components/map/rwandaConstants'
+import DCPageHeader from '../../components/district-commander/DCPageHeader'
+import { getDistrictCommanderDistrict } from '../../utils/districtCommanderSession'
+import { DC_COVERAGE_SECTORS, DC_COVERAGE_RECOMMENDATIONS } from '../../data/mockDistrictCommanderData'
+import 'leaflet/dist/leaflet.css'
+
+const NYARUGENGE_CENTER = [-1.958, 30.052]
+
+function coverageFill(pct) {
+  if (pct >= 85) return 'rgba(61, 170, 106, 0.25)'
+  if (pct >= 65) return 'rgba(240, 120, 32, 0.25)'
+  return 'rgba(232, 53, 74, 0.25)'
+}
+
+function coverageStroke(pct) {
+  if (pct >= 85) return 'var(--status-low)'
+  if (pct >= 65) return 'var(--status-medium)'
+  return 'var(--status-critical)'
+}
+
+export default function DCCoverage() {
+  const { theme } = useThemeStore()
+  const district = getDistrictCommanderDistrict()
+  const [layers, setLayers] = useState({
+    'Coverage Zones': true,
+    'Unit Positions': true,
+    'Sector Labels': true,
+  })
+  const [recs, setRecs] = useState(() => DC_COVERAGE_RECOMMENDATIONS.map((r) => ({ ...r })))
+
+  const toggle = (name) => setLayers((p) => ({ ...p, [name]: !p[name] }))
+
+  const atRisk = DC_COVERAGE_SECTORS.filter((s) => s.coverage < 65).length
+  const overall = Math.round(
+    DC_COVERAGE_SECTORS.reduce((s, x) => s + x.coverage, 0) / DC_COVERAGE_SECTORS.length
+  )
+
+  return (
+    <div className="p-6 flex flex-col gap-4">
+      <DCPageHeader
+        title="Coverage Analysis"
+        subtitle={`Sector coverage map and gap recommendations for ${district} District.`}
+      />
+
+      <div className="flex flex-col lg:flex-row gap-4 min-h-[520px]">
+        <div className="lg:w-[60%] flex flex-col min-w-0">
+          <div className="shrink-0 flex flex-wrap gap-2 mb-2">
+            {Object.keys(layers).map((name) => (
+              <button
+                key={name}
+                type="button"
+                className="text-[11px] font-semibold px-3 py-1.5 rounded-full border cursor-pointer"
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  background: layers[name] ? 'var(--accent-ghost)' : 'var(--bg-input)',
+                  borderColor: layers[name] ? 'var(--accent)' : 'var(--border)',
+                  color: layers[name] ? 'var(--accent)' : 'var(--text-secondary)',
+                }}
+                onClick={() => toggle(name)}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+          <div className="dispatcher-surface flex-1 min-h-[440px] relative overflow-hidden">
+            <div
+              className="absolute top-3 left-3 z-[1000] px-3 py-2 rounded-lg border border-(--border) bg-(--bg-surface) text-[10px] space-y-1"
+            >
+              <div><span style={{ color: 'var(--status-low)' }}>●</span> Good (≥85%)</div>
+              <div><span style={{ color: 'var(--status-medium)' }}>●</span> Moderate (65–84%)</div>
+              <div><span style={{ color: 'var(--status-critical)' }}>●</span> Critical (&lt;65%)</div>
+            </div>
+            <MapContainer
+              center={NYARUGENGE_CENTER}
+              zoom={14}
+              minZoom={RWANDA_MIN_ZOOM}
+              maxZoom={RWANDA_MAX_ZOOM}
+              maxBounds={RWANDA_BOUNDS}
+              style={{ width: '100%', height: '100%', minHeight: 440, background: 'var(--bg-base)' }}
+            >
+              <TileLayer
+                url={
+                  theme === 'dark'
+                    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+                    : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+                }
+                attribution="&copy; CARTO"
+              />
+              <RwandaBoundsEnforcer />
+              {layers['Coverage Zones'] &&
+                DC_COVERAGE_SECTORS.map((s) => (
+                  <Circle
+                    key={s.name}
+                    center={[s.lat, s.lng]}
+                    radius={s.radius}
+                    pathOptions={{
+                      fillColor: coverageFill(s.coverage),
+                      fillOpacity: 1,
+                      color: coverageStroke(s.coverage),
+                      weight: 2,
+                    }}
+                  >
+                    {layers['Sector Labels'] && (
+                      <Tooltip permanent direction="center" className="!bg-transparent !border-0 !shadow-none">
+                        <span className="text-[10px] font-bold" style={{ color: 'var(--text-primary)' }}>
+                          {s.name} ({s.coverage}%)
+                        </span>
+                      </Tooltip>
+                    )}
+                  </Circle>
+                ))}
+            </MapContainer>
+          </div>
+        </div>
+
+        <div className="lg:w-[40%] flex flex-col gap-4 min-w-0">
+          <div className="dispatcher-surface p-4">
+            <h2 className="text-[13px] font-bold m-0 mb-3">Coverage Summary</h2>
+            <div className="space-y-2 text-[13px]">
+              <div className="flex justify-between">
+                <span className="text-(--text-secondary)">Sectors at risk</span>
+                <span className="font-mono font-bold">{atRisk}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-(--text-secondary)">Overall district coverage</span>
+                <span className="font-mono font-bold">{overall}%</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-(--text-secondary)">Recommended unit moves</span>
+                <span className="font-mono font-bold">{recs.length}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <h2 className="text-[13px] font-bold m-0">AI Coverage Recommendations</h2>
+            {recs.map((rec) => (
+              <div key={rec.id} className="dispatcher-surface p-4">
+                <div className="text-[13px] font-bold text-(--text-primary)">{rec.text}</div>
+                <p className="text-[12px] text-(--text-secondary) m-0 mt-1">{rec.impact}</p>
+                <p className="text-[11px] text-(--text-muted) font-mono m-0 mt-1">{rec.source}</p>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  <button
+                    type="button"
+                    className="dispatcher-btn-primary text-[11px] py-1.5 px-2.5"
+                    disabled={rec.approved}
+                    style={
+                      rec.approved
+                        ? {
+                            background: 'var(--status-low-bg)',
+                            color: 'var(--status-low)',
+                            border: '1px solid var(--status-low)',
+                            cursor: 'default',
+                          }
+                        : undefined
+                    }
+                    onClick={() =>
+                      setRecs((list) => list.map((r) => (r.id === rec.id ? { ...r, approved: true } : r)))
+                    }
+                  >
+                    {rec.approved ? 'Approved ✓' : 'Approve for OM'}
+                  </button>
+                  <button type="button" className="dispatcher-btn-ghost text-[11px] py-1.5 px-2.5 inline-flex items-center gap-1">
+                    <ArrowUp size={12} />
+                    Escalate to HQ
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

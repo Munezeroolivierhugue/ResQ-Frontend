@@ -33,6 +33,16 @@ import OpsManagerDispatchers from './pages/ops-manager/OpsManagerDispatchers'
 import OpsManagerShift from './pages/ops-manager/OpsManagerShift'
 import OpsManagerProfile from './pages/ops-manager/OpsManagerProfile'
 import OpsManagerSettings from './pages/ops-manager/OpsManagerSettings'
+import DistrictCommanderRoute from './components/layout/DistrictCommanderRoute'
+import DistrictCommanderShell from './components/district-commander/DistrictCommanderShell'
+import DCDashboard from './pages/district-commander/DCDashboard'
+import DCShiftReports from './pages/district-commander/DCShiftReports'
+import DCUnits from './pages/district-commander/DCUnits'
+import DCCoverage from './pages/district-commander/DCCoverage'
+import DCResources from './pages/district-commander/DCResources'
+import DCExecutiveReport from './pages/district-commander/DCExecutiveReport'
+import DCProfile from './pages/district-commander/DCProfile'
+import DCSettings from './pages/district-commander/DCSettings'
 
 const dispatcher = { name: 'Jean Bosco', role: 'DISPATCHER' }
 const admin = { name: 'Super Admin', role: 'SUPER ADMIN' }
@@ -56,6 +66,22 @@ export default function App() {
           <Route path="profile" element={<Navigate to="/admin/settings/profile" replace />} />
           <Route path="settings" element={<Navigate to="/admin/settings/profile" replace />} />
           <Route path="settings/:section" element={<AdminSettings />} />
+        </Route>
+
+        {/* District Commander portal */}
+        <Route path="/district-commander" element={<DistrictCommanderRoute />}>
+          <Route element={<DistrictCommanderShell />}>
+            <Route path="dashboard" element={<DCDashboard />} />
+            <Route path="shift-reports" element={<DCShiftReports />} />
+            <Route path="units" element={<DCUnits />} />
+            <Route path="coverage" element={<DCCoverage />} />
+            <Route path="resources" element={<DCResources />} />
+            <Route path="executive-report" element={<DCExecutiveReport />} />
+            <Route path="profile" element={<DCProfile />} />
+            <Route path="settings" element={<Navigate to="/district-commander/settings/profile" replace />} />
+            <Route path="settings/:section" element={<DCSettings />} />
+            <Route index element={<Navigate to="/district-commander/dashboard" replace />} />
+          </Route>
         </Route>
 
         {/* Operations Manager portal */}

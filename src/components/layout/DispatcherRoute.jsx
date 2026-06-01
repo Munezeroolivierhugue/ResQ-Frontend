@@ -9,6 +9,9 @@ export default function DispatcherRoute() {
     if (role === 'ops_manager' || role === 'operations_manager') {
       return <Navigate to="/ops-manager/dashboard" replace />
     }
+    if (role === 'district_commander') {
+      return <Navigate to="/district-commander/dashboard" replace />
+    }
     return <Navigate to="/login" replace />
   }
   return <Outlet />
