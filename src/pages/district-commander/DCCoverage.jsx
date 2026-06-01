@@ -1,15 +1,19 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { MapContainer, TileLayer, Circle, Tooltip } from 'react-leaflet'
 import { ArrowUp } from 'lucide-react'
 import { useThemeStore } from '../../store/themeStore'
 import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
+import MapFitBounds from '../../components/map/MapFitBounds'
 import { RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../components/map/rwandaConstants'
 import DCPageHeader from '../../components/district-commander/DCPageHeader'
 import { getDistrictCommanderDistrict } from '../../utils/districtCommanderSession'
 import { DC_COVERAGE_SECTORS, DC_COVERAGE_RECOMMENDATIONS } from '../../data/mockDistrictCommanderData'
 import 'leaflet/dist/leaflet.css'
 
-const NYARUGENGE_CENTER = [-1.958, 30.052]
+/** Default view before MapFitBounds runs — Nyarugenge sector cluster */
+const COVERAGE_MAP_CENTER = [-1.961, 30.05]
+const COVERAGE_MAP_ZOOM = 15
+const COVERAGE_MAP_PADDING = [40, 40]
 
 function coverageFill(pct) {
   if (pct >= 85) return 'rgba(61, 170, 106, 0.25)'
@@ -38,6 +42,11 @@ export default function DCCoverage() {
   const atRisk = DC_COVERAGE_SECTORS.filter((s) => s.coverage < 65).length
   const overall = Math.round(
     DC_COVERAGE_SECTORS.reduce((s, x) => s + x.coverage, 0) / DC_COVERAGE_SECTORS.length
+  )
+
+  const sectorPoints = useMemo(
+    () => DC_COVERAGE_SECTORS.map((s) => [s.lat, s.lng]),
+    []
   )
 
   return (
@@ -76,8 +85,8 @@ export default function DCCoverage() {
               <div><span style={{ color: 'var(--status-critical)' }}>●</span> Critical (&lt;65%)</div>
             </div>
             <MapContainer
-              center={NYARUGENGE_CENTER}
-              zoom={14}
+              center={COVERAGE_MAP_CENTER}
+              zoom={COVERAGE_MAP_ZOOM}
               minZoom={RWANDA_MIN_ZOOM}
               maxZoom={RWANDA_MAX_ZOOM}
               maxBounds={RWANDA_BOUNDS}
@@ -91,7 +100,8 @@ export default function DCCoverage() {
                 }
                 attribution="&copy; CARTO"
               />
-              <RwandaBoundsEnforcer />
+              <RwandaBoundsEnforcer fitOnMount={false} />
+              <MapFitBounds points={sectorPoints} padding={COVERAGE_MAP_PADDING} />
               {layers['Coverage Zones'] &&
                 DC_COVERAGE_SECTORS.map((s) => (
                   <Circle

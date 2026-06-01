@@ -2,11 +2,13 @@ import { useEffect } from 'react'
 import { useMap } from 'react-leaflet'
 import { RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from './rwandaConstants'
 
-export default function RwandaBoundsEnforcer() {
+export default function RwandaBoundsEnforcer({ fitOnMount = true }) {
   const map = useMap()
 
   useEffect(() => {
-    map.fitBounds(RWANDA_BOUNDS, { padding: [0, 0], animate: false })
+    if (fitOnMount) {
+      map.fitBounds(RWANDA_BOUNDS, { padding: [0, 0], animate: false })
+    }
     map.setMinZoom(RWANDA_MIN_ZOOM)
     map.setMaxZoom(RWANDA_MAX_ZOOM)
     map.setMaxBounds(RWANDA_BOUNDS)
