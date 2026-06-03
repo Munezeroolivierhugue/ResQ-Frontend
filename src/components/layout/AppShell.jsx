@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import Navbar from './Navbar'
 import Sidebar from './Sidebar'
 
 export default function AppShell({ user }) {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const location = useLocation()
+  const isLiveDispatchMap = location.pathname === '/dispatcher'
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -18,7 +20,13 @@ export default function AppShell({ user }) {
           profileHref="/dispatcher/settings/profile"
           settingsHref="/dispatcher/settings/profile"
         />
-        <main className="portal-main flex-1 overflow-auto bg-(--bg-base)">
+        <main
+          className={
+            isLiveDispatchMap
+              ? 'portal-main portal-main--dispatch-map flex-1 min-h-0 bg-(--bg-base)'
+              : 'portal-main flex-1 overflow-auto bg-(--bg-base)'
+          }
+        >
           <Outlet />
         </main>
       </div>
