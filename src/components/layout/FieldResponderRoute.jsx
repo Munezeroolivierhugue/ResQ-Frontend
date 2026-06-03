@@ -12,6 +12,7 @@ export default function FieldResponderRoute() {
       return <Navigate to="/ops-manager/dashboard" replace />
     }
     if (role === 'dispatcher') return <Navigate to="/dispatcher" replace />
+    if (role === 'emergency_planner') return <Navigate to="/planner/dashboard" replace />
     return <Navigate to="/login" replace />
   }
   return <div className="field-responder-page"><Outlet /></div>

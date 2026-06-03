@@ -10,6 +10,7 @@ export default function DistrictCommanderRoute() {
     }
     if (role === 'dispatcher') return <Navigate to="/dispatcher" replace />
     if (role === 'field_responder') return <Navigate to="/field-responder/shift-start" replace />
+    if (role === 'emergency_planner') return <Navigate to="/planner/dashboard" replace />
     return <Navigate to="/login" replace />
   }
   return <Outlet />
