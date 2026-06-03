@@ -1,5 +1,5 @@
-import AdminPortalSettingsView from '../../components/settings/AdminPortalSettingsView'
+import AdminSystemSettings from './AdminSystemSettings'
 
 export default function AdminSettings() {
-  return <AdminPortalSettingsView />
+  return <AdminSystemSettings />
 }

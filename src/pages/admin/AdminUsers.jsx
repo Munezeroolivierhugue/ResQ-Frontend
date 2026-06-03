@@ -1,65 +1,200 @@
-import { Link } from 'react-router-dom'
-import { mockInvitedUsers } from '../../data/mockAuthData'
-import { ASSIGNED_ROLES } from '../../data/mockAuthData'
+import { useState } from 'react'
+import { UserPlus, Users, Monitor, Mail, UserX, ShieldCheck, ShieldX, Pencil, Key, Upload, Download, X } from 'lucide-react'
+import MetricCard from '../../components/dispatcher/MetricCard'
+import StatusBadge from '../../components/dispatcher/StatusBadge'
+import AdminPageHeader from '../../components/admin/AdminPageHeader'
+import AdminInviteUser from './AdminInviteUser'
+import { ADMIN_USERS, adminRoleBadge } from '../../data/mockAdminData'
+import { ADMIN_PENDING_INVITES } from '../../data/mockAdminData'
 
-const statusStyle = {
-  pending: { color: 'var(--status-medium)', bg: 'var(--status-medium-bg)' },
-  active: { color: 'var(--status-low)', bg: 'var(--status-low-bg)' },
+const ROLE_FILTERS = ['All Roles', 'Dispatcher', 'Field Responder', 'Ops Manager', 'District Commander', 'Emergency Planner', 'Analyst', 'Super Admin']
+const STATUS_FILTERS = ['All', 'Active', 'Pending', 'Suspended']
+
+function statusVariant(s) {
+  if (s === 'ACTIVE') return 'resolved'
+  if (s === 'PENDING') return 'handover'
+  return 'critical'
 }
 
 export default function AdminUsers() {
+  const [showInvite, setShowInvite] = useState(false)
+  const [roleFilter, setRoleFilter] = useState('All Roles')
+  const [statusFilter, setStatusFilter] = useState('All')
+
   return (
-    <div className="portal-page">
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="text-2xl font-bold m-0" style={{ fontFamily: 'var(--font-display)' }}>
-            Provisioned users
-          </h1>
-          <p className="text-[13px] text-(--text-secondary) m-0 mt-1">
-            Users created by super admin awaiting or completed onboarding.
-          </p>
-        </div>
-        <Link to="/admin" className="auth-primary-btn no-underline" style={{ width: 'auto' }}>
-          Invite user
-        </Link>
+    <div className="portal-page flex flex-col gap-5 min-w-[1024px]">
+      <AdminPageHeader
+        title="User Management"
+        subtitle="All accounts, roles, and access control."
+        actions={
+          <button type="button" className="dispatcher-btn-primary inline-flex items-center gap-2" onClick={() => setShowInvite(true)}>
+            <UserPlus size={16} />
+            Invite New User
+          </button>
+        }
+      />
+
+      <div className="portal-grid-4">
+        <MetricCard icon={Users} label="Total Users" value="47" hintTone="neutral" />
+        <MetricCard icon={Monitor} label="Active Sessions" value="12" hintTone="neutral" />
+        <MetricCard
+          icon={Mail}
+          label="Pending Invitations"
+          value={String(ADMIN_PENDING_INVITES)}
+          className="dispatcher-metric-card--alert"
+          hintTone="neutral"
+        />
+        <MetricCard icon={UserX} label="Suspended Accounts" value="2" hintTone="warning" className="dispatcher-metric-card--alert" />
       </div>
 
-      <div className="rounded-xl border border-(--border) bg-(--bg-surface) table-scroll shadow-[var(--shadow-card)]">
-        <table className="w-full border-collapse text-[13px] min-w-[640px]">
+      <div className="flex flex-wrap gap-2 items-center">
+        <input className="dispatcher-input h-10 flex-1 min-w-[200px]" placeholder="Search by name, email, or district..." />
+        <div className="flex flex-wrap gap-1">
+          {ROLE_FILTERS.map((r) => (
+            <button
+              key={r}
+              type="button"
+              className="text-[10px] font-semibold px-2.5 py-1 rounded-full border cursor-pointer"
+              style={{
+                background: roleFilter === r ? 'var(--accent-ghost)' : 'var(--bg-elevated)',
+                borderColor: roleFilter === r ? 'var(--accent)' : 'var(--border)',
+                color: roleFilter === r ? 'var(--accent)' : 'var(--text-secondary)',
+              }}
+              onClick={() => setRoleFilter(r)}
+            >
+              {r}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {STATUS_FILTERS.map((s) => (
+            <button
+              key={s}
+              type="button"
+              className="text-[10px] font-semibold px-2.5 py-1 rounded-full border cursor-pointer"
+              style={{
+                background: statusFilter === s ? 'var(--accent-ghost)' : 'var(--bg-elevated)',
+                borderColor: statusFilter === s ? 'var(--accent)' : 'var(--border)',
+                color: statusFilter === s ? 'var(--accent)' : 'var(--text-secondary)',
+              }}
+              onClick={() => setStatusFilter(s)}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="dispatcher-surface overflow-x-auto">
+        <table className="w-full text-[12px] min-w-[960px]">
           <thead>
-            <tr className="bg-(--bg-base) border-b border-(--border)">
-              {['Name', 'Email', 'Phone', 'Role', 'Status', 'Invited'].map((h) => (
-                <th key={h} className="text-left px-4 py-3 field-label">
-                  {h}
-                </th>
-              ))}
+            <tr className="text-(--text-muted) border-b border-(--border)">
+              <th className="text-left p-3">User</th>
+              <th className="text-left p-3">Role</th>
+              <th className="p-3">District</th>
+              <th className="p-3">Status</th>
+              <th className="p-3">Last Login</th>
+              <th className="p-3">Session</th>
+              <th className="p-3">MFA</th>
+              <th className="p-3">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {mockInvitedUsers.map((u) => {
-              const roleLabel = ASSIGNED_ROLES.find((r) => r.value === u.role)?.label || u.role
-              const st = statusStyle[u.status] || statusStyle.pending
+            {ADMIN_USERS.map((u) => {
+              const rb = adminRoleBadge(u.role)
               return (
-                <tr key={u.id} className="border-b border-(--border-subtle) hover:bg-(--bg-elevated)">
-                  <td className="px-4 py-3 font-semibold">{u.fullName}</td>
-                  <td className="px-4 py-3" style={{ fontFamily: 'var(--font-mono)' }}>{u.email}</td>
-                  <td className="px-4 py-3 text-(--text-secondary)">{u.phone}</td>
-                  <td className="px-4 py-3">{roleLabel}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className="text-[10px] font-bold uppercase px-2 py-0.5 rounded"
-                      style={{ color: st.color, background: st.bg }}
-                    >
-                      {u.status}
+                <tr
+                  key={u.email}
+                  className="border-b border-(--border-subtle) dispatcher-table-row group"
+                  style={{
+                    background: u.tint === 'medium' ? 'var(--status-medium-bg)' : u.tint === 'critical' ? 'var(--status-critical-bg)' : undefined,
+                    opacity: u.opacity ?? 1,
+                  }}
+                >
+                  <td className="p-3">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
+                        style={{ background: 'var(--accent-ghost)', color: 'var(--accent)' }}
+                      >
+                        {u.initials}
+                      </span>
+                      <div>
+                        <div className="font-medium text-[13px]">{u.name}</div>
+                        <div className="font-mono text-[11px] text-(--text-muted)">{u.email}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="p-3">
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={{ background: rb.bg, color: rb.color }}>
+                      {rb.label}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-(--text-muted)">{u.invitedAt}</td>
+                  <td className="p-3 text-(--text-secondary)">{u.district}</td>
+                  <td className="p-3">
+                    <StatusBadge label={u.status} variant={statusVariant(u.status)} />
+                  </td>
+                  <td className="p-3 font-mono text-(--text-muted)">{u.lastLogin}</td>
+                  <td className="p-3">
+                    <span className="flex items-center gap-1 text-[11px]">
+                      <span
+                        className="w-1.5 h-1.5 rounded-full"
+                        style={{ background: u.session === 'ONLINE' ? 'var(--status-low)' : 'var(--text-muted)' }}
+                      />
+                      {u.session}
+                    </span>
+                  </td>
+                  <td className="p-3">
+                    {u.mfa ? <ShieldCheck size={16} style={{ color: 'var(--status-low)' }} /> : <ShieldX size={16} style={{ color: 'var(--status-critical)' }} />}
+                  </td>
+                  <td className="p-3">
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button type="button" className="dispatcher-btn-icon" aria-label="Edit"><Pencil size={14} /></button>
+                      <button type="button" className="dispatcher-btn-icon" aria-label="Suspend"><UserX size={14} /></button>
+                      <button type="button" className="dispatcher-btn-icon" aria-label="Reset password"><Key size={14} /></button>
+                    </div>
+                  </td>
                 </tr>
               )
             })}
           </tbody>
         </table>
       </div>
+
+      <div className="dispatcher-surface p-4">
+        <h3 className="text-[13px] font-semibold m-0">Bulk User Import</h3>
+        <p className="text-[12px] text-(--text-muted) m-0 mb-3">Import multiple users from CSV</p>
+        <div
+          className="flex items-center justify-center gap-2 rounded-lg mb-3"
+          style={{ height: 80, border: '2px dashed var(--border)', background: 'var(--bg-elevated)' }}
+        >
+          <Upload size={20} className="text-(--text-muted)" />
+          <span className="text-[13px] text-(--text-muted)">Drop CSV file here or browse</span>
+        </div>
+        <a href="#" className="text-[12px] font-semibold text-(--accent) inline-flex items-center gap-1 no-underline hover:underline">
+          <Download size={12} />
+          Download CSV Template
+        </a>
+        <button type="button" className="dispatcher-btn-primary mt-3 block" disabled>
+          Import Users
+        </button>
+      </div>
+
+      {showInvite && (
+        <div className="fixed inset-0 z-[350] flex justify-end" style={{ background: 'rgba(0,0,0,0.45)' }}>
+          <div className="w-full max-w-[920px] h-full overflow-y-auto bg-(--bg-base) border-l border-(--border) shadow-2xl relative">
+            <button
+              type="button"
+              className="absolute top-4 right-4 z-10 p-2 rounded-lg border border-(--border) bg-(--bg-surface) cursor-pointer"
+              onClick={() => setShowInvite(false)}
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+            <AdminInviteUser />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

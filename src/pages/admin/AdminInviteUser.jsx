@@ -245,7 +245,7 @@ export default function AdminInviteUser() {
                     value={form.role}
                     onChange={(e) => handleRoleChange(e.target.value)}
                   >
-                    {ASSIGNED_ROLES.map((r) => (
+                    {ASSIGNED_ROLES.filter((r) => r.value !== 'admin' && r.value !== 'super_admin').map((r) => (
                       <option key={r.value} value={r.value}>{r.label}</option>
                     ))}
                   </select>
