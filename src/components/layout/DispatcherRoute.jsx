@@ -12,6 +12,9 @@ export default function DispatcherRoute() {
     if (role === 'district_commander') {
       return <Navigate to="/district-commander/dashboard" replace />
     }
+    if (role === 'field_responder') {
+      return <Navigate to="/field-responder/shift-start" replace />
+    }
     return <Navigate to="/login" replace />
   }
   return <Outlet />
