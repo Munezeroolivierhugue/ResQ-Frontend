@@ -6,7 +6,6 @@ import {
   Map,
   Package,
   FileBarChart,
-  User,
   Settings,
   HelpCircle,
   LogOut,
@@ -30,7 +29,6 @@ const HEADQUARTERS = [
 ]
 
 const BOTTOM = [
-  { icon: User, label: 'My Profile', href: '/district-commander/profile' },
   { icon: Settings, label: 'Settings', href: '/district-commander/settings/profile' },
   { icon: HelpCircle, label: 'Help', href: '#' },
   { icon: LogOut, label: 'Logout', href: '/login', danger: true },
@@ -119,8 +117,8 @@ export default function DistrictCommanderSidebar({ mobileOpen, onClose }) {
           const Icon = item.icon
           const isSettings = item.href.includes('/settings')
           const isActive =
-            location.pathname === item.href ||
-            (isSettings && location.pathname.startsWith('/district-commander/settings'))
+            (isSettings && location.pathname.startsWith('/district-commander/settings')) ||
+            (!isSettings && location.pathname === item.href)
           return (
             <div key={item.label} className={`sidebar-item-wrap${isActive ? ' active' : ''}`}>
               {isActive && (

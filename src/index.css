@@ -2429,9 +2429,49 @@ a[href*="recover"]:hover {
   min-width: 640px;
 }
 
+/* Above navbar (z-100) and desktop sidebar (z-10); below mobile sidebar (z-200) */
+.dc-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  background: rgba(0, 0, 0, 0.35);
+}
+
 .dc-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100%;
   width: 100%;
   max-width: 100%;
+  z-index: 220;
+  display: flex;
+  flex-direction: column;
+  isolation: isolate;
+  background: var(--bg-surface);
+  border-left: 1px solid var(--border);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.18);
+}
+
+.dc-drawer-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  flex-shrink: 0;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.dc-drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dc-drawer-notice {
+  position: relative;
+  z-index: 0;
 }
 
 @media (min-width: 640px) {
