@@ -14,6 +14,13 @@ import DispatchImmediate from './pages/dispatcher/DispatchImmediate'
 import Notifications from './pages/dispatcher/Notifications'
 import DispatcherRoute from './components/layout/DispatcherRoute'
 import AdminSettings from './pages/admin/AdminSettings'
+import AdminRoute from './components/layout/AdminRoute'
+import AdminDashboard from './pages/admin/AdminDashboard'
+import AdminIntegrations from './pages/admin/AdminIntegrations'
+import AdminAIConfig from './pages/admin/AdminAIConfig'
+import AdminAudit from './pages/admin/AdminAudit'
+import AdminSecurity from './pages/admin/AdminSecurity'
+import AdminProfile from './pages/admin/AdminProfile'
 import Login from './pages/auth/Login'
 import LoginMfa from './pages/auth/LoginMfa'
 import Register from './pages/auth/Register'
@@ -65,10 +72,19 @@ import PlannerPrediction from './pages/planner/PlannerPrediction'
 import PlannerReports from './pages/planner/PlannerReports'
 import PlannerProfile from './pages/planner/PlannerProfile'
 import PlannerSettings from './pages/planner/PlannerSettings'
+import AnalystRoute from './components/layout/AnalystRoute'
+import AnalystShell from './components/analyst/AnalystShell'
+import AnalystDashboard from './pages/analyst/AnalystDashboard'
+import AnalystReports from './pages/analyst/AnalystReports'
+import AnalystPatterns from './pages/analyst/AnalystPatterns'
+import AnalystModels from './pages/analyst/AnalystModels'
+import AnalystDataQuality from './pages/analyst/AnalystDataQuality'
+import AnalystBenchmarking from './pages/analyst/AnalystBenchmarking'
+import AnalystLibrary from './pages/analyst/AnalystLibrary'
+import AnalystProfile from './pages/analyst/AnalystProfile'
+import AnalystSettings from './pages/analyst/AnalystSettings'
 
 const dispatcher = { name: 'Jean Bosco', role: 'DISPATCHER' }
-const admin = { name: 'Super Admin', role: 'SUPER ADMIN' }
-
 export default function App() {
   return (
     <BrowserRouter>
@@ -81,13 +97,21 @@ export default function App() {
         <Route path="/verify-otp" element={<VerifyOtp />} />
         <Route path="/mfa-setup" element={<MfaSetup />} />
 
-        {/* Admin */}
-        <Route path="/admin" element={<AdminShell user={admin} />}>
-          <Route index element={<AdminInviteUser />} />
-          <Route path="users" element={<AdminUsers />} />
-          <Route path="profile" element={<Navigate to="/admin/settings/profile" replace />} />
-          <Route path="settings" element={<Navigate to="/admin/settings/profile" replace />} />
-          <Route path="settings/:section" element={<AdminSettings />} />
+        {/* Super Admin */}
+        <Route path="/admin" element={<AdminRoute />}>
+          <Route element={<AdminShell />}>
+            <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="users" element={<AdminUsers />} />
+            <Route path="integrations" element={<AdminIntegrations />} />
+            <Route path="ai-config" element={<AdminAIConfig />} />
+            <Route path="audit" element={<AdminAudit />} />
+            <Route path="security" element={<AdminSecurity />} />
+            <Route path="profile" element={<AdminProfile />} />
+            <Route path="settings" element={<Navigate to="/admin/settings/general" replace />} />
+            <Route path="settings/:section" element={<AdminSettings />} />
+            <Route path="invite" element={<AdminInviteUser />} />
+            <Route index element={<Navigate to="/admin/dashboard" replace />} />
+          </Route>
         </Route>
 
         {/* Field Responder mobile app */}
@@ -121,6 +145,23 @@ export default function App() {
             <Route path="settings" element={<Navigate to="/district-commander/settings/profile" replace />} />
             <Route path="settings/:section" element={<DCSettings />} />
             <Route index element={<Navigate to="/district-commander/dashboard" replace />} />
+          </Route>
+        </Route>
+
+        {/* Analyst portal */}
+        <Route path="/analyst" element={<AnalystRoute />}>
+          <Route element={<AnalystShell />}>
+            <Route path="dashboard" element={<AnalystDashboard />} />
+            <Route path="reports" element={<AnalystReports />} />
+            <Route path="patterns" element={<AnalystPatterns />} />
+            <Route path="models" element={<AnalystModels />} />
+            <Route path="data-quality" element={<AnalystDataQuality />} />
+            <Route path="benchmarking" element={<AnalystBenchmarking />} />
+            <Route path="library" element={<AnalystLibrary />} />
+            <Route path="profile" element={<AnalystProfile />} />
+            <Route path="settings" element={<Navigate to="/analyst/settings/profile" replace />} />
+            <Route path="settings/:section" element={<AnalystSettings />} />
+            <Route index element={<Navigate to="/analyst/dashboard" replace />} />
           </Route>
         </Route>
 
