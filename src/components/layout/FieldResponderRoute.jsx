@@ -4,7 +4,7 @@ import { getDemoRole } from '../../utils/authSession'
 export default function FieldResponderRoute() {
   const role = getDemoRole()
   if (role !== 'field_responder') {
-    if (role === 'admin') return <Navigate to="/admin" replace />
+    if (role === 'super_admin' || role === 'admin') return <Navigate to="/admin/dashboard" replace />
     if (role === 'district_commander') {
       return <Navigate to="/district-commander/dashboard" replace />
     }
@@ -13,6 +13,7 @@ export default function FieldResponderRoute() {
     }
     if (role === 'dispatcher') return <Navigate to="/dispatcher" replace />
     if (role === 'emergency_planner') return <Navigate to="/planner/dashboard" replace />
+    if (role === 'analyst') return <Navigate to="/analyst/dashboard" replace />
     return <Navigate to="/login" replace />
   }
   return <div className="field-responder-page"><Outlet /></div>
