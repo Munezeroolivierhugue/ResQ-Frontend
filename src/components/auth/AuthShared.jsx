@@ -11,7 +11,8 @@ const DEMO_PORTALS = [
   { label: 'District Commander', value: 'district_commander', href: '/district-commander/dashboard' },
   { label: 'Field Responder', value: 'field_responder', href: '/field-responder/shift-start' },
   { label: 'Emergency Planner', value: 'emergency_planner', href: '/planner/dashboard' },
-  { label: 'Super Admin', value: 'admin', href: '/admin' },
+  { label: 'Analyst', value: 'analyst', href: '/analyst/dashboard' },
+  { label: 'Super Admin', value: 'super_admin', href: '/admin/dashboard' },
 ]
 
 /** Login-only demo portal switcher — remove when backend is wired. */

@@ -93,7 +93,7 @@ export default function Register() {
         </AuthField>
         <AuthField label="Assigned role">
           <AuthSelect value={form.role} onChange={(e) => set('role', e.target.value)}>
-            {ASSIGNED_ROLES.filter((r) => r.value !== 'admin').map((r) => (
+            {ASSIGNED_ROLES.filter((r) => r.value !== 'admin' && r.value !== 'super_admin').map((r) => (
               <option key={r.value} value={r.value}>{r.label}</option>
             ))}
           </AuthSelect>

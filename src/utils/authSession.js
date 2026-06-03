@@ -9,6 +9,7 @@ export function setDemoRole(role) {
 }
 
 export function getPortalForRole(role) {
+  if (role === 'admin') return '/admin/dashboard'
   return ASSIGNED_ROLES.find((r) => r.value === role)?.portal || '/dispatcher'
 }
 
