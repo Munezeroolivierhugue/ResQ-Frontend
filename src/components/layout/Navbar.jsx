@@ -9,7 +9,12 @@ export default function Navbar({
   portalLabel = 'Dispatcher Portal',
   profileHref = '/dispatcher/settings/profile',
   settingsHref = '/dispatcher/settings',
+  avatarVariant = 'default',
 }) {
+  const isSuperAdmin = avatarVariant === 'superAdmin'
+  const initials = isSuperAdmin
+    ? 'SA'
+    : user.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
   const [showNotif, setShowNotif] = useState(false)
   const [showUser, setShowUser] = useState(false)
 
@@ -60,12 +65,28 @@ export default function Navbar({
             onClick={() => { setShowUser((v) => !v); setShowNotif(false) }}
             className="flex items-center gap-2 px-2 py-1 bg-transparent border-none cursor-pointer rounded-lg hover:bg-(--bg-elevated) transition-colors"
           >
-            <div className="w-8 h-8 rounded-full bg-(--accent-ghost) border-2 border-(--accent) flex items-center justify-center font-bold text-[13px] text-(--accent) tracking-[0.04em] shrink-0" style={{ fontFamily: 'var(--font-display)' }}>
-              {user.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()}
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-[13px] tracking-[0.04em] shrink-0"
+              style={{
+                fontFamily: 'var(--font-display)',
+                background: isSuperAdmin ? 'var(--status-critical-bg)' : 'var(--accent-ghost)',
+                border: `2px solid ${isSuperAdmin ? 'var(--status-critical)' : 'var(--accent)'}`,
+                color: isSuperAdmin ? 'var(--status-critical)' : 'var(--accent)',
+              }}
+            >
+              {initials}
             </div>
             <div className="navbar-user-text text-left">
               <div className="text-[13px] font-semibold text-(--text-primary) leading-tight">{user.name}</div>
-              <div className="text-[10px] text-(--accent) font-bold tracking-[0.08em]" style={{ fontFamily: 'var(--font-display)' }}>{user.role}</div>
+              <div
+                className="text-[10px] font-bold tracking-[0.08em]"
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  color: isSuperAdmin ? 'var(--status-critical)' : 'var(--accent)',
+                }}
+              >
+                {user.role}
+              </div>
             </div>
             <ChevronDown size={13} className="text-(--text-muted)" />
           </button>
