@@ -54,6 +54,17 @@ import FRPerformance from './pages/field-responder/FRPerformance'
 import FRShiftEnd from './pages/field-responder/FRShiftEnd'
 import FRProfile from './pages/field-responder/FRProfile'
 import FieldResponderSettingsView from './components/settings/FieldResponderSettingsView'
+import PlannerRoute from './components/layout/PlannerRoute'
+import PlannerShell from './components/planner/PlannerShell'
+import PlannerDashboard from './pages/planner/PlannerDashboard'
+import PlannerHotspots from './pages/planner/PlannerHotspots'
+import PlannerCoverage from './pages/planner/PlannerCoverage'
+import PlannerDeployment from './pages/planner/PlannerDeployment'
+import PlannerSimulation from './pages/planner/PlannerSimulation'
+import PlannerPrediction from './pages/planner/PlannerPrediction'
+import PlannerReports from './pages/planner/PlannerReports'
+import PlannerProfile from './pages/planner/PlannerProfile'
+import PlannerSettings from './pages/planner/PlannerSettings'
 
 const dispatcher = { name: 'Jean Bosco', role: 'DISPATCHER' }
 const admin = { name: 'Super Admin', role: 'SUPER ADMIN' }
@@ -110,6 +121,23 @@ export default function App() {
             <Route path="settings" element={<Navigate to="/district-commander/settings/profile" replace />} />
             <Route path="settings/:section" element={<DCSettings />} />
             <Route index element={<Navigate to="/district-commander/dashboard" replace />} />
+          </Route>
+        </Route>
+
+        {/* Emergency Planner portal */}
+        <Route path="/planner" element={<PlannerRoute />}>
+          <Route element={<PlannerShell />}>
+            <Route path="dashboard" element={<PlannerDashboard />} />
+            <Route path="hotspots" element={<PlannerHotspots />} />
+            <Route path="coverage" element={<PlannerCoverage />} />
+            <Route path="deployment" element={<PlannerDeployment />} />
+            <Route path="simulation" element={<PlannerSimulation />} />
+            <Route path="prediction" element={<PlannerPrediction />} />
+            <Route path="reports" element={<PlannerReports />} />
+            <Route path="profile" element={<PlannerProfile />} />
+            <Route path="settings" element={<Navigate to="/planner/settings/profile" replace />} />
+            <Route path="settings/:section" element={<PlannerSettings />} />
+            <Route index element={<Navigate to="/planner/dashboard" replace />} />
           </Route>
         </Route>
 
