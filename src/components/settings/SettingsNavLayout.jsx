@@ -14,7 +14,7 @@ export default function SettingsNavLayout({
   const activeSection = section || 'profile'
 
   return (
-    <div className="settings-page p-6 w-full">
+    <div className="settings-page portal-page w-full">
       <div className="mb-6">
         <div className="flex items-center gap-1.5 mb-1">
           <span className="text-[12px] text-(--text-muted)">{breadcrumbParent}</span>
