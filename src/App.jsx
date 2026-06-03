@@ -43,6 +43,17 @@ import DCResources from './pages/district-commander/DCResources'
 import DCExecutiveReport from './pages/district-commander/DCExecutiveReport'
 import DCProfile from './pages/district-commander/DCProfile'
 import DCSettings from './pages/district-commander/DCSettings'
+import FieldResponderRoute from './components/layout/FieldResponderRoute'
+import FieldResponderShell from './components/field-responder/FieldResponderShell'
+import FRShiftStart from './pages/field-responder/FRShiftStart'
+import FRAssignment from './pages/field-responder/FRAssignment'
+import FRNavigation from './pages/field-responder/FRNavigation'
+import FROnScene from './pages/field-responder/FROnScene'
+import FRFieldReport from './pages/field-responder/FRFieldReport'
+import FRPerformance from './pages/field-responder/FRPerformance'
+import FRShiftEnd from './pages/field-responder/FRShiftEnd'
+import FRProfile from './pages/field-responder/FRProfile'
+import FieldResponderSettingsView from './components/settings/FieldResponderSettingsView'
 
 const dispatcher = { name: 'Jean Bosco', role: 'DISPATCHER' }
 const admin = { name: 'Super Admin', role: 'SUPER ADMIN' }
@@ -66,6 +77,24 @@ export default function App() {
           <Route path="profile" element={<Navigate to="/admin/settings/profile" replace />} />
           <Route path="settings" element={<Navigate to="/admin/settings/profile" replace />} />
           <Route path="settings/:section" element={<AdminSettings />} />
+        </Route>
+
+        {/* Field Responder mobile app */}
+        <Route path="/field-responder" element={<FieldResponderRoute />}>
+          {/* Navigation is full-screen (no shell chrome) — map needs a real viewport height */}
+          <Route path="navigation" element={<FRNavigation />} />
+          <Route element={<FieldResponderShell />}>
+            <Route path="shift-start" element={<FRShiftStart />} />
+            <Route path="assignment" element={<FRAssignment />} />
+            <Route path="on-scene" element={<FROnScene />} />
+            <Route path="report" element={<FRFieldReport />} />
+            <Route path="performance" element={<FRPerformance />} />
+            <Route path="shift-end" element={<FRShiftEnd />} />
+            <Route path="profile" element={<FRProfile />} />
+            <Route path="settings" element={<Navigate to="/field-responder/settings/profile" replace />} />
+            <Route path="settings/:section" element={<FieldResponderSettingsView />} />
+            <Route index element={<Navigate to="/field-responder/shift-start" replace />} />
+          </Route>
         </Route>
 
         {/* District Commander portal */}
