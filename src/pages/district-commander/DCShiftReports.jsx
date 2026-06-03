@@ -138,27 +138,39 @@ export default function DCShiftReports() {
 
       {selected && (
         <>
-          <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setSelectedId(null)} aria-hidden />
+          <div
+            className="dc-drawer-backdrop"
+            onClick={() => setSelectedId(null)}
+            aria-hidden
+          />
           <aside
-            className="dc-drawer fixed top-0 right-0 h-full z-50 flex flex-col border-l border-(--border) bg-(--bg-surface) shadow-xl"
+            className="dc-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dc-shift-report-title"
             style={{ fontFamily: 'var(--font-body)' }}
           >
-            <div className="flex items-start justify-between gap-2 p-4 border-b border-(--border-subtle) shrink-0">
-              <div>
-                <div className="font-mono text-[12px] font-bold text-(--accent)">SHIFT REPORT — {selected.id}</div>
+            <div className="dc-drawer-header flex items-start justify-between gap-2 p-4">
+              <div className="min-w-0 pr-2">
+                <div
+                  id="dc-shift-report-title"
+                  className="font-mono text-[12px] font-bold text-(--accent)"
+                >
+                  SHIFT REPORT — {selected.id}
+                </div>
                 <div className="text-[13px] font-semibold text-(--text-primary) mt-1">{selected.om}</div>
                 <div className="text-[12px] text-(--text-secondary)">{selected.shift}</div>
                 <div className="text-[11px] font-mono text-(--text-muted) mt-0.5">Submitted {selected.submitted}</div>
               </div>
-              <button type="button" className="dispatcher-btn-icon" onClick={() => setSelectedId(null)} aria-label="Close">
+              <button type="button" className="dispatcher-btn-icon shrink-0" onClick={() => setSelectedId(null)} aria-label="Close">
                 <X size={18} />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
+            <div className="dc-drawer-body p-4 flex flex-col gap-5">
               {panelMessage && (
                 <div
-                  className="p-3 rounded-lg text-[12px]"
+                  className="dc-drawer-notice p-3 rounded-lg text-[12px]"
                   style={{
                     background: panelMessage.type === 'flag' ? 'var(--status-critical-bg)' : 'var(--status-low-bg)',
                     border: `1px solid ${panelMessage.type === 'flag' ? 'var(--status-critical)' : 'var(--status-low)'}`,
