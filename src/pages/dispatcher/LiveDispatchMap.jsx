@@ -5,6 +5,7 @@ import { useThemeStore } from '../../store/themeStore'
 import { Radio, Ambulance, Truck, ShieldCheck, Bus, Zap } from 'lucide-react'
 import { getCriticalUnassignedIncident } from '../../data/mockDispatchImmediateData'
 import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
+import MapInvalidateSize from '../../components/map/MapInvalidateSize'
 import { RWANDA_CENTER, RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../components/map/rwandaConstants'
 import { mockIncidents, mockUnits } from '../../data/mockData'
 import 'leaflet/dist/leaflet.css'
@@ -78,7 +79,7 @@ export default function LiveDispatchMap() {
   const criticalIncident = getCriticalUnassignedIncident()
 
   return (
-    <div className="flex flex-col h-full relative">
+    <div className="dispatch-map-page relative">
 
       {/* Status bar */}
       <div className="h-[46px] bg-(--bg-surface) border-b border-(--border) flex items-center px-1.5 shrink-0">
@@ -98,10 +99,11 @@ export default function LiveDispatchMap() {
       </div>
 
       {/* Main area */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="dispatch-map-content">
 
         {/* Map */}
-        <div className="flex-1 relative">
+        <div className="dispatch-map-left">
+          <div className="dispatch-map-container">
           <MapContainer
             center={RWANDA_CENTER}
             zoom={RWANDA_MIN_ZOOM}
@@ -112,6 +114,7 @@ export default function LiveDispatchMap() {
             style={{ width: '100%', height: '100%', background: theme === 'dark' ? '#040D1F' : '#E8EAED' }}
             zoomControl={false}
           >
+            <MapInvalidateSize />
             <TileLayer
               url={theme === 'dark'
                 ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
@@ -140,6 +143,7 @@ export default function LiveDispatchMap() {
               </CircleMarker>
             ))}
           </MapContainer>
+          </div>
 
           {/* Legend */}
           <div className="absolute bottom-4 left-4 z-[1000] bg-white border border-[#E0E0E0] rounded-lg px-[14px] py-[10px] flex flex-col gap-[5px] shadow-[0_2px_8px_rgba(0,0,0,0.15)]">
@@ -160,7 +164,7 @@ export default function LiveDispatchMap() {
         </div>
 
         {/* Right panel */}
-        <div className="w-[316px] bg-(--bg-surface) border-l border-(--border) flex flex-col overflow-hidden shrink-0">
+        <div className="dispatch-map-right">
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="px-3 pt-[11px] pb-[7px] flex items-center justify-between shrink-0">
               <span className="text-[13px] font-bold tracking-[0.04em]" style={{ fontFamily: 'var(--font-display)' }}>ACTIVE UNITS</span>
