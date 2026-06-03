@@ -1,0 +1,251 @@
+/** Emergency Planner — mock strategic planning data (Kigali). */
+
+export const PLANNER_DISTRICT = 'Kigali City'
+
+export const PLANNER_HOTSPOT_BADGE = 3
+export const PLANNER_DEPLOYMENT_BADGE = 4
+
+export const PLANNER_PREDICTIONS = [
+  {
+    zone: 'Kimihurura Sector',
+    type: 'High Demand',
+    window: '14:00 – 18:00 today',
+    confidence: 88,
+    action: 'Reposition P-07 to Kimihurura by 13:30',
+  },
+  {
+    zone: 'Nyamirambo',
+    type: 'Theft Risk',
+    window: '16:00 – 20:00',
+    confidence: 79,
+    action: 'Increase patrol M-03, M-08 by 15:30',
+  },
+  {
+    zone: 'KN 3 Ave — Traffic Incident Risk',
+    type: 'Traffic',
+    window: '12:00 – 14:00',
+    confidence: 84,
+    action: 'Position AMB-04 at Kacyiru junction',
+  },
+  {
+    zone: 'Biryogo',
+    type: 'Coverage Gap Risk',
+    window: '18:00 – 22:00',
+    confidence: 71,
+    action: 'P-19 repositioning recommended',
+  },
+  {
+    zone: 'Remera',
+    type: 'Public Gathering',
+    window: '09:00 – 17:00',
+    confidence: 92,
+    action: 'Double motorcycle patrol by 08:45',
+  },
+]
+
+export const PLANNER_APPROVALS = [
+  {
+    id: 'PLN-0041',
+    name: 'Friday PM Kimihurura Surge',
+    status: 'PENDING',
+    submittedTo: 'Kagame R. (Ops Manager)',
+    ago: '2h ago',
+    pendingHours: 2,
+  },
+  {
+    id: 'PLN-0039',
+    name: 'Wednesday AM Coverage Fix',
+    status: 'APPROVED',
+    submittedTo: 'Kagame R. (Ops Manager)',
+    ago: '1d ago',
+  },
+  {
+    id: 'PLN-0038',
+    name: 'Overnight Nyamirambo Plan',
+    status: 'REJECTED',
+    submittedTo: 'Kagame R. (Ops Manager)',
+    ago: '2d ago',
+    reason: 'Insufficient units available',
+  },
+  {
+    id: 'PLN-0035',
+    name: 'Weekend Market Day Gasabo',
+    status: 'PENDING',
+    submittedTo: 'Kagame R. (Ops Manager)',
+    ago: '6h ago',
+    pendingHours: 6,
+  },
+]
+
+export const PLANNER_HEATMAP_ZONES = [
+  { name: 'Kimironko', lat: -1.944, lng: 30.062, count: 47, topType: 'Theft', density: 'high' },
+  { name: 'Nyamirambo', lat: -1.974, lng: 30.041, count: 38, topType: 'Theft', density: 'high' },
+  { name: 'Kicukiro', lat: -1.969, lng: 30.123, count: 29, topType: 'Traffic', density: 'medium' },
+  { name: 'Remera', lat: -1.959, lng: 30.104, count: 24, topType: 'Domestic', density: 'medium' },
+  { name: 'Gasabo', lat: -1.928, lng: 30.104, count: 18, topType: 'Medical', density: 'low' },
+  { name: 'Kanombe', lat: -1.968, lng: 30.139, count: 12, topType: 'Traffic', density: 'low' },
+]
+
+export const PLANNER_HOUR_DATA = [
+  { hour: '0', n: 2 }, { hour: '1', n: 1 }, { hour: '2', n: 1 }, { hour: '3', n: 2 },
+  { hour: '4', n: 3 }, { hour: '5', n: 4 }, { hour: '6', n: 8 }, { hour: '7', n: 14 },
+  { hour: '8', n: 18 }, { hour: '9', n: 12 }, { hour: '10', n: 10 }, { hour: '11', n: 11 },
+  { hour: '12', n: 16 }, { hour: '13', n: 14 }, { hour: '14', n: 15 }, { hour: '15', n: 12 },
+  { hour: '16', n: 13 }, { hour: '17', n: 11 }, { hour: '18', n: 17 }, { hour: '19', n: 19 },
+  { hour: '20', n: 18 }, { hour: '21', n: 14 }, { hour: '22', n: 10 }, { hour: '23', n: 5 },
+]
+
+export const PLANNER_DAY_DATA = [
+  { day: 'Mon', n: 42 }, { day: 'Tue', n: 38 }, { day: 'Wed', n: 45 },
+  { day: 'Thu', n: 41 }, { day: 'Fri', n: 58 }, { day: 'Sat', n: 48 }, { day: 'Sun', n: 35 },
+]
+
+export const PLANNER_MONTH_DATA = [
+  { month: 'Jan', n: 180 }, { month: 'Feb', n: 165 }, { month: 'Mar', n: 210 },
+  { month: 'Apr', n: 225 }, { month: 'May', n: 198 }, { month: 'Jun', n: 175 },
+  { month: 'Jul', n: 168 }, { month: 'Aug', n: 172 }, { month: 'Sep', n: 185 },
+  { month: 'Oct', n: 190 }, { month: 'Nov', n: 215 }, { month: 'Dec', n: 188 },
+]
+
+export const PLANNER_EMERGING_HOTSPOTS = [
+  { zone: 'Kimironko', increase: 34, count: 47, topType: 'Theft', severity: 'critical' },
+  { zone: 'Biryogo', increase: 21, count: 31, topType: 'Theft', severity: 'medium' },
+  { zone: 'Nyabugogo', increase: 18, count: 28, topType: 'Robbery', severity: 'medium' },
+  { zone: 'Gikondo', increase: 12, count: 19, topType: 'Traffic', severity: 'accent' },
+]
+
+export const PLANNER_COVERAGE_SECTORS = [
+  { name: 'Kimironko', lat: -1.944, lng: 30.062, coverage: 91 },
+  { name: 'Kicukiro', lat: -1.969, lng: 30.123, coverage: 87 },
+  { name: 'Nyamirambo', lat: -1.974, lng: 30.041, coverage: 74 },
+  { name: 'Biryogo', lat: -1.978, lng: 30.055, coverage: 58 },
+  { name: 'Remera', lat: -1.959, lng: 30.104, coverage: 83 },
+  { name: 'Gisozi', lat: -1.936, lng: 30.072, coverage: 62 },
+]
+
+export const PLANNER_COVERAGE_GAPS = [
+  { zone: 'Biryogo', coverage: 58, incidents: 31, unit: 'P-19', distance: '2.1km', rec: 'Deploy P-19 to Biryogo Standby A' },
+  { zone: 'Gisozi', coverage: 62, incidents: 24, unit: 'M-06', distance: '1.8km', rec: 'Add motorcycle patrol' },
+  { zone: 'Nyabugogo', coverage: 67, incidents: 28, unit: 'P-03', distance: '4.5km', rec: 'Reposition P-03' },
+  { zone: 'Kimisagara', coverage: 71, incidents: 19, unit: 'P-12', distance: '2.9km', rec: 'Shift P-12 earlier' },
+  { zone: 'Gikondo', coverage: 74, incidents: 22, unit: 'AMB-02', distance: '3.1km', rec: 'Reposition AMB-02' },
+]
+
+export const PLANNER_COVERAGE_TREND = [
+  { week: 'W1', overall: 91, gasabo: 89, nyarugenge: 88, kicukiro: 90 },
+  { week: 'W2', overall: 90, gasabo: 88, nyarugenge: 87, kicukiro: 89 },
+  { week: 'W3', overall: 90, gasabo: 87, nyarugenge: 86, kicukiro: 88 },
+  { week: 'W4', overall: 89, gasabo: 86, nyarugenge: 85, kicukiro: 87 },
+  { week: 'W5', overall: 89, gasabo: 85, nyarugenge: 84, kicukiro: 86 },
+  { week: 'W6', overall: 88, gasabo: 84, nyarugenge: 83, kicukiro: 85 },
+  { week: 'W7', overall: 88, gasabo: 83, nyarugenge: 82, kicukiro: 84 },
+  { week: 'W8', overall: 88, gasabo: 82, nyarugenge: 81, kicukiro: 83 },
+  { week: 'W9', overall: 87, gasabo: 81, nyarugenge: 80, kicukiro: 82 },
+  { week: 'W10', overall: 87, gasabo: 80, nyarugenge: 79, kicukiro: 81 },
+  { week: 'W11', overall: 88, gasabo: 81, nyarugenge: 80, kicukiro: 82 },
+  { week: 'W12', overall: 88, gasabo: 82, nyarugenge: 81, kicukiro: 83 },
+]
+
+export const PLANNER_HOURLY_COVERAGE = Array.from({ length: 24 }, (_, h) => ({
+  hour: String(h),
+  pct: h >= 2 && h <= 5 ? 72 + (h % 3) : h >= 18 && h <= 22 ? 78 + (h % 4) : 85 + (h % 8),
+}))
+
+export const PLANNER_DEFAULT_INSTRUCTIONS = [
+  { unit: 'P-07', from: 'Kicukiro Depot', to: 'Kimihurura Standby B', at: '13:30' },
+  { unit: 'M-01', from: 'Remera Station', to: 'Biryogo Checkpoint', at: '13:00' },
+]
+
+export const PLANNER_PLANS = [
+  { id: 'PLN-0041', name: 'Friday PM Kimihurura Surge', district: 'Kigali', range: 'May 30 14:00–20:00', status: 'PENDING' },
+  { id: 'PLN-0039', name: 'Wed AM Coverage Fix', district: 'Nyarugenge', range: 'May 28 08:00–12:00', status: 'APPROVED' },
+  { id: 'PLN-0038', name: 'Overnight Nyamirambo Plan', district: 'Kigali', range: 'May 27 22:00–06:00', status: 'REJECTED' },
+  { id: 'PLN-0035', name: 'Weekend Market Gasabo', district: 'Gasabo', range: 'Jun 1 08:00–18:00', status: 'PENDING' },
+  { id: 'PLN-0031', name: 'Independence Day Plan', district: 'All Districts', range: 'Jul 4 All Day', status: 'DRAFT' },
+]
+
+export const PLANNER_RESPONSE_ZONES = [
+  { zone: 'Kimironko', lat: -1.944, lng: 30.062, minutes: 4.2, unit: 'P-07', distance: '1.2km', route: 'KG 7 Ave', confidence: 91 },
+  { zone: 'Kicukiro', lat: -1.969, lng: 30.123, minutes: 6.8, unit: 'P-12', distance: '2.4km', route: 'KK 15 Ave', confidence: 86 },
+  { zone: 'Nyamirambo', lat: -1.974, lng: 30.041, minutes: 7.1, unit: 'M-03', distance: '2.8km', route: 'KN 3 Ave', confidence: 84 },
+  { zone: 'Biryogo', lat: -1.978, lng: 30.055, minutes: 11.4, unit: 'P-19', distance: '3.2km', route: 'KN 9 Ave via Muhanga', confidence: 84 },
+  { zone: 'Gisozi', lat: -1.936, lng: 30.072, minutes: 13.2, unit: 'P-19', distance: '4.1km', route: 'KG 11 Ave', confidence: 78 },
+  { zone: 'Remera', lat: -1.959, lng: 30.104, minutes: 5.9, unit: 'M-01', distance: '1.9km', route: 'KN 3 Rd', confidence: 88 },
+  { zone: 'Kanombe', lat: -1.968, lng: 30.139, minutes: 9.8, unit: 'AMB-04', distance: '3.5km', route: 'KK 3 Ave', confidence: 82 },
+]
+
+export const PLANNER_PREDICTION_FACTORS = [
+  { icon: 'route', label: 'Distance to nearest unit', impact: 40 },
+  { icon: 'traffic', label: 'Current traffic', impact: 25 },
+  { icon: 'clock', label: 'Time of day pattern', impact: 20 },
+  { icon: 'rain', label: 'Weather conditions', impact: 10 },
+  { icon: 'users', label: 'Unit availability', impact: 5 },
+]
+
+export const PLANNER_PREDICTED_VS_ACTUAL = [
+  { day: 'Mon', predicted: 11.2, actual: 10.8 },
+  { day: 'Tue', predicted: 10.5, actual: 11.1 },
+  { day: 'Wed', predicted: 11.8, actual: 12.2 },
+  { day: 'Thu', predicted: 10.9, actual: 10.4 },
+  { day: 'Fri', predicted: 12.1, actual: 11.6 },
+  { day: 'Sat', predicted: 11.4, actual: 11.9 },
+  { day: 'Sun', predicted: 10.2, actual: 9.8 },
+]
+
+export const PLANNER_RECOMMENDATIONS = [
+  { id: 'REC-041', type: 'Deployment Plan', status: 'Implemented', desc: 'Reposition P-07 to Kimihurura before Friday PM surge', outcome: 'Coverage: +8% in zone', date: 'Submitted May 24' },
+  { id: 'REC-038', type: 'Coverage Fix', status: 'Pending', desc: 'Overnight motorcycle patrol in Gisozi sector', date: 'Submitted May 26' },
+  { id: 'REC-035', type: 'Resource Request', status: 'Rejected', desc: 'Additional ambulance staging at Nyabugogo', reason: 'Insufficient units', date: 'Submitted May 22' },
+  { id: 'REC-032', type: 'Deployment Plan', status: 'Implemented', desc: 'AMB-04 pre-position at Kacyiru junction', outcome: 'Response: −2.1m avg', date: 'Submitted May 20' },
+  { id: 'REC-028', type: 'Coverage Fix', status: 'Pending', desc: 'Shift P-12 start time 30 min earlier weekdays', date: 'Submitted May 18' },
+  { id: 'REC-025', type: 'Deployment Plan', status: 'Implemented', desc: 'Weekend market day Gasabo patrol increase', outcome: 'Incidents: −12%', date: 'Submitted May 15' },
+]
+
+export const PLANNER_AI_INSIGHTS = [
+  { type: 'EMERGING TREND', icon: 'trend', text: 'Friday incident volume has increased 18% month-over-month for 6 consecutive weeks in Kicukiro.', ago: 'Detected 2h ago' },
+  { type: 'COVERAGE CONCERN', icon: 'alert', text: 'Gisozi sector coverage has declined below 65% for 3 consecutive days. Deployment plan recommended.', ago: 'Detected 6h ago' },
+  { type: 'MODEL UPDATE', icon: 'cpu', text: "Prediction model accuracy improved to 91% after last night's retraining on March–April incident data.", ago: 'Detected 14h ago' },
+  { type: 'EMERGING TREND', icon: 'trend', text: 'Rainy season correlation with traffic incidents in Nyarugenge now at 0.81 — highest in 12 months.', ago: 'Detected 1d ago' },
+]
+
+export const PLANNER_SAVED_SCENARIOS = [
+  { name: 'Amahoro Stadium', type: 'Public Gathering', date: 'May 26', outcome: 'Insufficient' },
+  { name: 'Independence Day 2026', type: 'Public Gathering', date: 'May 20', outcome: 'Sufficient' },
+  { name: 'Flash Flood Nyamirambo', type: 'Flood', date: 'May 15', outcome: 'Critical gaps' },
+  { name: 'Kigali Marathon', type: 'Public Gathering', date: 'May 10', outcome: 'Borderline' },
+  { name: 'Power Outage Gasabo', type: 'Outage', date: 'May 5', outcome: 'Insufficient' },
+]
+
+export const RWANDA_DISTRICTS = ['All Districts', 'Kigali', 'Nyarugenge', 'Kicukiro', 'Gasabo', 'Bugesera', 'Rwamagana']
+
+export function confidenceBadge(conf) {
+  if (conf >= 85) return { bg: 'var(--status-low-bg)', color: 'var(--status-low)' }
+  if (conf >= 70) return { bg: 'var(--accent-ghost)', color: 'var(--accent)' }
+  return { bg: 'var(--status-medium-bg)', color: 'var(--status-medium)' }
+}
+
+export function coverageColor(pct) {
+  if (pct >= 85) return 'var(--status-low)'
+  if (pct >= 65) return 'var(--status-medium)'
+  return 'var(--status-critical)'
+}
+
+export function responseTimeColor(min) {
+  if (min < 5) return 'var(--status-low)'
+  if (min <= 8) return 'var(--accent)'
+  if (min <= 12) return 'var(--status-medium)'
+  return 'var(--status-critical)'
+}
+
+export function heatmapFill(density) {
+  if (density === 'high') return 'rgba(232,53,74,0.4)'
+  if (density === 'medium') return 'rgba(240,120,32,0.3)'
+  return 'rgba(61,170,106,0.2)'
+}
+
+export function planStatusVariant(status) {
+  if (status === 'APPROVED') return 'resolved'
+  if (status === 'REJECTED') return 'critical'
+  if (status === 'PENDING') return 'handover'
+  return 'info'
+}
