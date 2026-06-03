@@ -3,7 +3,9 @@ import { Outlet } from 'react-router-dom'
 import Navbar from '../layout/Navbar'
 import AdminSidebar from '../layout/AdminSidebar'
 
-export default function AdminShell({ user }) {
+const superAdminUser = { name: 'System Admin', role: 'SUPER ADMIN' }
+
+export default function AdminShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
@@ -12,11 +14,12 @@ export default function AdminShell({ user }) {
       <AdminSidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
       <div className="flex flex-col flex-1 overflow-hidden min-w-0">
         <Navbar
-          user={user}
+          user={superAdminUser}
           onMenuClick={() => setMobileOpen((v) => !v)}
-          portalLabel="Admin Portal"
-          profileHref="/admin/settings/profile"
-          settingsHref="/admin/settings/profile"
+          portalLabel="System Administration"
+          profileHref="/admin/profile"
+          settingsHref="/admin/settings/general"
+          avatarVariant="superAdmin"
         />
         <main className="portal-main flex-1 overflow-auto bg-(--bg-base)">
           <Outlet />
