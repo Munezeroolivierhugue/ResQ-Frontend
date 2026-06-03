@@ -9,6 +9,7 @@ const DEMO_PORTALS = [
   { label: 'Dispatcher', value: 'dispatcher', href: '/dispatcher' },
   { label: 'Operations Manager', value: 'ops_manager', href: '/ops-manager/dashboard' },
   { label: 'District Commander', value: 'district_commander', href: '/district-commander/dashboard' },
+  { label: 'Field Responder', value: 'field_responder', href: '/field-responder/shift-start' },
   { label: 'Super Admin', value: 'admin', href: '/admin' },
 ]
 

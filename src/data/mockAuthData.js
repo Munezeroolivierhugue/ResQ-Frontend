@@ -10,7 +10,7 @@ export const ASSIGNED_ROLES = [
   { value: 'district_commander', label: 'District Commander', portal: '/district-commander/dashboard' },
   { value: 'ops_manager', label: 'Operations Manager', portal: '/ops-manager/dashboard' },
   { value: 'emergency_planner', label: 'Emergency Planner', portal: '/dispatcher' },
-  { value: 'field_responder', label: 'Field Responder', portal: '/dispatcher' },
+  { value: 'field_responder', label: 'Field Responder', portal: '/field-responder/shift-start' },
   { value: 'analyst', label: 'Analyst', portal: '/dispatcher' },
   { value: 'admin', label: 'Super Admin', portal: '/admin' },
 ]
