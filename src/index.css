@@ -4464,3 +4464,308 @@ a[href*="recover"]:hover {
   background: var(--status-critical);
   color: #ffffff;
 }
+
+/* ============================================================
+   AUDIO COMMS FEATURE — Dispatcher panel + Field Responder PTT
+   ============================================================
+   These classes are used by:
+     - CommsAudioLog.jsx  (dispatcher side, ActiveIncident)
+     - FROnScene.jsx      (field responder side)
+
+   HOW THE LAYOUT WORKS
+   - .audio-log-root     Flex column that fills the comms panel's remaining height
+   - .audio-log-header   Sticky top bar inside the voice tab (matches text tab header style)
+   - .audio-log-list     Scrollable area that holds all recorded clip cards
+   - .audio-clip         Individual clip card — left-bordered by unit colour
+   - .audio-ptt-bar      Pinned bottom area with the PTT button
+   ============================================================ */
+
+/* ── Comms tab buttons (Text / Voice switcher in ActiveIncident) ── */
+.comms-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 0.15s;
+  font-family: var(--font-display);
+  /* borderBottom is applied inline so the active accent follows the tab */
+}
+
+/* ── Root container for the whole Voice tab ── */
+.audio-log-root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  /* No extra padding — the panel already has correct padding */
+}
+
+/* ── Sticky header inside the voice tab ── */
+.audio-log-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.audio-unread-badge {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  background: var(--status-critical);
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 2px 6px;
+  font-family: var(--font-display);
+}
+
+/* ── Scrollable list of audio clip cards ── */
+.audio-log-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+/* ── Individual recorded clip card ── */
+.audio-clip {
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid;          /* color set inline per unit */
+  background: var(--bg-elevated);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.audio-clip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.audio-clip-from {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-family: var(--font-mono);
+}
+
+.audio-clip-time {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* Row that holds play button + waveform + duration */
+.audio-clip-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+
+/* Circular play/stop button */
+.audio-play-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  color: var(--text-on-accent);
+  transition: background 0.15s, transform 0.1s;
+}
+
+.audio-play-btn:hover {
+  transform: scale(1.08);
+}
+
+.audio-clip-dur {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Small label / transcript summary below the waveform */
+.audio-clip-label {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* ── PTT bottom bar (dispatcher) ── */
+.audio-ptt-bar {
+  flex-shrink: 0;
+  padding: 10px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.audio-recording-indicator {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--status-critical-bg);
+  border: 1px solid var(--status-critical);
+}
+
+/* Pulsing red dot shown while recording */
+.audio-rec-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: audio-rec-pulse 1s ease-in-out infinite;
+}
+
+@keyframes audio-rec-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+/* The main PTT button (dispatcher version) */
+.audio-ptt-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  border-radius: 8px;
+  border: 2px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  font-family: var(--font-display);
+  transition: background 0.15s, color 0.15s, transform 0.1s;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.audio-ptt-btn:active,
+.audio-ptt-btn--active {
+  background: var(--status-critical);
+  border-color: var(--status-critical);
+  color: #ffffff;
+  transform: scale(0.98);
+}
+
+.audio-ptt-hint {
+  margin: 0;
+  font-size: 9px;
+  text-align: center;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* ── Field Responder PTT button (FROnScene) ── */
+/* Slightly taller for touch targets on mobile */
+.fr-ptt-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 52px;
+  border-radius: 10px;
+  border: 2px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  font-family: var(--font-display);
+  transition: background 0.12s, color 0.12s, transform 0.08s;
+  user-select: none;
+  -webkit-user-select: none;
+  margin-top: 4px;
+}
+
+.fr-ptt-btn:active,
+.fr-ptt-btn--active {
+  background: var(--status-critical);
+  border-color: var(--status-critical);
+  color: #ffffff;
+  transform: scale(0.97);
+}
+
+/* ── Field Responder audio clip list (FROnScene Voice Channel card) ── */
+/* Matches the card-body layout patterns used by fr-comms-thread and fr-unit-row */
+
+.fr-audio-clip-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 8px;
+}
+
+.fr-audio-clip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  /* border-color is overridden inline when isNew=true */
+}
+
+.fr-audio-play-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  /* background is set inline (accent vs critical depends on playing state) */
+}
+
+.fr-audio-progress-track {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.fr-audio-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.1s linear;
+  /* width is set inline from playback progress */
+}
+
+

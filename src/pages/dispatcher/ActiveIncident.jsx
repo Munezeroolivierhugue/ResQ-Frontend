@@ -9,6 +9,8 @@ import {
   Truck,
   ShieldCheck,
   Radio,
+  MessageSquare,
+  Mic,
 } from 'lucide-react'
 import FieldLabel from '../../components/ui/FieldLabel'
 import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
@@ -20,6 +22,8 @@ import {
   mockFieldComms,
   UNIT_COLORS,
 } from '../../data/mockActiveIncidentData'
+import { mockAudioClips } from '../../data/mockAudioCommsData'
+import CommsAudioLog from '../../components/dispatcher/CommsAudioLog'
 import 'leaflet/dist/leaflet.css'
 
 const MAP_TILES =
@@ -72,6 +76,9 @@ function StatusBadge({ label, color }) {
 export default function ActiveIncident() {
   const [message, setMessage] = useState('')
   const [comms, setComms] = useState(mockFieldComms)
+  // 'text' | 'voice' — which tab is active in the Field Comms panel
+  const [commsTab, setCommsTab] = useState('text')
+  const [audioClips, setAudioClips] = useState(mockAudioClips)
 
   const mapPoints = useMemo(
     () => [
@@ -365,67 +372,137 @@ export default function ActiveIncident() {
 
         {/* Field comms — right column, full height */}
         <div className="w-full lg:w-[320px] xl:w-[360px] shrink-0 flex flex-col min-h-[240px] lg:min-h-0 bg-(--bg-surface) border-t lg:border-t-0 border-(--border)">
-          <div className="px-4 py-2.5 border-b border-(--border-subtle) flex items-center justify-between shrink-0">
-            <span
-              className="text-[10px] font-bold tracking-[0.12em] text-(--text-secondary) uppercase"
-              style={{ fontFamily: 'var(--font-display)' }}
-            >
-              Field comms — {activeIncident.sector}
-            </span>
-            <span className="text-[9px] font-bold uppercase tracking-wider text-(--status-low) flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-(--status-low)" />
-              Direct link active
-            </span>
-          </div>
-          <div className="flex-1 overflow-y-auto p-3 space-y-2.5 min-h-0">
-            {comms.map((msg) => {
-              const isSelf = msg.isSelf
-              const unitColor = msg.unitType ? UNIT_COLORS[msg.unitType] : 'var(--text-secondary)'
-              return (
-                <div key={msg.id} className={`flex ${isSelf ? 'justify-end' : 'justify-start'}`}>
-                  <div
-                    className="max-w-[90%] rounded-lg px-3 py-2 border"
-                    style={{
-                      background: isSelf ? 'var(--accent)' : 'var(--bg-input)',
-                      color: isSelf ? 'var(--text-on-accent)' : 'var(--text-primary)',
-                      borderColor: isSelf ? 'var(--accent)' : 'var(--border)',
-                    }}
-                  >
-                    <div
-                      className="text-[9px] font-bold uppercase tracking-wider mb-1 opacity-90"
-                      style={{
-                        fontFamily: 'var(--font-display)',
-                        color: isSelf ? 'var(--text-on-accent)' : unitColor,
-                      }}
-                    >
-                      {isSelf ? 'Dispatch [you]' : msg.from}
-                      <span className="font-normal opacity-70 ml-1.5" style={{ fontFamily: 'var(--font-mono)' }}>
-                        {msg.time}
-                      </span>
-                    </div>
-                    <p className="text-[12px] m-0 leading-relaxed">{msg.text}</p>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-          <form onSubmit={handleSend} className="p-3 border-t border-(--border-subtle) flex gap-2 shrink-0">
-            <input
-              type="text"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Type tactical message to field units…"
-              className="flex-1 h-10 rounded-lg px-3 text-[13px] bg-(--bg-input) border border-(--border) text-(--text-primary) outline-none placeholder:text-(--text-muted) focus:border-(--accent)"
-            />
+
+          {/* ── Tab bar: Text | Voice ── */}
+          <div className="px-3 pt-2 border-b border-(--border-subtle) flex items-center gap-1 shrink-0">
             <button
-              type="submit"
-              className="h-10 w-10 rounded-lg border-none flex items-center justify-center cursor-pointer shrink-0"
-              style={{ background: 'var(--accent)', color: 'var(--text-on-accent)' }}
-              aria-label="Send message"
+              id="comms-tab-text"
+              type="button"
+              onClick={() => setCommsTab('text')}
+              className="comms-tab-btn"
+              style={{
+                color: commsTab === 'text' ? 'var(--accent)' : 'var(--text-muted)',
+                borderBottom: commsTab === 'text' ? '2px solid var(--accent)' : '2px solid transparent',
+              }}
             >
-              <Send size={16} />
+              <MessageSquare size={12} />
+              Text
             </button>
-          </form>
+            <button
+              id="comms-tab-voice"
+              type="button"
+              onClick={() => setCommsTab('voice')}
+              className="comms-tab-btn"
+              style={{
+                color: commsTab === 'voice' ? 'var(--accent)' : 'var(--text-muted)',
+                borderBottom: commsTab === 'voice' ? '2px solid var(--accent)' : '2px solid transparent',
+              }}
+            >
+              <Mic size={12} />
+              Voice
+              {audioClips.filter(c => c.isNew).length > 0 && (
+                <span
+                  style={{
+                    fontSize: '9px',
+                    fontWeight: 700,
+                    background: 'var(--status-critical)',
+                    color: '#fff',
+                    borderRadius: '999px',
+                    padding: '1px 5px',
+                    marginLeft: '2px',
+                  }}
+                >
+                  {audioClips.filter(c => c.isNew).length}
+                </span>
+              )}
+            </button>
+            <span
+              className="text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 ml-auto pb-2"
+              style={{ color: 'var(--status-low)' }}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-(--status-low)" />
+              {activeIncident.sector}
+            </span>
+          </div>
+
+          {/* ── Text tab content ── */}
+          {commsTab === 'text' && (
+            <>
+              <div className="flex-1 overflow-y-auto p-3 space-y-2.5 min-h-0">
+                {comms.map((msg) => {
+                  const isSelf = msg.isSelf
+                  const unitColor = msg.unitType ? UNIT_COLORS[msg.unitType] : 'var(--text-secondary)'
+                  return (
+                    <div key={msg.id} className={`flex ${isSelf ? 'justify-end' : 'justify-start'}`}>
+                      <div
+                        className="max-w-[90%] rounded-lg px-3 py-2 border"
+                        style={{
+                          background: isSelf ? 'var(--accent)' : 'var(--bg-input)',
+                          color: isSelf ? 'var(--text-on-accent)' : 'var(--text-primary)',
+                          borderColor: isSelf ? 'var(--accent)' : 'var(--border)',
+                        }}
+                      >
+                        <div
+                          className="text-[9px] font-bold uppercase tracking-wider mb-1 opacity-90"
+                          style={{
+                            fontFamily: 'var(--font-display)',
+                            color: isSelf ? 'var(--text-on-accent)' : unitColor,
+                          }}
+                        >
+                          {isSelf ? 'Dispatch [you]' : msg.from}
+                          <span className="font-normal opacity-70 ml-1.5" style={{ fontFamily: 'var(--font-mono)' }}>
+                            {msg.time}
+                          </span>
+                        </div>
+                        <p className="text-[12px] m-0 leading-relaxed">{msg.text}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <form onSubmit={handleSend} className="p-3 border-t border-(--border-subtle) flex gap-2 shrink-0">
+                <input
+                  type="text"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Type tactical message to field units…"
+                  className="flex-1 h-10 rounded-lg px-3 text-[13px] bg-(--bg-input) border border-(--border) text-(--text-primary) outline-none placeholder:text-(--text-muted) focus:border-(--accent)"
+                />
+                <button
+                  type="submit"
+                  className="h-10 w-10 rounded-lg border-none flex items-center justify-center cursor-pointer shrink-0"
+                  style={{ background: 'var(--accent)', color: 'var(--text-on-accent)' }}
+                  aria-label="Send message"
+                >
+                  <Send size={16} />
+                </button>
+              </form>
+            </>
+          )}
+
+          {/* ── Voice tab content ── */}
+          {commsTab === 'voice' && (
+            <CommsAudioLog
+              clips={audioClips}
+              onRecord={() => {
+                // When dispatcher records a new clip, add it to the list
+                const now = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+                setAudioClips((prev) => [
+                  ...prev,
+                  {
+                    id: `ac-${Date.now()}`,
+                    from: 'dispatch',
+                    unitId: null,
+                    unitType: null,
+                    time: now,
+                    durationS: Math.floor(Math.random() * 12) + 4,
+                    label: 'Voice message sent to all field units',
+                    isNew: false,
+                  },
+                ])
+              }}
+            />
+          )}
         </div>
       </div>
     </div>
