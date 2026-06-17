@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Sun, Moon, Palette, Check, ShieldCheck, Monitor, Smartphone, UserCircle } from 'lucide-react'
+import { Sun, Moon, Palette, Check, ShieldCheck, Monitor, Bell, Languages, UserCircle } from 'lucide-react'
 import { useThemeStore } from '../../store/themeStore'
 import StatusBadge from '../dispatcher/StatusBadge'
 import SettingsPasswordSection from './SettingsPasswordSection'
 import SettingsProfileSection from './SettingsProfileSection'
 import SettingsNavLayout from './SettingsNavLayout'
 import SettingsToast from './SettingsToast'
+import { SettingsToggleRow, SettingsGroup } from './SettingsToggle'
 
 const THEME_OPTIONS = [
   { id: 'light', label: 'Light mode', description: 'High-contrast command interface optimized for daylight operations centers.', icon: Sun },
@@ -16,6 +17,8 @@ const THEME_OPTIONS = [
 const NAV = [
   { id: 'profile', label: 'Profile', icon: UserCircle },
   { id: 'appearance', label: 'Appearance', icon: Palette },
+  { id: 'notifications', label: 'Notifications', icon: Bell },
+  { id: 'language', label: 'Language', icon: Languages },
   { id: 'security', label: 'Security', icon: ShieldCheck },
 ]
 
@@ -25,10 +28,28 @@ export default function AdminPortalSettingsView() {
   const { theme, setTheme } = useThemeStore()
   const [toast, setToast] = useState(false)
   const [twoFa, setTwoFa] = useState(true)
+  const [language, setLanguage] = useState('en')
+  const [toggles, setToggles] = useState({
+    newUserInvite: true,
+    inviteAccepted: true,
+    systemHealthCritical: true,
+    systemHealthWarning: true,
+    integrationDown: true,
+    integrationRestored: false,
+    securityLoginAnomaly: true,
+    securityMfaDisabled: true,
+    auditHighRisk: true,
+    auditBulkExport: false,
+  })
 
   const flashToast = () => {
     setToast(true)
     setTimeout(() => setToast(false), 2500)
+  }
+
+  const setToggle = (key, val) => {
+    setToggles((t) => ({ ...t, [key]: val }))
+    flashToast()
   }
 
   return (
@@ -83,6 +104,125 @@ export default function AdminPortalSettingsView() {
             })}
           </div>
           <p className="settings-theme-status">Active theme: <strong>{theme.toUpperCase()}</strong> · Stored locally</p>
+        </div>
+      )}
+
+      {section === 'notifications' && (
+        <div className="settings-section-card dispatcher-surface p-5 w-full">
+          <h2 className="text-base font-bold m-0 mb-1" style={{ fontFamily: 'var(--font-display)' }}>
+            Notification Settings
+          </h2>
+          <p className="text-[13px] text-(--text-secondary) m-0 mb-4">
+            Control which system events and alerts reach you as Super Admin.
+          </p>
+
+          <SettingsGroup title="User Provisioning">
+            <SettingsToggleRow
+              label="New user invitation dispatched"
+              description="When any admin sends an invitation link to a new user"
+              on={toggles.newUserInvite}
+              onChange={(v) => setToggle('newUserInvite', v)}
+            />
+            <SettingsToggleRow
+              label="Invitation accepted"
+              description="When an invited user completes registration and activates their account"
+              on={toggles.inviteAccepted}
+              onChange={(v) => setToggle('inviteAccepted', v)}
+            />
+          </SettingsGroup>
+
+          <SettingsGroup title="System Health">
+            <SettingsToggleRow
+              label="Critical system alerts"
+              description="AI model failures, database issues, or response time SLA breaches"
+              on={toggles.systemHealthCritical}
+              onChange={(v) => setToggle('systemHealthCritical', v)}
+            />
+            <SettingsToggleRow
+              label="Health warnings"
+              description="Coverage drops, dispatch queue overloads, and scheduled job failures"
+              on={toggles.systemHealthWarning}
+              onChange={(v) => setToggle('systemHealthWarning', v)}
+            />
+          </SettingsGroup>
+
+          <SettingsGroup title="Integrations">
+            <SettingsToggleRow
+              label="Integration disconnected"
+              description="When an external service (CAD, GPS, radio) goes offline"
+              on={toggles.integrationDown}
+              onChange={(v) => setToggle('integrationDown', v)}
+            />
+            <SettingsToggleRow
+              label="Integration restored"
+              description="When a disconnected service reconnects successfully"
+              on={toggles.integrationRestored}
+              onChange={(v) => setToggle('integrationRestored', v)}
+            />
+          </SettingsGroup>
+
+          <SettingsGroup title="Security Events">
+            <SettingsToggleRow
+              label="Anomalous login detected"
+              description="Login from an unrecognized device, location, or at unusual hours"
+              on={toggles.securityLoginAnomaly}
+              onChange={(v) => setToggle('securityLoginAnomaly', v)}
+            />
+            <SettingsToggleRow
+              label="MFA disabled on any account"
+              description="Alert when two-factor authentication is turned off for any user"
+              on={toggles.securityMfaDisabled}
+              onChange={(v) => setToggle('securityMfaDisabled', v)}
+            />
+          </SettingsGroup>
+
+          <SettingsGroup title="Audit Trail">
+            <SettingsToggleRow
+              label="High-risk audit events"
+              description="Role changes, account deletions, and permission escalations"
+              on={toggles.auditHighRisk}
+              onChange={(v) => setToggle('auditHighRisk', v)}
+            />
+            <SettingsToggleRow
+              label="Bulk data exports"
+              description="When any user exports more than 500 records at once"
+              on={toggles.auditBulkExport}
+              onChange={(v) => setToggle('auditBulkExport', v)}
+            />
+          </SettingsGroup>
+        </div>
+      )}
+
+      {section === 'language' && (
+        <div className="settings-section-card dispatcher-surface p-5 w-full">
+          <h2 className="text-base font-bold m-0 mb-1" style={{ fontFamily: 'var(--font-display)' }}>
+            Language
+          </h2>
+          <p className="text-[13px] text-(--text-secondary) m-0 mb-4">
+            Select your preferred interface language for the RESQ portal.
+          </p>
+          <div className="settings-theme-grid">
+            <button type="button" className="settings-theme-card opacity-80" disabled>
+              <span className="settings-theme-card-icon text-2xl">🇷🇼</span>
+              <div className="settings-theme-card-body">
+                <div className="settings-theme-card-title">
+                  Kinyarwanda <span className="text-[10px] text-(--text-muted)">(Coming soon)</span>
+                </div>
+              </div>
+            </button>
+            <button
+              type="button"
+              className={`settings-theme-card${language === 'en' ? ' settings-theme-card--active' : ''}`}
+              onClick={() => { setLanguage('en'); flashToast() }}
+            >
+              <span className="settings-theme-card-icon text-2xl">🇬🇧</span>
+              <div className="settings-theme-card-body">
+                <div className="settings-theme-card-title">English</div>
+                <p className="settings-theme-card-desc">Default portal language for all RNP terminals.</p>
+              </div>
+              {language === 'en' && <span className="settings-theme-card-check"><Check size={16} /></span>}
+            </button>
+          </div>
         </div>
       )}
 

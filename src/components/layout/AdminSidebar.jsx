@@ -7,7 +7,6 @@ import {
   ShieldCheck,
   Lock,
   Settings,
-  User,
   HelpCircle,
   LogOut,
   Siren,
@@ -42,7 +41,7 @@ const SECURITY = [
 ]
 
 const ACCOUNT = [
-  { icon: User, label: 'My Profile', href: '/admin/profile' },
+  { icon: Settings, label: 'Settings', href: '/admin/settings/profile' },
   { icon: HelpCircle, label: 'Help', href: '#' },
   { icon: LogOut, label: 'Logout', href: '/login', danger: true },
 ]
@@ -120,7 +119,34 @@ export default function AdminSidebar({ mobileOpen, onClose }) {
         <NavSection label="Security" items={SECURITY} location={location} onClose={onClose} />
       </nav>
       <div className="sidebar-bottom">
-        <NavSection label="Account" items={ACCOUNT} location={location} onClose={onClose} />
+        <div className="sidebar-section-label">Account</div>
+        {ACCOUNT.map((item) => {
+          const Icon = item.icon
+          const isSettings = item.href.includes('/settings')
+          const isActive =
+            (isSettings && location.pathname.startsWith('/admin/settings')) ||
+            (!isSettings && location.pathname === item.href)
+          return (
+            <div key={item.label} className={`sidebar-item-wrap${isActive ? ' active' : ''}`}>
+              {isActive && (
+                <>
+                  <span className="sidebar-cutout sidebar-cutout-top" />
+                  <span className="sidebar-cutout sidebar-cutout-bottom" />
+                </>
+              )}
+              <Link
+                to={item.href}
+                className={`sidebar-item${isActive ? ' active' : ''}`}
+                title={item.label}
+                onClick={onClose}
+                style={{ color: item.danger ? 'var(--status-critical)' : undefined }}
+              >
+                <span className="sidebar-icon"><Icon size={18} /></span>
+                <span className="sidebar-label">{item.label}</span>
+              </Link>
+            </div>
+          )
+        })}
       </div>
     </aside>
   )
