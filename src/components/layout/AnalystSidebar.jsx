@@ -7,7 +7,6 @@ import {
   Database,
   BarChart3,
   Library,
-  User,
   Settings,
   HelpCircle,
   LogOut,
@@ -38,7 +37,6 @@ const DATA = [
 ]
 
 const ACCOUNT = [
-  { icon: User, label: 'My Profile', href: '/analyst/profile' },
   { icon: Settings, label: 'Settings', href: '/analyst/settings/profile' },
   { icon: HelpCircle, label: 'Help', href: '#' },
   { icon: LogOut, label: 'Logout', href: '/login', danger: true },
