@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Sun, Moon, Palette, Bell, ShieldCheck, UserCircle, Languages } from 'lucide-react'
+import { Sun, Moon, Palette, Bell, ShieldCheck, UserCircle, Languages, Check, Monitor } from 'lucide-react'
+import StatusBadge from '../dispatcher/StatusBadge'
 import { useThemeStore } from '../../store/themeStore'
 import SettingsNavLayout from './SettingsNavLayout'
 import SettingsToast from './SettingsToast'
