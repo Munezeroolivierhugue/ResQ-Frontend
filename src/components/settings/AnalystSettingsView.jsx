@@ -28,6 +28,7 @@ export default function AnalystSettingsView() {
   const { theme, setTheme } = useThemeStore()
   const [toast, setToast] = useState(false)
   const [language, setLanguage] = useState('en')
+  const [twoFa, setTwoFa] = useState(false)
   const [toggles, setToggles] = useState({
     anomalyAlerts: true,
     dataQuality: true,
