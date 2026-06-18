@@ -15,8 +15,9 @@ import {
   ArrowRight,
   Check,
   Sparkles,
+  Building2,
 } from 'lucide-react'
-import { ASSIGNED_ROLES, mockInvitedUsers } from '../../data/mockAuthData'
+import { ASSIGNED_ROLES, mockInvitedUsers, ORGANIZATIONS } from '../../data/mockAuthData'
 import FieldLabel from '../../components/ui/FieldLabel'
 
 const RECENT_LIMIT = 5
@@ -139,6 +140,7 @@ export default function AdminInviteUser() {
     fullName: '',
     email: '',
     phone: '',
+    organization: ORGANIZATIONS[0],
     role: 'dispatcher',
     district: '',
   })
@@ -180,6 +182,7 @@ export default function AdminInviteUser() {
     sessionStorage.setItem('resq-invite-email', form.email)
     sessionStorage.setItem('resq-invite-name', form.fullName)
     sessionStorage.setItem('resq-invite-phone', form.phone)
+    sessionStorage.setItem('resq-invite-org', form.organization)
     sessionStorage.setItem('resq-invite-role', form.role)
     sessionStorage.setItem('resq-demo-role', form.role)
     if (payload.district) {
@@ -340,6 +343,23 @@ export default function AdminInviteUser() {
                       onChange={(e) => set('phone', e.target.value)}
                       required
                     />
+                  </div>
+                </label>
+
+                {/* Organization */}
+                <label className="aiu-field">
+                  <span className="aiu-field-label">Organization</span>
+                  <div className="aiu-input-wrap">
+                    <Building2 size={15} className="aiu-input-icon" />
+                    <select
+                      className="aiu-input aiu-input--icon aiu-select"
+                      value={form.organization}
+                      onChange={(e) => set('organization', e.target.value)}
+                    >
+                      {ORGANIZATIONS.map((o) => (
+                        <option key={o} value={o}>{o}</option>
+                      ))}
+                    </select>
                   </div>
                 </label>
 
