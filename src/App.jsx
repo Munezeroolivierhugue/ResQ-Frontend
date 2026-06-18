@@ -109,7 +109,7 @@ export default function App() {
             <Route path="profile" element={<AdminProfile />} />
             <Route path="settings" element={<Navigate to="/admin/settings/general" replace />} />
             <Route path="settings/:section" element={<AdminSettings />} />
-            <Route path="invite" element={<AdminInviteUser />} />
+            <Route path="users/invite" element={<AdminInviteUser />} />
             <Route index element={<Navigate to="/admin/dashboard" replace />} />
           </Route>
         </Route>
