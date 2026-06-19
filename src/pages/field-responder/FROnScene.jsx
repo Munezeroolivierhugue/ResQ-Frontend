@@ -17,7 +17,7 @@ export default function FROnScene() {
   const [draft, setDraft] = useState('')
   const [elapsed, setElapsed] = useState(504)
   // Audio comms state
-  const [audioClips, setAudioClips] = useState(mockAudioClips)
+  const addVoiceMessage = useFieldResponderStore((s) => s.addVoiceMessage)
   const [pttActive, setPttActive] = useState(false)
   const [pttSeconds, setPttSeconds] = useState(0)
   const pttRef = useRef(null)
@@ -52,21 +52,10 @@ export default function FROnScene() {
   const stopPtt = () => {
     clearInterval(pttRef.current)
     setPttActive(false)
+    if (pttSeconds > 0) {
+      addVoiceMessage(pttSeconds, 'officer', 'YOU')
+    }
     setPttSeconds(0)
-    const now = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-    setAudioClips((prev) => [
-      ...prev,
-      {
-        id: `ac-fr-${Date.now()}`,
-        from: 'field',
-        unitId: 'ME',
-        unitType: 'police',
-        time: now,
-        durationS: Math.floor(Math.random() * 10) + 3,
-        label: 'Voice update sent to Dispatch',
-        isNew: false,
-      },
-    ])
   }
 
   // Simulated playback for incoming clips
@@ -79,7 +68,7 @@ export default function FROnScene() {
     }
     setPlayingId(clip.id)
     setPlayProgress((p) => ({ ...p, [clip.id]: 0 }))
-    setAudioClips((prev) => prev.map((c) => c.id === clip.id ? { ...c, isNew: false } : c))
+
     playRef.current = setInterval(() => {
       setPlayProgress((p) => {
         const next = (p[clip.id] || 0) + 0.1
@@ -131,141 +120,179 @@ export default function FROnScene() {
         </button>
       </div>
 
-      <div className="dispatcher-surface fr-card fr-card--tight">
-        <div className="fr-card-header">
+      <div className="dispatcher-surface fr-card fr-card--tight flex flex-col min-h-[300px]">
+        <div className="fr-card-header bg-(--bg-elevated) shrink-0">
           <MessageSquare size={14} className="text-(--accent)" />
-          <span className="font-semibold text-[13px]">Dispatcher Channel</span>
-          <span className="fr-live-chip font-mono">LIVE</span>
-        </div>
-        <div className="fr-comms-thread">
-          {messages.map((m) => (
-            <div
-              key={m.id}
-              className={`fr-msg${m.from === 'officer' ? ' fr-msg--officer' : ' fr-msg--dispatch'}`}
-            >
-              <div className="fr-msg-label font-mono">
-                {m.from === 'officer' ? 'YOU' : 'DISPATCH'} · {m.time}
-              </div>
-              <div className="fr-msg-bubble">{m.text}</div>
-            </div>
-          ))}
-        </div>
-        <div className="fr-quick-replies">
-          {FR_QUICK_REPLIES.map((q) => (
-            <button key={q} type="button" className="fr-quick-chip" onClick={() => send(q)}>
-              {q}
-            </button>
-          ))}
-        </div>
-        <form
-          className="fr-comms-input-row"
-          onSubmit={(e) => {
-            e.preventDefault()
-            send(draft)
-          }}
-        >
-          <input
-            className="fr-comms-input"
-            placeholder="Type message..."
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-          />
-          <button type="submit" className="fr-comms-send" aria-label="Send">
-            <Send size={16} className="text-(--text-on-accent)" />
-          </button>
-        </form>
-      </div>
-
-      {/* ── Voice Channel card ── */}
-      <div className="dispatcher-surface fr-card fr-card--tight">
-        <div className="fr-card-header">
-          <Mic size={14} className="text-(--accent)" />
-          <span className="font-semibold text-[13px]">Voice Channel — Dispatch</span>
-          {audioClips.filter((c) => c.isNew).length > 0 && (
-            <span className="audio-unread-badge" style={{ marginLeft: '4px' }}>
-              {audioClips.filter((c) => c.isNew).length} new
-            </span>
-          )}
+          <span className="font-semibold text-[13px]">Unified Comms Channel</span>
           <span className="fr-live-chip font-mono ml-auto">LIVE</span>
         </div>
-
-        {/* Clip list */}
-        <div className="fr-audio-clip-list">
-          {audioClips.map((clip) => {
-            const isPlaying = playingId === clip.id
-            const prog = playProgress[clip.id] || 0
-            const pct = clip.durationS > 0 ? Math.min(prog / clip.durationS, 1) : 0
-            const isDispatch = clip.from === 'dispatch'
+        
+        <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-[#0f151c]">
+          {messages.map((m) => {
+            const isSelf = m.from === 'officer' || m.role === 'field' || m.from === 'field';
+            const unitColor = 'var(--accent)'; // Field UI often defaults dispatch to accent
+            
             return (
-              <div
-                key={clip.id}
-                className="fr-audio-clip"
-                style={{ borderColor: clip.isNew ? 'var(--accent)' : 'var(--border-subtle)' }}
-              >
-                {clip.isNew && <span className="w-1.5 h-1.5 rounded-full bg-(--status-critical) shrink-0" />}
-                <button
-                  type="button"
-                  className="fr-audio-play-btn"
-                  style={{ background: isPlaying ? 'var(--status-critical)' : 'var(--accent)' }}
-                  onClick={() => togglePlay(clip)}
-                  aria-label={isPlaying ? 'Stop' : 'Play'}
-                >
-                  {isPlaying
-                    ? <Square size={12} color="#fff" />
-                    : <Play size={12} color="var(--text-on-accent)" />}
-                </button>
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between mb-1">
-                    <span
-                      className="text-[10px] font-bold uppercase tracking-wider"
+              <div key={m.id} className={`flex ${isSelf ? 'justify-end' : 'justify-start'}`}>
+                {m.type === 'text' ? (
+                  // Text Bubble
+                  <div
+                    className="max-w-[85%] rounded-2xl px-3.5 py-2.5 border shadow-sm relative"
+                    style={{
+                      background: isSelf ? '#a2cc29' : 'transparent',
+                      color: isSelf ? '#000000' : 'var(--text-primary)',
+                      borderColor: isSelf ? '#a2cc29' : 'var(--border-light)',
+                      borderBottomRightRadius: isSelf ? '4px' : '16px',
+                      borderBottomLeftRadius: isSelf ? '16px' : '4px',
+                    }}
+                  >
+                    <div
+                      className="text-[9px] font-bold uppercase tracking-wider mb-1"
                       style={{
-                        fontFamily: 'var(--font-mono)',
-                        color: isDispatch ? 'var(--accent)' : 'var(--status-info)',
+                        fontFamily: 'var(--font-display)',
+                        color: isSelf ? 'rgba(0,0,0,0.6)' : unitColor,
                       }}
                     >
-                      {isDispatch ? 'DISPATCH' : clip.unitId}
-                    </span>
-                    <span className="text-[10px] text-(--text-muted)" style={{ fontFamily: 'var(--font-mono)' }}>
-                      {fmtDuration(clip.durationS)} · {clip.time}
-                    </span>
+                      {isSelf ? 'YOU' : 'DISPATCH'}
+                      <span className="font-normal opacity-70 ml-1.5" style={{ fontFamily: 'var(--font-mono)' }}>
+                        {m.time}
+                      </span>
+                    </div>
+                    <p className="text-[12.5px] m-0 leading-snug font-medium" style={{ color: isSelf ? '#111827' : 'var(--text-primary)' }}>{m.text}</p>
                   </div>
-                  {/* Progress bar */}
-                  <div className="fr-audio-progress-track">
-                    <div
-                      className="fr-audio-progress-fill"
-                      style={{ width: `${pct * 100}%` }}
-                    />
+                ) : (
+                  // Voice Bubble
+                  <div
+                    className="max-w-[85%] rounded-3xl px-1.5 py-1.5 border shadow-sm flex items-center gap-2 relative"
+                    style={{
+                      background: isSelf ? '#a2cc29' : 'transparent',
+                      borderColor: isSelf ? '#a2cc29' : 'var(--border-light)',
+                      borderBottomRightRadius: isSelf ? '6px' : '24px',
+                      borderBottomLeftRadius: isSelf ? '24px' : '6px',
+                      minWidth: '200px'
+                    }}
+                  >
+                    {m.isNew && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-(--status-critical) border border-[#0f151c]" />}
+                    <button
+                      type="button"
+                      className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-none transition-transform active:scale-95"
+                      style={{ 
+                        background: isSelf ? 'rgba(0,0,0,0.1)' : 'var(--accent)',
+                        color: isSelf ? '#000' : '#fff'
+                      }}
+                      onClick={() => togglePlay(m)}
+                    >
+                      {playingId === m.id ? <Square size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" className="ml-0.5" />}
+                    </button>
+                    
+                    <div className="flex-1 min-w-0 pr-3">
+                      <div className="flex justify-between items-end mb-0.5">
+                        <span
+                          className="text-[9px] font-bold uppercase tracking-wider"
+                          style={{
+                            fontFamily: 'var(--font-display)',
+                            color: isSelf ? 'rgba(0,0,0,0.6)' : unitColor,
+                          }}
+                        >
+                          {isSelf ? 'YOU' : 'DISPATCH'}
+                        </span>
+                        <span 
+                          className="text-[9px] font-bold tabular-nums" 
+                          style={{ color: isSelf ? 'rgba(0,0,0,0.5)' : 'var(--text-muted)' }}
+                        >
+                          {playingId === m.id 
+                            ? fmtDuration(Math.floor(playProgress[m.id] || 0)) 
+                            : fmtDuration(m.durationS)}
+                        </span>
+                      </div>
+                      
+                      {/* Fake Waveform */}
+                      <div className="h-4 flex items-end gap-[2px] w-full overflow-hidden opacity-80 mt-1">
+                        {Array.from({ length: 24 }).map((_, i) => {
+                          const isPlayed = playingId === m.id && ((i / 24) * m.durationS <= (playProgress[m.id] || 0));
+                          return (
+                            <div 
+                              key={i} 
+                              className="flex-1 rounded-full bg-current transition-all duration-75"
+                              style={{ 
+                                height: `${20 + Math.random() * 80}%`,
+                                color: isSelf 
+                                  ? (isPlayed ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.2)') 
+                                  : (isPlayed ? 'var(--accent)' : 'var(--border)'),
+                              }}
+                            />
+                          )
+                        })}
+                      </div>
+                    </div>
                   </div>
-                  <p className="text-[11px] text-(--text-secondary) m-0 mt-1">{clip.label}</p>
-                </div>
+                )}
               </div>
             )
           })}
         </div>
-
-        {/* Recording indicator */}
-        {pttActive && (
-          <div className="audio-recording-indicator mb-1.5">
-            <span className="audio-rec-dot" style={{ background: 'var(--status-critical)' }} />
-            <span className="text-[11px] font-bold text-(--status-critical)" style={{ fontFamily: 'var(--font-mono)' }}>
-              REC {pttSeconds}s — release to send
-            </span>
-          </div>
-        )}
-
-        {/* PTT button */}
-        <button
-          type="button"
-          className={`fr-ptt-btn${pttActive ? ' fr-ptt-btn--active' : ''}`}
-          onMouseDown={startPtt}
-          onMouseUp={stopPtt}
-          onTouchStart={startPtt}
-          onTouchEnd={stopPtt}
-          id="fr-ptt-btn"
-        >
-          <Mic size={16} />
-          {pttActive ? `Release to Send (${pttSeconds}s)` : 'Hold to Talk'}
-        </button>
+        
+        <div className="fr-quick-replies shrink-0 pb-1">
+          {FR_QUICK_REPLIES.map((q) => (
+            <button key={q} type="button" className="fr-quick-chip text-[11px] py-1" onClick={() => send(q)}>
+              {q}
+            </button>
+          ))}
+        </div>
+        
+        <div className="p-2 border-t border-(--border-subtle) shrink-0 bg-(--bg-surface)">
+          {pttActive && (
+            <div className="flex items-center gap-2 mb-2 px-2">
+              <span className="w-2 h-2 rounded-full bg-(--status-critical) animate-pulse" />
+              <span className="text-[11px] font-bold text-(--status-critical) font-mono">
+                RECORDING {fmtDuration(pttSeconds)}
+              </span>
+              <span className="text-[10px] text-(--text-muted) ml-auto">Release to send</span>
+            </div>
+          )}
+          <form
+            className="flex gap-2 items-end"
+            onSubmit={(e) => {
+              e.preventDefault()
+              send(draft)
+            }}
+          >
+            <input
+              className="flex-1 h-[38px] rounded-xl px-3 text-[13px] bg-(--bg-input) border border-(--border) text-(--text-primary) outline-none placeholder:text-(--text-muted) focus:border-(--accent) transition-colors"
+              placeholder="Type message..."
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+            />
+            {draft.trim() ? (
+              <button
+                type="submit"
+                className="h-[38px] w-[38px] rounded-xl border-none flex items-center justify-center cursor-pointer shrink-0 transition-transform active:scale-95"
+                style={{ background: 'var(--accent)', color: '#000' }}
+                aria-label="Send message"
+              >
+                <Send size={16} />
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="h-[38px] w-[38px] rounded-xl border-none flex items-center justify-center cursor-pointer shrink-0 transition-all duration-150 active:scale-95"
+                style={{ 
+                  background: pttActive ? 'var(--status-critical)' : 'transparent', 
+                  color: pttActive ? '#fff' : 'var(--accent)',
+                  border: pttActive ? 'none' : '1px solid var(--border)'
+                }}
+                aria-label="Hold to talk"
+                onMouseDown={startPtt}
+                onMouseUp={stopPtt}
+                onMouseLeave={stopPtt}
+                onTouchStart={startPtt}
+                onTouchEnd={stopPtt}
+              >
+                <Mic size={18} />
+              </button>
+            )}
+          </form>
+        </div>
       </div>
 
       <button
