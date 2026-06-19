@@ -18,7 +18,7 @@ const NAV_ITEMS = [
 
 const BOTTOM_ITEMS = [
   { icon: Settings,   label: 'Settings', href: '/dispatcher/settings' },
-  { icon: HelpCircle, label: 'Help',     href: '#' },
+  { icon: HelpCircle, label: 'Help',     href: '/dispatcher/help' },
   { icon: LogOut,     label: 'Logout',   href: '/login', danger: true },
 ]
 
@@ -79,8 +79,8 @@ export default function Sidebar({ mobileOpen, onClose }) {
       <div className="sidebar-bottom">
         {BOTTOM_ITEMS.map(item => {
           const Icon = item.icon
-          const isSettings = item.href === '/dispatcher/settings'
-          const isActive = isSettings && location.pathname.startsWith('/dispatcher/settings')
+          const isLogout = item.href === '/login'
+          const isActive = !isLogout && location.pathname.startsWith(item.href)
           return (
             <div key={item.label} className={`sidebar-item-wrap${isActive ? ' active' : ''}`}>
               {isActive && (

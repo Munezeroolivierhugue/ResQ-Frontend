@@ -42,7 +42,7 @@ const SECURITY = [
 
 const ACCOUNT = [
   { icon: Settings, label: 'Settings', href: '/admin/settings/profile' },
-  { icon: HelpCircle, label: 'Help', href: '#' },
+  { icon: HelpCircle, label: 'Help', href: '/admin/help' },
   { icon: LogOut, label: 'Logout', href: '/login', danger: true },
 ]
 
@@ -122,10 +122,8 @@ export default function AdminSidebar({ mobileOpen, onClose }) {
         <div className="sidebar-section-label">Account</div>
         {ACCOUNT.map((item) => {
           const Icon = item.icon
-          const isSettings = item.href.includes('/settings')
-          const isActive =
-            (isSettings && location.pathname.startsWith('/admin/settings')) ||
-            (!isSettings && location.pathname === item.href)
+          const isLogout = item.href === '/login'
+          const isActive = !isLogout && location.pathname.startsWith(item.href)
           return (
             <div key={item.label} className={`sidebar-item-wrap${isActive ? ' active' : ''}`}>
               {isActive && (
