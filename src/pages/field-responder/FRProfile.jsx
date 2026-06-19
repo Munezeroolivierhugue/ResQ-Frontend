@@ -10,6 +10,7 @@ import {
   BarChart3,
   LogOut,
   ChevronRight,
+  HelpCircle
 } from 'lucide-react'
 import { FR_SETTINGS_NAV } from '../../components/settings/FieldResponderSettingsView'
 import { FR_OFFICER } from '../../data/mockFieldResponderData'
@@ -62,6 +63,11 @@ export default function FRProfile() {
               <ChevronRight size={16} className="text-(--text-muted)" />
             </Link>
           ))}
+          <Link to="/field-responder/help" className="fr-profile-link dispatcher-surface">
+            <HelpCircle size={18} className="text-(--accent)" />
+            <span className="flex-1">Help Center</span>
+            <ChevronRight size={16} className="text-(--text-muted)" />
+          </Link>
         </div>
 
         <div className="fr-profile-section-label">Quick Actions</div>
