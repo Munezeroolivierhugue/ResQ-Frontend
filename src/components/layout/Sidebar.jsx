@@ -7,19 +7,19 @@ import SidebarToggle from './SidebarToggle'
 import { useSidebarClasses } from '../../hooks/useSidebarClasses'
 
 const NAV_ITEMS = [
-  { icon: Map,           label: 'Live Dispatch Map',  href: '/dispatcher' },
-  { icon: Zap,           label: 'New Incident',        href: '/dispatcher/new-incident' },
-  { icon: Bot,           label: 'AI Dispatch Engine',  href: '/dispatcher/ai-engine' },
-  { icon: Radio,         label: 'Active Incident',     href: '/dispatcher/active-incident' },
-  { icon: ScrollText,    label: 'Incident History',    href: '/dispatcher/history' },
-  { icon: FileCheck,     label: 'Incident Report',     href: '/dispatcher/incident-report' },
-  { icon: ClipboardList, label: 'Shift Handover',      href: '/dispatcher/shift-handover' },
+  { icon: Map, label: 'Live Dispatch Map', href: '/dispatcher' },
+  { icon: Zap, label: 'New Incident', href: '/dispatcher/new-incident' },
+  { icon: Bot, label: 'AI Dispatch Engine', href: '/dispatcher/ai-engine' },
+  { icon: Radio, label: 'Active Incident', href: '/dispatcher/active-incident' },
+  { icon: ScrollText, label: 'Incident History', href: '/dispatcher/history' },
+  { icon: FileCheck, label: 'Incident Report', href: '/dispatcher/incident-report' },
+  { icon: ClipboardList, label: 'Shift Handover', href: '/dispatcher/shift-handover' },
 ]
 
 const BOTTOM_ITEMS = [
-  { icon: Settings,   label: 'Settings', href: '/dispatcher/settings' },
-  { icon: HelpCircle, label: 'Help',     href: '/dispatcher/help' },
-  { icon: LogOut,     label: 'Logout',   href: '/login', danger: true },
+  { icon: Settings, label: 'Settings', href: '/dispatcher/settings' },
+  { icon: HelpCircle, label: 'Help', href: '/dispatcher/help' },
+  { icon: LogOut, label: 'Logout', href: '/login', danger: true },
 ]
 
 function NavItem({ item, isActive, onClose }) {

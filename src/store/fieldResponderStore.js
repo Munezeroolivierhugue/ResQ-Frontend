@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { FR_DISPATCH_MESSAGES } from '../data/mockFieldResponderData'
+import { mockUnifiedComms } from '../data/mockUnifiedComms'
 
 const STAGES = ['dispatched', 'en_route', 'on_scene', 'incident_clear']
 
@@ -8,7 +8,7 @@ export const useFieldResponderStore = create((set, get) => ({
   dutyStatus: 'offline',
   assignmentStage: 'dispatched',
   hasActiveAssignment: true,
-  messages: [...FR_DISPATCH_MESSAGES],
+  messages: [...mockUnifiedComms],
   reportSubmitted: false,
   outstandingReports: [],
   toast: null,
@@ -47,7 +47,20 @@ export const useFieldResponderStore = create((set, get) => ({
     set((s) => ({
       messages: [
         ...s.messages,
-        { id: `m-${Date.now()}`, from, time, text },
+        { id: `m-${Date.now()}`, type: 'text', from, time, text },
+      ],
+    }))
+  },
+  addVoiceMessage: (durationS, from = 'officer', unitId = 'YOU') => {
+    const now = new Date()
+    const time = now.toLocaleTimeString('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+    set((s) => ({
+      messages: [
+        ...s.messages,
+        { id: `ac-${Date.now()}`, type: 'voice', from, unitId, unitType: 'fire', time, durationS, label: 'Voice update sent to Dispatch', isNew: false },
       ],
     }))
   },
