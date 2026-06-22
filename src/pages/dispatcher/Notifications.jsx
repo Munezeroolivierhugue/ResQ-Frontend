@@ -3,10 +3,13 @@ import { ChevronRight } from 'lucide-react'
 import DataTable from '../../components/dispatcher/DataTable'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import { useNotificationsStore } from '../../store/notificationsStore'
+import MutualAidOfferModal from '../../components/dispatcher/MutualAidOfferModal'
+import { useState } from 'react'
 
 export default function Notifications() {
   const navigate = useNavigate()
-  const { items } = useNotificationsStore()
+  const { items, markRead } = useNotificationsStore()
+  const [selectedMutualAid, setSelectedMutualAid] = useState(null)
 
   const columns = [
     {
@@ -29,7 +32,13 @@ export default function Notifications() {
         <button
           type="button"
           className="text-[12px] text-(--accent) bg-transparent border-none cursor-pointer font-semibold"
-          onClick={() => navigate(row.href)}
+          onClick={() => {
+            if (row.type === 'mutual_aid') {
+              setSelectedMutualAid(row)
+            } else {
+              navigate(row.href)
+            }
+          }}
         >
           Open →
         </button>
@@ -56,6 +65,16 @@ export default function Notifications() {
       <div className="dispatcher-surface overflow-hidden">
         <DataTable columns={columns} rows={items} />
       </div>
+
+      <MutualAidOfferModal
+        isOpen={!!selectedMutualAid}
+        requestDetails={selectedMutualAid?.details || selectedMutualAid}
+        onClose={() => setSelectedMutualAid(null)}
+        onPledge={(units) => {
+          if (selectedMutualAid) markRead(selectedMutualAid.id)
+          // Implement pledging logic here, like a toast message or API call
+        }}
+      />
     </div>
   )
 }
