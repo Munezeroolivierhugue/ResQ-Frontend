@@ -429,7 +429,7 @@ export default function ActiveIncident() {
 
         {/* Field comms — right column, full height */}
         <div className="w-full lg:w-[320px] xl:w-[360px] shrink-0 flex flex-col min-h-[240px] lg:min-h-0 bg-(--bg-surface) border-t lg:border-t-0 border-(--border)">
-          
+
           {/* Header */}
           <div className="px-4 py-3 border-b border-(--border-subtle) flex items-center justify-between shrink-0 bg-(--bg-elevated)">
             <div className="flex items-center gap-2 text-(--text-primary)">
@@ -445,11 +445,11 @@ export default function ActiveIncident() {
             </span>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0 bg-[#0f151c]">
+          <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0 bg-(--bg-base)">
             {comms.map((msg) => {
               const isSelf = msg.isSelf
               const unitColor = msg.unitType ? UNIT_COLORS[msg.unitType] : 'var(--text-secondary)'
-              
+
               return (
                 <div key={msg.id} className={`flex ${isSelf ? 'justify-end' : 'justify-start'}`}>
                   {msg.type === 'text' ? (
@@ -457,9 +457,9 @@ export default function ActiveIncident() {
                     <div
                       className="max-w-[85%] rounded-2xl px-3.5 py-2.5 border shadow-sm relative group"
                       style={{
-                        background: isSelf ? '#a2cc29' : 'transparent',
-                        color: isSelf ? '#000000' : 'var(--text-primary)',
-                        borderColor: isSelf ? '#a2cc29' : 'var(--border-light)',
+                        background: isSelf ? '#a2cc29' : 'var(--bg-surface)',
+                        color: isSelf ? '#111827' : 'var(--text-primary)',
+                        borderColor: isSelf ? '#a2cc29' : 'var(--border-subtle)',
                         borderBottomRightRadius: isSelf ? '4px' : '16px',
                         borderBottomLeftRadius: isSelf ? '16px' : '4px',
                       }}
@@ -468,7 +468,7 @@ export default function ActiveIncident() {
                         className="text-[9px] font-bold uppercase tracking-wider mb-1"
                         style={{
                           fontFamily: 'var(--font-display)',
-                          color: isSelf ? 'rgba(0,0,0,0.6)' : unitColor,
+                          color: isSelf ? 'rgba(17,24,39,0.7)' : unitColor,
                         }}
                       >
                         {isSelf ? 'DISPATCH [YOU]' : msg.from}
@@ -483,59 +483,59 @@ export default function ActiveIncident() {
                     <div
                       className="max-w-[85%] rounded-3xl px-1.5 py-1.5 border shadow-sm flex items-center gap-2 relative group"
                       style={{
-                        background: isSelf ? '#a2cc29' : 'transparent',
-                        borderColor: isSelf ? '#a2cc29' : 'var(--border-light)',
+                        background: isSelf ? '#a2cc29' : 'var(--bg-surface)',
+                        borderColor: isSelf ? '#a2cc29' : 'var(--border-subtle)',
                         borderBottomRightRadius: isSelf ? '6px' : '24px',
                         borderBottomLeftRadius: isSelf ? '24px' : '6px',
                         minWidth: '200px'
                       }}
                     >
-                      {msg.isNew && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-(--status-critical) border border-[#0f151c]" />}
+                      {msg.isNew && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-(--status-critical) border border-(--bg-base)" />}
                       <button
                         type="button"
                         className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-none transition-transform active:scale-95"
-                        style={{ 
-                          background: isSelf ? 'rgba(0,0,0,0.1)' : 'var(--accent)',
-                          color: isSelf ? '#000' : '#fff'
+                        style={{
+                          background: isSelf ? 'rgba(17,24,39,0.1)' : 'var(--accent)',
+                          color: isSelf ? '#111827' : '#fff'
                         }}
                         onClick={() => togglePlay(msg)}
                       >
                         {playingId === msg.id ? <Square size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" className="ml-0.5" />}
                       </button>
-                      
+
                       <div className="flex-1 min-w-0 pr-3">
                         <div className="flex justify-between items-end mb-0.5">
                           <span
                             className="text-[9px] font-bold uppercase tracking-wider"
                             style={{
                               fontFamily: 'var(--font-display)',
-                              color: isSelf ? 'rgba(0,0,0,0.6)' : unitColor,
+                              color: isSelf ? 'rgba(17,24,39,0.7)' : unitColor,
                             }}
                           >
                             {isSelf ? 'DISPATCH [YOU]' : msg.from}
                           </span>
-                          <span 
-                            className="text-[9px] font-bold tabular-nums" 
-                            style={{ color: isSelf ? 'rgba(0,0,0,0.5)' : 'var(--text-muted)' }}
+                          <span
+                            className="text-[9px] font-bold tabular-nums"
+                            style={{ color: isSelf ? 'rgba(17,24,39,0.6)' : 'var(--text-muted)' }}
                           >
-                            {playingId === msg.id 
-                              ? fmtDuration(Math.floor(playProgress[msg.id] || 0)) 
+                            {playingId === msg.id
+                              ? fmtDuration(Math.floor(playProgress[msg.id] || 0))
                               : fmtDuration(msg.durationS)}
                           </span>
                         </div>
-                        
+
                         {/* Fake Waveform */}
                         <div className="h-4 flex items-end gap-[2px] w-full overflow-hidden opacity-80 mt-1">
                           {Array.from({ length: 24 }).map((_, i) => {
                             const isPlayed = playingId === msg.id && ((i / 24) * msg.durationS <= (playProgress[msg.id] || 0));
                             return (
-                              <div 
-                                key={i} 
+                              <div
+                                key={i}
                                 className="flex-1 rounded-full bg-current transition-all duration-75"
-                                style={{ 
+                                style={{
                                   height: `${20 + Math.random() * 80}%`,
-                                  color: isSelf 
-                                    ? (isPlayed ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.2)') 
+                                  color: isSelf
+                                    ? (isPlayed ? 'rgba(17,24,39,0.85)' : 'rgba(17,24,39,0.25)')
                                     : (isPlayed ? 'var(--accent)' : 'var(--border)'),
                                 }}
                               />
@@ -560,7 +560,7 @@ export default function ActiveIncident() {
                 <span className="text-[10px] text-(--text-muted) ml-auto">Release to send</span>
               </div>
             )}
-            
+
             <div className="flex gap-2 items-end">
               <form onSubmit={handleSend} className="flex-1 flex gap-2">
                 <input
@@ -583,8 +583,8 @@ export default function ActiveIncident() {
                   <button
                     type="button"
                     className="h-10 w-10 rounded-xl border-none flex items-center justify-center cursor-pointer shrink-0 transition-all duration-150 active:scale-95"
-                    style={{ 
-                      background: pttActive ? 'var(--status-critical)' : 'transparent', 
+                    style={{
+                      background: pttActive ? 'var(--status-critical)' : 'transparent',
                       color: pttActive ? '#fff' : 'var(--accent)',
                       border: pttActive ? 'none' : '1px solid var(--border)'
                     }}
