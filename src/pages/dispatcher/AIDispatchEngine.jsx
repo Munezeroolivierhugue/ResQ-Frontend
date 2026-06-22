@@ -32,10 +32,13 @@ const alternatives = [
 
 const severityColor = { critical: '#FF2D44', high: '#FF7A00', medium: '#E6A817', low: '#879D1F' }
 
+import AvailableUnitsModal from '../../components/dispatcher/AvailableUnitsModal'
+
 export default function AIDispatchEngine() {
   const navigate = useNavigate()
   const { theme } = useThemeStore()
   const [dispatched, setDispatched] = useState(false)
+  const [isUnitsModalOpen, setIsUnitsModalOpen] = useState(false)
 
   const handleDispatch = () => {
     setDispatched(true)
@@ -198,13 +201,18 @@ export default function AIDispatchEngine() {
               </button>
               <button
                 className="w-full flex items-center justify-center py-2.25 px-5 bg-transparent border border-(--border) text-(--text-primary) font-semibold text-[13px] rounded-lg cursor-pointer hover:bg-(--bg-elevated) hover:border-(--accent) transition-colors"
-                style={{ fontFamily: 'var(--font-body)' }}>
+                style={{ fontFamily: 'var(--font-body)' }}
+                onClick={() => setIsUnitsModalOpen(true)}>
                 Choose Different Unit
               </button>
             </>
           )}
         </div>
       </div>
+      <AvailableUnitsModal
+        isOpen={isUnitsModalOpen}
+        onClose={() => setIsUnitsModalOpen(false)}
+      />
     </div>
   )
 }

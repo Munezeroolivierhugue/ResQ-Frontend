@@ -25,6 +25,7 @@ import {
 } from '../../data/mockActiveIncidentData'
 import { fmtDuration } from '../../data/mockAudioCommsData'
 import { mockUnifiedComms } from '../../data/mockUnifiedComms'
+import { useNotificationsStore } from '../../store/notificationsStore'
 import 'leaflet/dist/leaflet.css'
 
 const MAP_TILES =
@@ -77,6 +78,7 @@ function StatusBadge({ label, color }) {
 export default function ActiveIncident() {
   const [message, setMessage] = useState('')
   const [comms, setComms] = useState(mockUnifiedComms)
+  const addNotification = useNotificationsStore((state) => state.addNotification)
 
   // Voice recording state
   const [pttActive, setPttActive] = useState(false)
@@ -423,15 +425,6 @@ export default function ActiveIncident() {
               )
             })}
           </ul>
-          <div className="p-3 border-t border-(--border-subtle) shrink-0">
-            <button
-              type="button"
-              className="w-full py-2 rounded-lg border border-(--border) bg-(--bg-input) text-[10px] font-bold uppercase tracking-wider text-(--text-secondary) cursor-pointer hover:border-(--accent) hover:text-(--accent) transition-colors"
-              style={{ fontFamily: 'var(--font-display)' }}
-            >
-              Request additional unit
-            </button>
-          </div>
         </div>
 
         {/* Field comms — right column, full height */}
@@ -608,6 +601,7 @@ export default function ActiveIncident() {
           </div>
         </div>
       </div>
+
     </div>
   )
 }
