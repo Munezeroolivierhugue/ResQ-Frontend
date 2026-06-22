@@ -1,14 +1,17 @@
 import DistrictLabel from './DistrictLabel'
 import { getDistrictCommanderDistrict } from '../../utils/districtCommanderSession'
 
-export default function DCPageHeader({ title, subtitle }) {
+export default function DCPageHeader({ title, subtitle, action }) {
   const districtName = getDistrictCommanderDistrict()
 
   return (
-    <div className="mb-6">
-      <h1 className="dispatcher-page-title m-0">{title}</h1>
-      <DistrictLabel districtName={districtName} />
-      {subtitle && <p className="dispatcher-page-subtitle m-0 mt-2">{subtitle}</p>}
+    <div className="mb-6 flex items-start justify-between">
+      <div>
+        <h1 className="dispatcher-page-title m-0">{title}</h1>
+        <DistrictLabel districtName={districtName} />
+        {subtitle && <p className="dispatcher-page-subtitle m-0 mt-2">{subtitle}</p>}
+      </div>
+      {action && <div>{action}</div>}
     </div>
   )
 }
