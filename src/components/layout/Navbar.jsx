@@ -19,7 +19,7 @@ export default function Navbar({
   const [showUser, setShowUser] = useState(false)
 
   return (
-    <header className="h-15 border-b border-(--border) flex items-center px-5 gap-4 sticky top-0 z-100 shrink-0 bg-surface">
+    <header className="h-15 border-b border-(--border) flex items-center px-5 gap-4 sticky top-0 z-[9999] shrink-0 bg-surface">
 
       <button className="navbar-menu-btn p-1.75 rounded-md bg-transparent border-none cursor-pointer flex items-center justify-center text-(--text-secondary) hover:bg-(--bg-elevated) hover:text-(--text-primary) transition-colors" onClick={onMenuClick} aria-label="Open menu">
         <Menu size={20} />
