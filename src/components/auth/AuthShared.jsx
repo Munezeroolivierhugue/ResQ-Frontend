@@ -80,7 +80,7 @@ export function AuthBrandPanel() {
       />
       <div className="auth-brand-content auth-brand-content--centered">
         <div className="auth-logo-row">
-          <span className="auth-logo-icon">
+          <span className="auth-logo-text">
             <Siren size={44} strokeWidth={1.75} />
           </span>
           <div>
