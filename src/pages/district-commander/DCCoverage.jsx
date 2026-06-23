@@ -53,6 +53,7 @@ export default function DCCoverage() {
     <div className="portal-page flex flex-col gap-4">
       <DCPageHeader
         title="Coverage Analysis"
+        eyebrow="District Commander"
         subtitle={`Sector coverage map and gap recommendations for ${district} District.`}
       />
 
