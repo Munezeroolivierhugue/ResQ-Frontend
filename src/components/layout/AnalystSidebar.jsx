@@ -46,10 +46,10 @@ function NavItem({ item, isActive, onClose }) {
   const Icon = item.icon
   const badgeStyle =
     item.badge === 'accent'
-      ? { background: 'var(--accent-ghost)', color: 'var(--accent)' }
+      ? { background: 'var(--accent)', color: '#ffffff' }
       : item.badge === 'critical'
-        ? { background: 'var(--status-critical-bg)', color: 'var(--status-critical)' }
-        : { background: 'var(--status-medium-bg)', color: 'var(--status-medium)' }
+        ? { background: 'var(--status-critical)', color: '#ffffff' }
+        : { background: 'var(--status-medium)', color: '#ffffff' }
   return (
     <div className={`sidebar-item-wrap${isActive ? ' active' : ''}`}>
       {isActive && (
