@@ -58,6 +58,7 @@ export default function DCShiftReports() {
     <div className="portal-page relative">
       <DCPageHeader
         title="Shift Reports"
+        eyebrow="District Commander"
         subtitle="Submitted by Operations Managers assigned to this district."
       />
 
