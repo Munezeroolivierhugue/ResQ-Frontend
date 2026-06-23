@@ -127,7 +127,7 @@ export default function FROnScene() {
           <span className="fr-live-chip font-mono ml-auto">LIVE</span>
         </div>
         
-        <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-[#0f151c]">
+        <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-(--bg-base)">
           {messages.map((m) => {
             const isSelf = m.from === 'officer' || m.role === 'field' || m.from === 'field';
             const unitColor = 'var(--accent)'; // Field UI often defaults dispatch to accent
@@ -136,50 +136,25 @@ export default function FROnScene() {
               <div key={m.id} className={`flex ${isSelf ? 'justify-end' : 'justify-start'}`}>
                 {m.type === 'text' ? (
                   // Text Bubble
-                  <div
-                    className="max-w-[85%] rounded-2xl px-3.5 py-2.5 border shadow-sm relative"
-                    style={{
-                      background: isSelf ? '#a2cc29' : 'transparent',
-                      color: isSelf ? '#000000' : 'var(--text-primary)',
-                      borderColor: isSelf ? '#a2cc29' : 'var(--border-light)',
-                      borderBottomRightRadius: isSelf ? '4px' : '16px',
-                      borderBottomLeftRadius: isSelf ? '16px' : '4px',
-                    }}
-                  >
+                  <div className={`chat-bubble chat-bubble-text ${isSelf ? 'chat-bubble--self' : ''}`}>
                     <div
-                      className="text-[9px] font-bold uppercase tracking-wider mb-1"
-                      style={{
-                        fontFamily: 'var(--font-display)',
-                        color: isSelf ? 'rgba(0,0,0,0.6)' : unitColor,
-                      }}
+                      className="chat-bubble-label mb-1"
+                      style={{ color: isSelf ? undefined : unitColor }}
                     >
                       {isSelf ? 'YOU' : 'DISPATCH'}
-                      <span className="font-normal opacity-70 ml-1.5" style={{ fontFamily: 'var(--font-mono)' }}>
+                      <span className="chat-bubble-time">
                         {m.time}
                       </span>
                     </div>
-                    <p className="text-[12.5px] m-0 leading-snug font-medium" style={{ color: isSelf ? '#111827' : 'var(--text-primary)' }}>{m.text}</p>
+                    <p className="chat-bubble-msg">{m.text}</p>
                   </div>
                 ) : (
                   // Voice Bubble
-                  <div
-                    className="max-w-[85%] rounded-3xl px-1.5 py-1.5 border shadow-sm flex items-center gap-2 relative"
-                    style={{
-                      background: isSelf ? '#a2cc29' : 'transparent',
-                      borderColor: isSelf ? '#a2cc29' : 'var(--border-light)',
-                      borderBottomRightRadius: isSelf ? '6px' : '24px',
-                      borderBottomLeftRadius: isSelf ? '24px' : '6px',
-                      minWidth: '200px'
-                    }}
-                  >
-                    {m.isNew && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-(--status-critical) border border-[#0f151c]" />}
+                  <div className={`chat-bubble chat-bubble-voice ${isSelf ? 'chat-bubble--self' : ''}`}>
+                    {m.isNew && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-(--status-critical) border border-(--bg-base)" />}
                     <button
                       type="button"
-                      className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-none transition-transform active:scale-95"
-                      style={{ 
-                        background: isSelf ? 'rgba(0,0,0,0.1)' : 'var(--accent)',
-                        color: isSelf ? '#000' : '#fff'
-                      }}
+                      className="chat-play-btn"
                       onClick={() => togglePlay(m)}
                     >
                       {playingId === m.id ? <Square size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" className="ml-0.5" />}
@@ -188,18 +163,12 @@ export default function FROnScene() {
                     <div className="flex-1 min-w-0 pr-3">
                       <div className="flex justify-between items-end mb-0.5">
                         <span
-                          className="text-[9px] font-bold uppercase tracking-wider"
-                          style={{
-                            fontFamily: 'var(--font-display)',
-                            color: isSelf ? 'rgba(0,0,0,0.6)' : unitColor,
-                          }}
+                          className="chat-bubble-label"
+                          style={{ color: isSelf ? undefined : unitColor }}
                         >
                           {isSelf ? 'YOU' : 'DISPATCH'}
                         </span>
-                        <span 
-                          className="text-[9px] font-bold tabular-nums" 
-                          style={{ color: isSelf ? 'rgba(0,0,0,0.5)' : 'var(--text-muted)' }}
-                        >
+                        <span className="chat-bubble-label chat-bubble-time !ml-0">
                           {playingId === m.id 
                             ? fmtDuration(Math.floor(playProgress[m.id] || 0)) 
                             : fmtDuration(m.durationS)}
@@ -207,18 +176,17 @@ export default function FROnScene() {
                       </div>
                       
                       {/* Fake Waveform */}
-                      <div className="h-4 flex items-end gap-[2px] w-full overflow-hidden opacity-80 mt-1">
+                      <div className="h-4 flex items-end gap-[2px] w-full overflow-hidden mt-1">
                         {Array.from({ length: 24 }).map((_, i) => {
                           const isPlayed = playingId === m.id && ((i / 24) * m.durationS <= (playProgress[m.id] || 0));
                           return (
                             <div 
                               key={i} 
-                              className="flex-1 rounded-full bg-current transition-all duration-75"
+                              className="chat-waveform-bar"
                               style={{ 
                                 height: `${20 + Math.random() * 80}%`,
-                                color: isSelf 
-                                  ? (isPlayed ? 'rgba(0,0,0,0.8)' : 'rgba(0,0,0,0.2)') 
-                                  : (isPlayed ? 'var(--accent)' : 'var(--border)'),
+                                opacity: isPlayed ? 0.85 : 0.35,
+                                color: isPlayed && !isSelf ? 'var(--accent)' : undefined
                               }}
                             />
                           )
