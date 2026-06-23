@@ -59,8 +59,8 @@ export default function NotificationsDropdown({ open, onClose, onToggle }) {
         <Bell size={17} />
         {unread > 0 && (
           <span
-            className="absolute top-0.75 right-0.75 min-w-3.75 h-3.75 px-0.5 rounded-full bg-(--status-critical) text-[9px] font-bold flex items-center justify-center"
-            style={{ fontFamily: 'var(--font-body)', color: 'var(--text-on-accent)' }}
+            className="absolute top-0.75 right-0.75 min-w-3.75 h-3.75 px-0.5 rounded-full text-[9px] font-bold flex items-center justify-center"
+            style={{ fontFamily: 'var(--font-body)', background: 'var(--status-critical)', color: '#ffffff' }}
           >
             {unread}
           </span>
