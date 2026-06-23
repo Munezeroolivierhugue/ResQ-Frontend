@@ -50,8 +50,8 @@ function NavItem({ item, isActive, onClose }) {
   const Icon = item.icon
   const badgeStyle =
     item.badge === 'accent'
-      ? { background: 'var(--accent-ghost)', color: 'var(--accent)' }
-      : { background: 'var(--status-critical-bg)', color: 'var(--status-critical)' }
+      ? { background: 'var(--accent)', color: '#ffffff' }
+      : { background: 'var(--status-critical)', color: '#ffffff' }
   return (
     <div className={`sidebar-item-wrap${isActive ? ' active' : ''}`}>
       {isActive && (
