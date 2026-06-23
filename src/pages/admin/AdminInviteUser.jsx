@@ -1,7 +1,23 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Send, Copy, CheckCircle, Users } from 'lucide-react'
-import { ASSIGNED_ROLES, mockInvitedUsers } from '../../data/mockAuthData'
+import {
+  Send,
+  Copy,
+  CheckCircle,
+  Users,
+  User,
+  Mail,
+  Phone,
+  Shield,
+  MapPin,
+  ExternalLink,
+  UserPlus,
+  ArrowRight,
+  Check,
+  Sparkles,
+  Building2,
+} from 'lucide-react'
+import { ASSIGNED_ROLES, mockInvitedUsers, ORGANIZATIONS } from '../../data/mockAuthData'
 import FieldLabel from '../../components/ui/FieldLabel'
 
 const RECENT_LIMIT = 5
@@ -35,6 +51,25 @@ function roleRequiresDistrict(role) {
   return ROLES_REQUIRING_DISTRICT.includes(role)
 }
 
+function getInitials(name) {
+  return name
+    .split(' ')
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase()
+}
+
+function getAvatarColor(name) {
+  const colors = [
+    '#2196C8', '#879D1F', '#9B4DCA', '#E8354A',
+    '#F07820', '#3DAA6A', '#D4A017', '#5A6478',
+  ]
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  return colors[Math.abs(hash) % colors.length]
+}
+
 function RecentProvisionedPanel() {
   const recent = [...mockInvitedUsers]
     .sort((a, b) => (b.invitedAt > a.invitedAt ? 1 : -1))
@@ -42,46 +77,59 @@ function RecentProvisionedPanel() {
 
   if (recent.length === 0) {
     return (
-      <aside className="dispatcher-surface admin-provision-recent">
-        <h2 className="admin-provision-recent-title">Recently provisioned</h2>
-        <div className="admin-provision-empty">
-          <Users size={32} className="admin-provision-empty-icon" aria-hidden />
-          <p className="text-[13px] m-0">No users provisioned yet.</p>
+      <aside className="aiu-panel">
+        <div className="aiu-panel-header">
+          <Users size={16} className="aiu-panel-header-icon" />
+          <h2 className="aiu-panel-title">Recently Provisioned</h2>
+        </div>
+        <div className="aiu-empty">
+          <div className="aiu-empty-icon-wrap">
+            <Users size={28} aria-hidden />
+          </div>
+          <p className="aiu-empty-text">No users provisioned yet.</p>
+          <p className="aiu-empty-sub">Invited users will appear here after dispatch.</p>
         </div>
       </aside>
     )
   }
 
   return (
-    <aside className="dispatcher-surface admin-provision-recent">
-      <h2 className="admin-provision-recent-title">Recently provisioned</h2>
-      <div className="admin-provision-recent-list">
+    <aside className="aiu-panel">
+      <div className="aiu-panel-header">
+        <Users size={16} className="aiu-panel-header-icon" />
+        <h2 className="aiu-panel-title">Recently Provisioned</h2>
+        <span className="aiu-panel-count">{recent.length}</span>
+      </div>
+      <div className="aiu-recent-list">
         {recent.map((u) => {
           const roleLabel = ASSIGNED_ROLES.find((r) => r.value === u.role)?.label || u.role
-          const statusLabel = u.status === 'active' ? 'Active' : 'Pending'
+          const isActive = u.status === 'active'
+          const color = getAvatarColor(u.fullName)
           return (
-            <div key={u.id} className="admin-provision-recent-row">
-              <div className="min-w-0">
-                <p className="admin-provision-recent-name">{u.fullName}</p>
-                <p className="admin-provision-recent-meta">{u.email}</p>
+            <div key={u.id} className="aiu-recent-row">
+              <div
+                className="aiu-avatar"
+                style={{ background: color + '22', color }}
+              >
+                {getInitials(u.fullName)}
               </div>
-              <div className="admin-provision-recent-badges">
-                <span className="admin-provision-role-badge">{roleLabel}</span>
-                <span
-                  className={`admin-provision-status-badge admin-provision-status-badge--${u.status}`}
-                >
-                  {statusLabel}
+              <div className="aiu-recent-info">
+                <p className="aiu-recent-name">{u.fullName}</p>
+                <p className="aiu-recent-email">{u.email}</p>
+              </div>
+              <div className="aiu-recent-badges">
+                <span className="aiu-role-badge">{roleLabel}</span>
+                <span className={`aiu-status-badge aiu-status-badge--${u.status}`}>
+                  {isActive ? 'Active' : 'Pending'}
                 </span>
               </div>
             </div>
           )
         })}
       </div>
-      <Link
-        to="/admin/users"
-        className="inline-flex mt-4 text-[12px] font-semibold text-(--accent) no-underline hover:underline"
-      >
-        View all provisioned users →
+      <Link to="/admin/users" className="aiu-view-all">
+        View all provisioned users
+        <ArrowRight size={13} />
       </Link>
     </aside>
   )
@@ -92,10 +140,12 @@ export default function AdminInviteUser() {
     fullName: '',
     email: '',
     phone: '',
+    organization: ORGANIZATIONS[0],
     role: 'dispatcher',
     district: '',
   })
   const [sent, setSent] = useState(null)
+  const [copied, setCopied] = useState(false)
   const [districtError, setDistrictError] = useState('')
 
   const showDistrictField = roleRequiresDistrict(form.role)
@@ -132,6 +182,7 @@ export default function AdminInviteUser() {
     sessionStorage.setItem('resq-invite-email', form.email)
     sessionStorage.setItem('resq-invite-name', form.fullName)
     sessionStorage.setItem('resq-invite-phone', form.phone)
+    sessionStorage.setItem('resq-invite-org', form.organization)
     sessionStorage.setItem('resq-invite-role', form.role)
     sessionStorage.setItem('resq-demo-role', form.role)
     if (payload.district) {
@@ -144,182 +195,250 @@ export default function AdminInviteUser() {
 
   const copyLink = () => {
     navigator.clipboard?.writeText(inviteLink)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
-  return (
-    <div className="portal-page">
-      <h1 className="text-2xl font-bold m-0 mb-1" style={{ fontFamily: 'var(--font-display)' }}>
-        Create user & send invitation
-      </h1>
-      <p className="text-[13px] text-(--text-secondary) m-0 mb-6">
-        Super admin provisions accounts. The user completes registration, password, and MFA via the
-        invitation link (UI simulation only).
-      </p>
+  const roleLabel = ASSIGNED_ROLES.find((r) => r.value === form.role)?.label || form.role
 
-      <div className="admin-provision-layout">
-        <div className="admin-provision-form">
+  return (
+    <div className="portal-page aiu-root">
+      {/* ── Page header ── */}
+      <div className="aiu-page-header">
+        <div className="aiu-page-header-icon">
+          <UserPlus size={20} />
+        </div>
+        <div>
+          <h1 className="aiu-page-title">Create User &amp; Send Invitation</h1>
+          <p className="aiu-page-sub">
+            Super admin provisions accounts. Users complete registration via the invitation link.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-6">
+        {/* ── Top: Form / Success ── */}
+        <div className="w-full">
           {sent ? (
-            <div className="rounded-xl border border-(--border) bg-(--bg-surface) p-5 shadow-[var(--shadow-card)]">
-              <div className="flex items-start gap-3 mb-4">
-                <CheckCircle size={22} className="text-(--status-low) shrink-0" />
+            /* ── Success state ── */
+            <div className="aiu-success-card">
+              <div className="aiu-success-glow" />
+              <div className="aiu-success-top">
+                <div className="aiu-success-icon">
+                  <CheckCircle size={28} />
+                </div>
                 <div>
-                  <div className="font-bold text-(--text-primary)">Invitation dispatched</div>
-                  <p className="text-[13px] text-(--text-secondary) m-0 mt-1">
-                    {sent.fullName} ({sent.email}) will receive a link to create their command profile.
+                  <div className="aiu-success-title">Invitation Dispatched!</div>
+                  <p className="aiu-success-desc">
+                    An invitation link has been generated for{' '}
+                    <strong>{sent.fullName}</strong>.
                   </p>
                 </div>
               </div>
-              <FieldLabel className="mb-1.5">Mock invitation link</FieldLabel>
-              <div className="flex gap-2">
-                <input
-                  readOnly
-                  value={inviteLink}
-                  className="flex-1 h-10 rounded-lg px-3 text-[12px] bg-(--bg-input) border border-(--border) text-(--text-primary)"
-                  style={{ fontFamily: 'var(--font-mono)' }}
-                />
+
+              <div className="aiu-success-meta">
+                <div className="aiu-success-meta-row">
+                  <Mail size={13} className="aiu-success-meta-icon" />
+                  <span>{sent.email}</span>
+                </div>
+                {sent.district && (
+                  <div className="aiu-success-meta-row">
+                    <MapPin size={13} className="aiu-success-meta-icon" />
+                    <span>District: {sent.district}</span>
+                  </div>
+                )}
+                <div className="aiu-success-meta-row">
+                  <Shield size={13} className="aiu-success-meta-icon" />
+                  <span>{roleLabel}</span>
+                </div>
+              </div>
+
+              <div className="aiu-link-section">
+                <FieldLabel className="aiu-link-label">Mock Invitation Link</FieldLabel>
+                <div className="aiu-link-row">
+                  <input
+                    readOnly
+                    value={inviteLink}
+                    className="aiu-link-input"
+                  />
+                  <button
+                    type="button"
+                    onClick={copyLink}
+                    className={`aiu-copy-btn ${copied ? 'aiu-copy-btn--copied' : ''}`}
+                  >
+                    {copied ? <Check size={14} /> : <Copy size={14} />}
+                    {copied ? 'Copied!' : 'Copy'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="aiu-success-actions">
+                <Link
+                  to={`/register?invite=1&email=${encodeURIComponent(sent.email)}`}
+                  className="aiu-open-reg-link"
+                >
+                  Open registration as invited user
+                  <ExternalLink size={13} />
+                </Link>
                 <button
                   type="button"
-                  onClick={copyLink}
-                  className="h-10 px-3 rounded-lg border border-(--border) bg-(--bg-elevated) cursor-pointer flex items-center gap-1.5 text-[12px] font-semibold text-(--text-primary)"
+                  onClick={() => { setSent(null); setCopied(false) }}
+                  className="aiu-invite-another-btn"
                 >
-                  <Copy size={14} />
-                  Copy
+                  <Sparkles size={14} />
+                  Invite another user
                 </button>
               </div>
-              <Link
-                to={`/register?invite=1&email=${encodeURIComponent(sent.email)}`}
-                className="inline-flex mt-4 text-[13px] font-semibold text-(--accent) no-underline hover:underline"
-              >
-                Open registration as invited user →
-              </Link>
-              <button
-                type="button"
-                onClick={() => setSent(null)}
-                className="block mt-4 text-[12px] text-(--text-muted) bg-transparent border-none cursor-pointer hover:text-(--text-primary)"
-              >
-                Invite another user
-              </button>
             </div>
           ) : (
-            <form
-              onSubmit={handleSubmit}
-              className="rounded-xl border border-(--border) bg-(--bg-surface) p-5 shadow-[var(--shadow-card)] space-y-4"
-            >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <label className="auth-field">
-                  <span className="auth-field-label">Full name</span>
-                  <input
-                    className="auth-input"
-                    placeholder="Jean Bosco Nkurunziza"
-                    value={form.fullName}
-                    onChange={(e) => set('fullName', e.target.value)}
-                    required
-                  />
+            /* ── Invitation form ── */
+            <form onSubmit={handleSubmit} className="aiu-form-card">
+              <div className="aiu-form-card-header">
+                <span className="aiu-form-card-eyebrow">New Account Provisioning</span>
+                <h2 className="aiu-form-card-title">User Details</h2>
+              </div>
+
+              <div className="aiu-form-grid">
+                {/* Full name */}
+                <label className="aiu-field">
+                  <span className="aiu-field-label">Full Name</span>
+                  <div className="aiu-input-wrap">
+                    <User size={15} className="aiu-input-icon" />
+                    <input
+                      className="aiu-input aiu-input--icon"
+                      placeholder="Jean Bosco Nkurunziza"
+                      value={form.fullName}
+                      onChange={(e) => set('fullName', e.target.value)}
+                      required
+                    />
+                  </div>
                 </label>
-                <label className="auth-field">
-                  <span className="auth-field-label">Professional email</span>
-                  <input
-                    type="email"
-                    className="auth-input"
-                    placeholder="j.bosco@rnp.gov.rw"
-                    value={form.email}
-                    onChange={(e) => set('email', e.target.value)}
-                    required
-                  />
+
+                {/* Email */}
+                <label className="aiu-field">
+                  <span className="aiu-field-label">Professional Email</span>
+                  <div className="aiu-input-wrap">
+                    <Mail size={15} className="aiu-input-icon" />
+                    <input
+                      type="email"
+                      className="aiu-input aiu-input--icon"
+                      placeholder="j.bosco@rnp.gov.rw"
+                      value={form.email}
+                      onChange={(e) => set('email', e.target.value)}
+                      required
+                    />
+                  </div>
                 </label>
-                <label className="auth-field">
-                  <span className="auth-field-label">Phone number</span>
-                  <input
-                    type="tel"
-                    className="auth-input"
-                    placeholder="+250 788 123 456"
-                    value={form.phone}
-                    onChange={(e) => set('phone', e.target.value)}
-                    required
-                  />
+
+                {/* Phone */}
+                <label className="aiu-field">
+                  <span className="aiu-field-label">Phone Number</span>
+                  <div className="aiu-input-wrap">
+                    <Phone size={15} className="aiu-input-icon" />
+                    <input
+                      type="tel"
+                      className="aiu-input aiu-input--icon"
+                      placeholder="+250 788 123 456"
+                      value={form.phone}
+                      onChange={(e) => set('phone', e.target.value)}
+                      required
+                    />
+                  </div>
                 </label>
-                <label className="auth-field">
-                  <span className="auth-field-label">Assigned role</span>
-                  <select
-                    className="auth-input auth-select"
-                    value={form.role}
-                    onChange={(e) => handleRoleChange(e.target.value)}
-                  >
-                    {ASSIGNED_ROLES.filter((r) => r.value !== 'admin' && r.value !== 'super_admin').map((r) => (
-                      <option key={r.value} value={r.value}>{r.label}</option>
-                    ))}
-                  </select>
+
+                {/* Organization */}
+                <label className="aiu-field">
+                  <span className="aiu-field-label">Organization</span>
+                  <div className="aiu-input-wrap">
+                    <Building2 size={15} className="aiu-input-icon" />
+                    <select
+                      className="aiu-input aiu-input--icon aiu-select"
+                      value={form.organization}
+                      onChange={(e) => set('organization', e.target.value)}
+                    >
+                      {ORGANIZATIONS.map((o) => (
+                        <option key={o} value={o}>{o}</option>
+                      ))}
+                    </select>
+                  </div>
+                </label>
+
+                {/* Role */}
+                <label className="aiu-field">
+                  <span className="aiu-field-label">Assigned Role</span>
+                  <div className="aiu-input-wrap">
+                    <Shield size={15} className="aiu-input-icon" />
+                    <select
+                      className="aiu-input aiu-input--icon aiu-select"
+                      value={form.role}
+                      onChange={(e) => handleRoleChange(e.target.value)}
+                    >
+                      {ASSIGNED_ROLES.filter((r) => r.value !== 'admin' && r.value !== 'super_admin').map((r) => (
+                        <option key={r.value} value={r.value}>{r.label}</option>
+                      ))}
+                    </select>
+                  </div>
                 </label>
               </div>
 
+              {/* District field — animated reveal */}
               <div
                 aria-hidden={!showDistrictField}
+                className="aiu-district-reveal"
                 style={{
-                  maxHeight: showDistrictField ? '100px' : 0,
+                  maxHeight: showDistrictField ? '140px' : 0,
                   opacity: showDistrictField ? 1 : 0,
+                  marginTop: showDistrictField ? '1rem' : 0,
                   overflow: 'hidden',
-                  transition: 'max-height 200ms ease, opacity 200ms ease',
+                  transition: 'max-height 250ms ease, opacity 250ms ease, margin-top 250ms ease',
                 }}
               >
-                <label className="auth-field block m-0">
-                  <span className="auth-field-label">Assigned District</span>
-                  <select
-                    className="auth-input auth-select"
-                    value={form.district}
-                    onChange={(e) => {
-                      setDistrictError('')
-                      set('district', e.target.value)
-                    }}
-                    required={showDistrictField}
-                    style={{
-                      height: '44px',
-                      border: '1px solid var(--border)',
-                      background: 'var(--bg-input)',
-                      borderRadius: '8px',
-                      width: '100%',
-                    }}
-                  >
-                    <option value="">Select district…</option>
-                    {RWANDA_DISTRICT_GROUPS.map((group) => (
-                      <optgroup key={group.label} label={group.label}>
-                        {group.districts.map((d) => (
-                          <option key={d} value={d}>
-                            {d}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                  <p
-                    className="m-0 mt-1.5"
-                    style={{ fontSize: '11px', color: 'var(--text-muted)' }}
-                  >
+                <label className="aiu-field">
+                  <span className="aiu-field-label">Assigned District</span>
+                  <div className="aiu-input-wrap">
+                    <MapPin size={15} className="aiu-input-icon" />
+                    <select
+                      className="aiu-input aiu-input--icon aiu-select"
+                      value={form.district}
+                      onChange={(e) => {
+                        setDistrictError('')
+                        set('district', e.target.value)
+                      }}
+                      required={showDistrictField}
+                    >
+                      <option value="">Select district…</option>
+                      {RWANDA_DISTRICT_GROUPS.map((group) => (
+                        <optgroup key={group.label} label={group.label}>
+                          {group.districts.map((d) => (
+                            <option key={d} value={d}>{d}</option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="aiu-field-hint">
                     This district will filter all data visible to this user after login.
                   </p>
                   {districtError && (
-                    <p
-                      className="m-0 mt-1"
-                      style={{ fontSize: '11px', color: 'var(--status-critical)' }}
-                    >
-                      {districtError}
-                    </p>
+                    <p className="aiu-field-error">{districtError}</p>
                   )}
                 </label>
               </div>
 
-              <button
-                type="submit"
-                className="auth-primary-btn"
-                style={{ width: 'auto', paddingLeft: '1.5rem', paddingRight: '1.5rem' }}
-              >
-                <Send size={16} />
-                Send invitation link
-              </button>
+              <div className="aiu-form-footer">
+                <button type="submit" className="aiu-submit-btn">
+                  <Send size={16} />
+                  Send Invitation Link
+                </button>
+              </div>
             </form>
           )}
         </div>
 
-        <RecentProvisionedPanel />
+        {/* ── Bottom: Recent provisioned ── */}
+        <div className="w-full">
+          <RecentProvisionedPanel />
+        </div>
       </div>
     </div>
   )

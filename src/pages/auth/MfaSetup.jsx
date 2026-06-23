@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Smartphone, ShieldCheck, Info } from 'lucide-react'
+import { Smartphone, ShieldCheck, Info, Check } from 'lucide-react'
 import AuthCenterLayout from '../../components/auth/AuthCenterLayout'
 import { MFA_SETUP_OPTIONS } from '../../data/mockAuthData'
 
@@ -11,13 +11,15 @@ const ICONS = {
 
 export default function MfaSetup() {
   const navigate = useNavigate()
-  const [selected, setSelected] = useState('google_auth')
+  const [showSuccess, setShowSuccess] = useState(false)
 
   const handleConfirm = () => {
+    setShowSuccess(true)
+  }
+
+  const handleFinalContinue = () => {
     sessionStorage.setItem('resq-mfa-enabled', 'true')
-    if (selected === 'trusted_device') {
-      sessionStorage.setItem('resq-trusted-device', 'true')
-    }
+    sessionStorage.setItem('resq-trusted-device', 'true')
     navigate('/login')
   }
 
@@ -25,29 +27,29 @@ export default function MfaSetup() {
     <AuthCenterLayout>
       <div className="auth-mfa-wrap auth-mfa-wrap--centered">
         <span className="auth-mfa-badge">Identity protection active</span>
-        <h1 className="auth-mfa-title">Fortify your command profile</h1>
+        <h1 className="auth-mfa-title">Command profile secured</h1>
         <p className="auth-mfa-desc">
-          Multi-factor authentication is mandatory for Sentinel Protocol access. Enable Google
-          Authenticator and trusted device recognition before entering the command grid.
+          Multi-factor authentication has been successfully established. Google Authenticator and
+          trusted device recognition are now active for your account.
         </p>
 
         <div className="auth-mfa-cards auth-mfa-cards--two">
           {MFA_SETUP_OPTIONS.map((opt) => {
             const Icon = ICONS[opt.id] || Smartphone
-            const active = selected === opt.id
             return (
-              <button
+              <div
                 key={opt.id}
-                type="button"
-                onClick={() => setSelected(opt.id)}
-                className={`auth-mfa-card${active ? ' auth-mfa-card--active' : ''}`}
+                className="auth-mfa-card auth-mfa-card--active"
+                style={{ cursor: 'default' }}
               >
-                {opt.recommended && <span className="auth-mfa-recommended">Recommended</span>}
-                <Icon size={22} className="auth-mfa-card-icon" />
+                <div className="flex items-center gap-2 mb-2">
+                  <Icon size={22} className="auth-mfa-card-icon m-0" />
+                  <span className="text-[13px] font-bold text-(--accent)">CONFIGURED</span>
+                </div>
                 <div className="auth-mfa-card-title">{opt.title}</div>
                 <p className="auth-mfa-card-text">{opt.description}</p>
-                <span className={`auth-mfa-radio${active ? ' auth-mfa-radio--on' : ''}`} />
-              </button>
+                <span className="auth-mfa-radio auth-mfa-radio--on" />
+              </div>
             )
           })}
         </div>
@@ -63,10 +65,36 @@ export default function MfaSetup() {
             </p>
           </div>
           <button type="button" onClick={handleConfirm} className="auth-mfa-confirm">
-            Confirm MFA setup
+            Complete Registration
           </button>
         </div>
       </div>
+
+      {showSuccess && (
+        <div className="fixed inset-0 z-[500] flex items-center justify-center p-4" style={{ background: 'rgba(0, 0, 0, 0.65)', backdropFilter: 'blur(4px)' }}>
+          <div className="bg-(--bg-base) rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col animate-in fade-in zoom-in duration-300">
+            <div className="p-10 flex flex-col items-center justify-center text-center" style={{ background: 'var(--accent)', color: 'var(--accent-text)' }}>
+              <div className="w-16 h-16 rounded-full border-4 flex items-center justify-center mb-4" style={{ borderColor: 'rgba(255,255,255,0.3)' }}>
+                <Check size={36} strokeWidth={3} />
+              </div>
+              <div className="font-bold tracking-widest text-lg uppercase">Success</div>
+            </div>
+            <div className="p-8 text-center flex flex-col gap-6">
+              <p className="text-(--text-secondary) text-[14px] leading-relaxed m-0">
+                Congratulations, your account has been successfully created and secured.
+              </p>
+              <button
+                type="button"
+                className="dispatcher-btn-primary w-full justify-center"
+                style={{ background: 'var(--accent)', color: 'var(--accent-text)', border: 'none' }}
+                onClick={handleFinalContinue}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AuthCenterLayout>
   )
 }

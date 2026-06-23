@@ -32,7 +32,7 @@ const REPORTS = [
 
 const ACCOUNT = [
   { icon: Settings, label: 'Settings', href: '/planner/settings/profile' },
-  { icon: HelpCircle, label: 'Help', href: '#' },
+  { icon: HelpCircle, label: 'Help', href: '/planner/help' },
   { icon: LogOut, label: 'Logout', href: '/login', danger: true },
 ]
 

@@ -20,7 +20,7 @@ export default function Register() {
     fullName: sessionStorage.getItem('resq-invite-name') || '',
     email: inviteEmail,
     phone: sessionStorage.getItem('resq-invite-phone') || '',
-    organization: ORGANIZATIONS[0],
+    organization: sessionStorage.getItem('resq-invite-org') || ORGANIZATIONS[0],
     role: sessionStorage.getItem('resq-invite-role') || 'dispatcher',
     jurisdiction: JURISDICTIONS[0],
     password: '',
@@ -84,13 +84,7 @@ export default function Register() {
             required
           />
         </AuthField>
-        <AuthField label="Organization selection">
-          <AuthSelect value={form.organization} onChange={(e) => set('organization', e.target.value)}>
-            {ORGANIZATIONS.map((o) => (
-              <option key={o} value={o}>{o}</option>
-            ))}
-          </AuthSelect>
-        </AuthField>
+
         <AuthField label="Assigned role">
           <AuthSelect value={form.role} onChange={(e) => set('role', e.target.value)}>
             {ASSIGNED_ROLES.filter((r) => r.value !== 'admin' && r.value !== 'super_admin').map((r) => (

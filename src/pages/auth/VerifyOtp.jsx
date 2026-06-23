@@ -8,6 +8,7 @@ const OTP_LEN = 6
 export default function VerifyOtp() {
   const navigate = useNavigate()
   const [digits, setDigits] = useState(Array(OTP_LEN).fill(''))
+  const [error, setError] = useState('')
   const refs = useRef([])
 
   const email = sessionStorage.getItem('resq-register-email') || 'user@rnp.gov.rw'
@@ -20,8 +21,30 @@ export default function VerifyOtp() {
     if (val && i < OTP_LEN - 1) refs.current[i + 1]?.focus()
   }
 
+  const handleKeyDown = (i, e) => {
+    if (e.key === 'Backspace' && !digits[i] && i > 0) refs.current[i - 1]?.focus()
+  }
+
+  const handlePaste = (e) => {
+    e.preventDefault()
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LEN)
+    if (!pasted) return
+    const next = [...digits]
+    pasted.split('').forEach((char, idx) => {
+      next[idx] = char
+    })
+    setDigits(next)
+    const focusIndex = Math.min(pasted.length, OTP_LEN - 1)
+    refs.current[focusIndex]?.focus()
+  }
+
   const handleVerify = (e) => {
     e.preventDefault()
+    if (digits.some((d) => !d)) {
+      setError('Please enter the complete 6-digit secure code.')
+      return
+    }
+    setError('')
     navigate('/mfa-setup')
   }
 
@@ -49,10 +72,14 @@ export default function VerifyOtp() {
                 maxLength={1}
                 value={d}
                 onChange={(e) => handleChange(i, e.target.value)}
+                onKeyDown={(e) => handleKeyDown(i, e)}
+                onPaste={handlePaste}
+                autoFocus={i === 0}
                 className="auth-otp-digit"
               />
             ))}
           </div>
+          {error && <p className="auth-field-error" style={{ textAlign: 'center', marginTop: '12px' }}>{error}</p>}
           <button type="submit" className="auth-otp-submit">
             <Lock size={16} />
             Verify & authorize

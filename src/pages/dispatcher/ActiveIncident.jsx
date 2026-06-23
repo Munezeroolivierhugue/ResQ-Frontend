@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef, useEffect } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Circle, Marker, Tooltip } from 'react-leaflet'
 import L from 'leaflet'
 import {
@@ -9,6 +9,10 @@ import {
   Truck,
   ShieldCheck,
   Radio,
+  MessageSquare,
+  Mic,
+  Play,
+  Square
 } from 'lucide-react'
 import FieldLabel from '../../components/ui/FieldLabel'
 import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
@@ -17,9 +21,11 @@ import { RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../component
 import {
   activeIncident,
   activeIncidentUnits,
-  mockFieldComms,
   UNIT_COLORS,
 } from '../../data/mockActiveIncidentData'
+import { fmtDuration } from '../../data/mockAudioCommsData'
+import { mockUnifiedComms } from '../../data/mockUnifiedComms'
+import { useNotificationsStore } from '../../store/notificationsStore'
 import 'leaflet/dist/leaflet.css'
 
 const MAP_TILES =
@@ -71,7 +77,73 @@ function StatusBadge({ label, color }) {
 
 export default function ActiveIncident() {
   const [message, setMessage] = useState('')
-  const [comms, setComms] = useState(mockFieldComms)
+  const [comms, setComms] = useState(mockUnifiedComms)
+  const addNotification = useNotificationsStore((state) => state.addNotification)
+
+  // Voice recording state
+  const [pttActive, setPttActive] = useState(false)
+  const [pttSeconds, setPttSeconds] = useState(0)
+  const pttRef = useRef(null)
+
+  // Audio playback state
+  const [playingId, setPlayingId] = useState(null)
+  const [playProgress, setPlayProgress] = useState({})
+  const playRef = useRef(null)
+
+  useEffect(() => () => {
+    clearInterval(pttRef.current)
+    clearInterval(playRef.current)
+  }, [])
+
+  const startPtt = () => {
+    setPttActive(true)
+    setPttSeconds(0)
+    pttRef.current = setInterval(() => setPttSeconds((s) => s + 1), 1000)
+  }
+
+  const stopPtt = () => {
+    clearInterval(pttRef.current)
+    setPttActive(false)
+    if (pttSeconds > 0) {
+      const now = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+      setComms((prev) => [
+        ...prev,
+        {
+          id: `ac-new-${Date.now()}`,
+          type: 'voice',
+          from: 'DISPATCH',
+          role: 'dispatch',
+          time: now,
+          durationS: pttSeconds,
+          label: 'Voice message sent to field units',
+          isSelf: true,
+        },
+      ])
+    }
+    setPttSeconds(0)
+  }
+
+  const togglePlay = (clip) => {
+    if (playingId === clip.id) {
+      clearInterval(playRef.current)
+      setPlayingId(null)
+      setPlayProgress((p) => ({ ...p, [clip.id]: 0 }))
+      return
+    }
+    setPlayingId(clip.id)
+    setPlayProgress((p) => ({ ...p, [clip.id]: 0 }))
+    playRef.current = setInterval(() => {
+      setPlayProgress((p) => {
+        const next = (p[clip.id] || 0) + 0.1
+        if (next >= clip.durationS) {
+          clearInterval(playRef.current)
+          setPlayingId(null)
+          return { ...p, [clip.id]: clip.durationS }
+        }
+        return { ...p, [clip.id]: next }
+      })
+    }, 100)
+  }
 
   const mapPoints = useMemo(
     () => [
@@ -107,6 +179,7 @@ export default function ActiveIncident() {
         time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
         text: message.trim(),
         isSelf: true,
+        type: 'text'
       },
     ])
     setMessage('')
@@ -352,82 +425,183 @@ export default function ActiveIncident() {
               )
             })}
           </ul>
-          <div className="p-3 border-t border-(--border-subtle) shrink-0">
-            <button
-              type="button"
-              className="w-full py-2 rounded-lg border border-(--border) bg-(--bg-input) text-[10px] font-bold uppercase tracking-wider text-(--text-secondary) cursor-pointer hover:border-(--accent) hover:text-(--accent) transition-colors"
-              style={{ fontFamily: 'var(--font-display)' }}
-            >
-              Request additional unit
-            </button>
-          </div>
         </div>
 
         {/* Field comms — right column, full height */}
         <div className="w-full lg:w-[320px] xl:w-[360px] shrink-0 flex flex-col min-h-[240px] lg:min-h-0 bg-(--bg-surface) border-t lg:border-t-0 border-(--border)">
-          <div className="px-4 py-2.5 border-b border-(--border-subtle) flex items-center justify-between shrink-0">
+
+          {/* Header */}
+          <div className="px-4 py-3 border-b border-(--border-subtle) flex items-center justify-between shrink-0 bg-(--bg-elevated)">
+            <div className="flex items-center gap-2 text-(--text-primary)">
+              <Radio size={14} className="text-(--accent)" />
+              <span className="text-[12px] font-bold tracking-wide uppercase" style={{ fontFamily: 'var(--font-display)' }}>Unified Comms</span>
+            </div>
             <span
-              className="text-[10px] font-bold tracking-[0.12em] text-(--text-secondary) uppercase"
-              style={{ fontFamily: 'var(--font-display)' }}
+              className="text-[9px] font-bold uppercase tracking-wider flex items-center gap-1"
+              style={{ color: 'var(--status-low)' }}
             >
-              Field comms — {activeIncident.sector}
-            </span>
-            <span className="text-[9px] font-bold uppercase tracking-wider text-(--status-low) flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-(--status-low)" />
-              Direct link active
+              {activeIncident.sector}
             </span>
           </div>
-          <div className="flex-1 overflow-y-auto p-3 space-y-2.5 min-h-0">
+
+          <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0 bg-(--bg-base)">
             {comms.map((msg) => {
               const isSelf = msg.isSelf
               const unitColor = msg.unitType ? UNIT_COLORS[msg.unitType] : 'var(--text-secondary)'
+
               return (
                 <div key={msg.id} className={`flex ${isSelf ? 'justify-end' : 'justify-start'}`}>
-                  <div
-                    className="max-w-[90%] rounded-lg px-3 py-2 border"
-                    style={{
-                      background: isSelf ? 'var(--accent)' : 'var(--bg-input)',
-                      color: isSelf ? 'var(--text-on-accent)' : 'var(--text-primary)',
-                      borderColor: isSelf ? 'var(--accent)' : 'var(--border)',
-                    }}
-                  >
+                  {msg.type === 'text' ? (
+                    // Text Bubble
                     <div
-                      className="text-[9px] font-bold uppercase tracking-wider mb-1 opacity-90"
+                      className="max-w-[85%] rounded-2xl px-3.5 py-2.5 border shadow-sm relative group"
                       style={{
-                        fontFamily: 'var(--font-display)',
-                        color: isSelf ? 'var(--text-on-accent)' : unitColor,
+                        background: isSelf ? '#a2cc29' : 'var(--bg-surface)',
+                        color: isSelf ? '#111827' : 'var(--text-primary)',
+                        borderColor: isSelf ? '#a2cc29' : 'var(--border-subtle)',
+                        borderBottomRightRadius: isSelf ? '4px' : '16px',
+                        borderBottomLeftRadius: isSelf ? '16px' : '4px',
                       }}
                     >
-                      {isSelf ? 'Dispatch [you]' : msg.from}
-                      <span className="font-normal opacity-70 ml-1.5" style={{ fontFamily: 'var(--font-mono)' }}>
-                        {msg.time}
-                      </span>
+                      <div
+                        className="text-[9px] font-bold uppercase tracking-wider mb-1"
+                        style={{
+                          fontFamily: 'var(--font-display)',
+                          color: isSelf ? 'rgba(17,24,39,0.7)' : unitColor,
+                        }}
+                      >
+                        {isSelf ? 'DISPATCH [YOU]' : msg.from}
+                        <span className="font-normal opacity-70 ml-1.5" style={{ fontFamily: 'var(--font-mono)' }}>
+                          {msg.time}
+                        </span>
+                      </div>
+                      <p className="text-[12.5px] m-0 leading-snug font-medium" style={{ color: isSelf ? '#111827' : 'var(--text-primary)' }}>{msg.text}</p>
                     </div>
-                    <p className="text-[12px] m-0 leading-relaxed">{msg.text}</p>
-                  </div>
+                  ) : (
+                    // Voice Bubble (iMessage style)
+                    <div
+                      className="max-w-[85%] rounded-3xl px-1.5 py-1.5 border shadow-sm flex items-center gap-2 relative group"
+                      style={{
+                        background: isSelf ? '#a2cc29' : 'var(--bg-surface)',
+                        borderColor: isSelf ? '#a2cc29' : 'var(--border-subtle)',
+                        borderBottomRightRadius: isSelf ? '6px' : '24px',
+                        borderBottomLeftRadius: isSelf ? '24px' : '6px',
+                        minWidth: '200px'
+                      }}
+                    >
+                      {msg.isNew && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-(--status-critical) border border-(--bg-base)" />}
+                      <button
+                        type="button"
+                        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-none transition-transform active:scale-95"
+                        style={{
+                          background: isSelf ? 'rgba(17,24,39,0.1)' : 'var(--accent)',
+                          color: isSelf ? '#111827' : '#fff'
+                        }}
+                        onClick={() => togglePlay(msg)}
+                      >
+                        {playingId === msg.id ? <Square size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" className="ml-0.5" />}
+                      </button>
+
+                      <div className="flex-1 min-w-0 pr-3">
+                        <div className="flex justify-between items-end mb-0.5">
+                          <span
+                            className="text-[9px] font-bold uppercase tracking-wider"
+                            style={{
+                              fontFamily: 'var(--font-display)',
+                              color: isSelf ? 'rgba(17,24,39,0.7)' : unitColor,
+                            }}
+                          >
+                            {isSelf ? 'DISPATCH [YOU]' : msg.from}
+                          </span>
+                          <span
+                            className="text-[9px] font-bold tabular-nums"
+                            style={{ color: isSelf ? 'rgba(17,24,39,0.6)' : 'var(--text-muted)' }}
+                          >
+                            {playingId === msg.id
+                              ? fmtDuration(Math.floor(playProgress[msg.id] || 0))
+                              : fmtDuration(msg.durationS)}
+                          </span>
+                        </div>
+
+                        {/* Fake Waveform */}
+                        <div className="h-4 flex items-end gap-[2px] w-full overflow-hidden opacity-80 mt-1">
+                          {Array.from({ length: 24 }).map((_, i) => {
+                            const isPlayed = playingId === msg.id && ((i / 24) * msg.durationS <= (playProgress[msg.id] || 0));
+                            return (
+                              <div
+                                key={i}
+                                className="flex-1 rounded-full bg-current transition-all duration-75"
+                                style={{
+                                  height: `${20 + Math.random() * 80}%`,
+                                  color: isSelf
+                                    ? (isPlayed ? 'rgba(17,24,39,0.85)' : 'rgba(17,24,39,0.25)')
+                                    : (isPlayed ? 'var(--accent)' : 'var(--border)'),
+                                }}
+                              />
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}
           </div>
-          <form onSubmit={handleSend} className="p-3 border-t border-(--border-subtle) flex gap-2 shrink-0">
-            <input
-              type="text"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Type tactical message to field units…"
-              className="flex-1 h-10 rounded-lg px-3 text-[13px] bg-(--bg-input) border border-(--border) text-(--text-primary) outline-none placeholder:text-(--text-muted) focus:border-(--accent)"
-            />
-            <button
-              type="submit"
-              className="h-10 w-10 rounded-lg border-none flex items-center justify-center cursor-pointer shrink-0"
-              style={{ background: 'var(--accent)', color: 'var(--text-on-accent)' }}
-              aria-label="Send message"
-            >
-              <Send size={16} />
-            </button>
-          </form>
+
+          <div className="p-3 bg-(--bg-elevated) border-t border-(--border-subtle) shrink-0">
+            {pttActive && (
+              <div className="flex items-center gap-2 mb-2 px-2">
+                <span className="w-2 h-2 rounded-full bg-(--status-critical) animate-pulse" />
+                <span className="text-[11px] font-bold text-(--status-critical) font-mono">
+                  RECORDING {fmtDuration(pttSeconds)}
+                </span>
+                <span className="text-[10px] text-(--text-muted) ml-auto">Release to send</span>
+              </div>
+            )}
+
+            <div className="flex gap-2 items-end">
+              <form onSubmit={handleSend} className="flex-1 flex gap-2">
+                <input
+                  type="text"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Type tactical message..."
+                  className="flex-1 h-10 rounded-xl px-3 text-[13px] bg-(--bg-input) border border-(--border) text-(--text-primary) outline-none placeholder:text-(--text-muted) focus:border-(--accent) transition-colors"
+                />
+                {message.trim() ? (
+                  <button
+                    type="submit"
+                    className="h-10 w-10 rounded-xl border-none flex items-center justify-center cursor-pointer shrink-0 transition-transform active:scale-95"
+                    style={{ background: 'var(--accent)', color: '#000' }}
+                    aria-label="Send message"
+                  >
+                    <Send size={16} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="h-10 w-10 rounded-xl border-none flex items-center justify-center cursor-pointer shrink-0 transition-all duration-150 active:scale-95"
+                    style={{
+                      background: pttActive ? 'var(--status-critical)' : 'transparent',
+                      color: pttActive ? '#fff' : 'var(--accent)',
+                      border: pttActive ? 'none' : '1px solid var(--border)'
+                    }}
+                    aria-label="Hold to talk"
+                    onMouseDown={startPtt}
+                    onMouseUp={stopPtt}
+                    onMouseLeave={stopPtt}
+                  >
+                    <Mic size={18} />
+                  </button>
+                )}
+              </form>
+            </div>
+          </div>
         </div>
       </div>
+
     </div>
   )
 }

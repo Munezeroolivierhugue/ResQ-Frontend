@@ -69,7 +69,7 @@ export default function NotificationsDropdown({ open, onClose, onToggle }) {
 
       {open && (
         <div
-          className="notif-dropdown animate-fade-in-up absolute top-[calc(100%+8px)] right-0 w-[380px] max-h-[520px] overflow-y-auto z-[100] bg-(--bg-surface) border border-(--border) rounded-xl shadow-[var(--shadow-dropdown)] flex flex-col"
+          className="notif-dropdown animate-fade-in-up absolute top-[calc(100%+8px)] right-0 w-[380px] max-h-[520px] overflow-y-auto z-[9999] bg-(--bg-surface) border border-(--border) rounded-xl shadow-[var(--shadow-dropdown)] flex flex-col"
         >
           <div className="sticky top-0 z-10 bg-(--bg-surface) px-4 py-3 border-b border-(--border-subtle) flex justify-between items-center">
             <span className="text-[14px] font-semibold text-(--text-primary)">Notifications</span>

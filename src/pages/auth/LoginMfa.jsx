@@ -9,6 +9,7 @@ const OTP_LEN = 6
 export default function LoginMfa() {
   const navigate = useNavigate()
   const [digits, setDigits] = useState(Array(OTP_LEN).fill(''))
+  const [error, setError] = useState('')
   const refs = useRef([])
 
   const email = sessionStorage.getItem('resq-login-email') || 'user@rnp.gov.rw'
@@ -25,8 +26,26 @@ export default function LoginMfa() {
     if (e.key === 'Backspace' && !digits[i] && i > 0) refs.current[i - 1]?.focus()
   }
 
+  const handlePaste = (e) => {
+    e.preventDefault()
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LEN)
+    if (!pasted) return
+    const next = [...digits]
+    pasted.split('').forEach((char, idx) => {
+      next[idx] = char
+    })
+    setDigits(next)
+    const focusIndex = Math.min(pasted.length, OTP_LEN - 1)
+    refs.current[focusIndex]?.focus()
+  }
+
   const handleVerify = (e) => {
     e.preventDefault()
+    if (digits.some((d) => !d)) {
+      setError('Please enter the complete 6-digit secure code.')
+      return
+    }
+    setError('')
     sessionStorage.setItem('resq-trusted-device', 'true')
     const role = sessionStorage.getItem('resq-demo-role') || 'dispatcher'
     const portal = ASSIGNED_ROLES.find((r) => r.value === role)?.portal || '/dispatcher'
@@ -62,11 +81,15 @@ export default function LoginMfa() {
                 value={d}
                 onChange={(e) => handleChange(i, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(i, e)}
+                onPaste={handlePaste}
+                autoFocus={i === 0}
                 className="auth-otp-digit"
                 aria-label={`Digit ${i + 1}`}
               />
             ))}
           </div>
+
+          {error && <p className="auth-field-error" style={{ textAlign: 'center', marginTop: '12px' }}>{error}</p>}
 
           <button type="submit" className="auth-otp-submit">
             <Lock size={16} />

@@ -7,19 +7,19 @@ import SidebarToggle from './SidebarToggle'
 import { useSidebarClasses } from '../../hooks/useSidebarClasses'
 
 const NAV_ITEMS = [
-  { icon: Map,           label: 'Live Dispatch Map',  href: '/dispatcher' },
-  { icon: Zap,           label: 'New Incident',        href: '/dispatcher/new-incident' },
-  { icon: Bot,           label: 'AI Dispatch Engine',  href: '/dispatcher/ai-engine' },
-  { icon: Radio,         label: 'Active Incident',     href: '/dispatcher/active-incident' },
-  { icon: ScrollText,    label: 'Incident History',    href: '/dispatcher/history' },
-  { icon: FileCheck,     label: 'Incident Report',     href: '/dispatcher/incident-report' },
-  { icon: ClipboardList, label: 'Shift Handover',      href: '/dispatcher/shift-handover' },
+  { icon: Map, label: 'Live Dispatch Map', href: '/dispatcher' },
+  { icon: Zap, label: 'New Incident', href: '/dispatcher/new-incident' },
+  { icon: Bot, label: 'AI Dispatch Engine', href: '/dispatcher/ai-engine' },
+  { icon: Radio, label: 'Active Incident', href: '/dispatcher/active-incident' },
+  { icon: ScrollText, label: 'Incident History', href: '/dispatcher/history' },
+  { icon: FileCheck, label: 'Incident Report', href: '/dispatcher/incident-report' },
+  { icon: ClipboardList, label: 'Shift Handover', href: '/dispatcher/shift-handover' },
 ]
 
 const BOTTOM_ITEMS = [
-  { icon: Settings,   label: 'Settings', href: '/dispatcher/settings' },
-  { icon: HelpCircle, label: 'Help',     href: '#' },
-  { icon: LogOut,     label: 'Logout',   href: '/login', danger: true },
+  { icon: Settings, label: 'Settings', href: '/dispatcher/settings' },
+  { icon: HelpCircle, label: 'Help', href: '/dispatcher/help' },
+  { icon: LogOut, label: 'Logout', href: '/login', danger: true },
 ]
 
 function NavItem({ item, isActive, onClose }) {
@@ -79,8 +79,8 @@ export default function Sidebar({ mobileOpen, onClose }) {
       <div className="sidebar-bottom">
         {BOTTOM_ITEMS.map(item => {
           const Icon = item.icon
-          const isSettings = item.href === '/dispatcher/settings'
-          const isActive = isSettings && location.pathname.startsWith('/dispatcher/settings')
+          const isLogout = item.href === '/login'
+          const isActive = !isLogout && location.pathname.startsWith(item.href)
           return (
             <div key={item.label} className={`sidebar-item-wrap${isActive ? ' active' : ''}`}>
               {isActive && (

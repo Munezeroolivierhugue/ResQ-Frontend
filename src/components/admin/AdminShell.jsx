@@ -17,8 +17,8 @@ export default function AdminShell() {
           user={superAdminUser}
           onMenuClick={() => setMobileOpen((v) => !v)}
           portalLabel="System Administration"
-          profileHref="/admin/profile"
-          settingsHref="/admin/settings/general"
+          profileHref="/admin/settings/profile"
+          settingsHref="/admin/settings/profile"
           avatarVariant="superAdmin"
         />
         <main className="portal-main flex-1 overflow-auto bg-(--bg-base)">

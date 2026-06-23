@@ -83,6 +83,13 @@ import AnalystBenchmarking from './pages/analyst/AnalystBenchmarking'
 import AnalystLibrary from './pages/analyst/AnalystLibrary'
 import AnalystProfile from './pages/analyst/AnalystProfile'
 import AnalystSettings from './pages/analyst/AnalystSettings'
+import AdminHelp from './pages/admin/Help'
+import AnalystHelp from './pages/analyst/Help'
+import DispatcherHelp from './pages/dispatcher/Help'
+import DistrictCommanderHelp from './pages/district-commander/Help'
+import FieldResponderHelp from './pages/field-responder/Help'
+import OpsManagerHelp from './pages/ops-manager/Help'
+import PlannerHelp from './pages/planner/Help'
 
 const dispatcher = { name: 'Jean Bosco', role: 'DISPATCHER' }
 export default function App() {
@@ -109,7 +116,8 @@ export default function App() {
             <Route path="profile" element={<AdminProfile />} />
             <Route path="settings" element={<Navigate to="/admin/settings/general" replace />} />
             <Route path="settings/:section" element={<AdminSettings />} />
-            <Route path="invite" element={<AdminInviteUser />} />
+            <Route path="users/invite" element={<AdminInviteUser />} />
+            <Route path="help" element={<AdminHelp />} />
             <Route index element={<Navigate to="/admin/dashboard" replace />} />
           </Route>
         </Route>
@@ -128,6 +136,7 @@ export default function App() {
             <Route path="profile" element={<FRProfile />} />
             <Route path="settings" element={<Navigate to="/field-responder/settings/profile" replace />} />
             <Route path="settings/:section" element={<FieldResponderSettingsView />} />
+            <Route path="help" element={<FieldResponderHelp />} />
             <Route index element={<Navigate to="/field-responder/shift-start" replace />} />
           </Route>
         </Route>
@@ -144,6 +153,7 @@ export default function App() {
             <Route path="profile" element={<DCProfile />} />
             <Route path="settings" element={<Navigate to="/district-commander/settings/profile" replace />} />
             <Route path="settings/:section" element={<DCSettings />} />
+            <Route path="help" element={<DistrictCommanderHelp />} />
             <Route index element={<Navigate to="/district-commander/dashboard" replace />} />
           </Route>
         </Route>
@@ -161,6 +171,7 @@ export default function App() {
             <Route path="profile" element={<AnalystProfile />} />
             <Route path="settings" element={<Navigate to="/analyst/settings/profile" replace />} />
             <Route path="settings/:section" element={<AnalystSettings />} />
+            <Route path="help" element={<AnalystHelp />} />
             <Route index element={<Navigate to="/analyst/dashboard" replace />} />
           </Route>
         </Route>
@@ -178,6 +189,7 @@ export default function App() {
             <Route path="profile" element={<PlannerProfile />} />
             <Route path="settings" element={<Navigate to="/planner/settings/profile" replace />} />
             <Route path="settings/:section" element={<PlannerSettings />} />
+            <Route path="help" element={<PlannerHelp />} />
             <Route index element={<Navigate to="/planner/dashboard" replace />} />
           </Route>
         </Route>
@@ -196,6 +208,7 @@ export default function App() {
             <Route path="profile" element={<OpsManagerProfile />} />
             <Route path="settings" element={<Navigate to="/ops-manager/settings/profile" replace />} />
             <Route path="settings/:section" element={<OpsManagerSettings />} />
+            <Route path="help" element={<OpsManagerHelp />} />
             <Route index element={<Navigate to="/ops-manager/dashboard" replace />} />
           </Route>
         </Route>
@@ -215,6 +228,7 @@ export default function App() {
           <Route path="settings" element={<Navigate to="/dispatcher/settings/profile" replace />} />
           <Route path="settings/:section" element={<DispatcherSettings />} />
           <Route path="notifications" element={<Notifications />} />
+          <Route path="help" element={<DispatcherHelp />} />
           <Route element={<DispatcherRoute />}>
             <Route path="dispatch-immediate/:incidentId" element={<DispatchImmediate />} />
           </Route>

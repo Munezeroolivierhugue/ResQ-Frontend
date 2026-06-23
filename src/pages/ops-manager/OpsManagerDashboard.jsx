@@ -2,12 +2,15 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ClipboardList, Clock, MapPin, Target, AlertTriangle, X, CheckCircle,
-  Brain, MessageSquare,
+  Brain, MessageSquare, Radio,
 } from 'lucide-react'
 import MetricCard from '../../components/dispatcher/MetricCard'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import { useOpsManagerStore } from '../../store/opsManagerStore'
+import { useNotificationsStore } from '../../store/notificationsStore'
+import OpsManagerReviewModal from '../../components/ops-manager/OpsManagerReviewModal'
+import MutualAidOfferModal from '../../components/dispatcher/MutualAidOfferModal'
 import {
   OPS_ESCALATIONS,
   OPS_DASHBOARD_RECOMMENDATIONS,
@@ -39,11 +42,41 @@ function FleetBar({ type, available, total }) {
 
 export default function OpsManagerDashboard() {
   const { handoverBannerDismissed, handoverRead, dismissHandoverBanner } = useOpsManagerStore()
+  const { items, markRead, addNotification } = useNotificationsStore()
+  
   const [showBanner, setShowBanner] = useState(!handoverBannerDismissed && !handoverRead)
+
+  // Mutual Aid Modals state
+  const [reviewingEscalation, setReviewingEscalation] = useState(null)
+  const [reviewingOffer, setReviewingOffer] = useState(null)
 
   useEffect(() => {
     setShowBanner(!handoverBannerDismissed && !handoverRead)
   }, [handoverBannerDismissed, handoverRead])
+
+  const pendingEscalations = items.filter(n => n.type === 'mutual_aid_escalation' && !n.read)
+  const pendingBroadcasts = items.filter(n => n.type === 'mutual_aid' && !n.read)
+
+  const handleBroadcast = (details) => {
+    // The Ops Manager approves the escalation and broadcasts it
+    if (reviewingEscalation) markRead(reviewingEscalation.id)
+    
+    addNotification({
+      id: `ma-broadcast-${Date.now()}`,
+      type: 'mutual_aid',
+      title: `MUTUAL AID: Neighboring District (${details.radius}km)`,
+      desc: `Priority request for ${details.priority}`,
+      time: 'Just now',
+      read: false,
+      href: '#ops-manager',
+      details: details
+    })
+  }
+
+  const handlePledge = (units) => {
+    if (reviewingOffer) markRead(reviewingOffer.id)
+    // Handle actual pledge logic here
+  }
 
   const fleetShortage = OPS_FLEET.some((f) => f.available / f.total < 0.5)
   const omDistrict = getOpsManagerDistrict()
@@ -78,6 +111,46 @@ export default function OpsManagerDashboard() {
           </Link>
         </div>
       )}
+
+      {/* Local Dispatcher Escalations */}
+      {pendingEscalations.map(esc => (
+        <div key={esc.id} className="dispatcher-surface p-4 flex flex-wrap items-start gap-4 relative border border-(--status-critical)">
+          <AlertTriangle size={22} className="text-(--status-critical) shrink-0" />
+          <div className="flex-1 min-w-[200px] pr-8">
+            <div className="font-bold text-(--status-critical)">Mutual Aid Escalation</div>
+            <p className="text-[13px] text-(--text-secondary) m-0 mt-1">
+              {esc.title}
+            </p>
+          </div>
+          <button 
+            type="button" 
+            className="dispatcher-btn-primary text-[13px]"
+            onClick={() => setReviewingEscalation(esc)}
+          >
+            Review Request →
+          </button>
+        </div>
+      ))}
+
+      {/* External Mutual Aid Broadcasts */}
+      {pendingBroadcasts.map(broadcast => (
+        <div key={broadcast.id} className="dispatcher-surface p-4 flex flex-wrap items-start gap-4 relative border border-(--status-medium)">
+          <Radio size={22} className="text-(--status-medium) shrink-0" />
+          <div className="flex-1 min-w-[200px] pr-8">
+            <div className="font-bold text-(--text-primary)">Incoming Mutual Aid Broadcast</div>
+            <p className="text-[13px] text-(--text-secondary) m-0 mt-1">
+              {broadcast.title}
+            </p>
+          </div>
+          <button 
+            type="button" 
+            className="dispatcher-btn-outline text-[13px]"
+            onClick={() => setReviewingOffer(broadcast)}
+          >
+            Offer Assistance →
+          </button>
+        </div>
+      ))}
 
       <div className="portal-grid-4">
         <MetricCard icon={Clock} label="Avg Response Time" value="7.2m" hint="↓ 0.8m vs target" hintTone="positive">
@@ -208,6 +281,20 @@ export default function OpsManagerDashboard() {
           </div>
         )}
       </div>
+
+      <OpsManagerReviewModal
+        isOpen={!!reviewingEscalation}
+        requestDetails={reviewingEscalation?.details}
+        onClose={() => setReviewingEscalation(null)}
+        onBroadcast={handleBroadcast}
+      />
+
+      <MutualAidOfferModal
+        isOpen={!!reviewingOffer}
+        requestDetails={reviewingOffer?.details}
+        onClose={() => setReviewingOffer(null)}
+        onPledge={handlePledge}
+      />
     </div>
   )
 }

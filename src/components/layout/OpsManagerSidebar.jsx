@@ -23,7 +23,7 @@ const OVERSIGHT = [
 
 const BOTTOM = [
   { icon: Settings, label: 'Settings', href: '/ops-manager/settings' },
-  { icon: HelpCircle, label: 'Help', href: '#' },
+  { icon: HelpCircle, label: 'Help', href: '/ops-manager/help' },
   { icon: LogOut, label: 'Logout', href: '/login', danger: true },
 ]
 
@@ -90,8 +90,8 @@ export default function OpsManagerSidebar({ mobileOpen, onClose }) {
       <div className="sidebar-bottom">
         {BOTTOM.map((item) => {
           const Icon = item.icon
-          const isSettings = item.href === '/ops-manager/settings'
-          const isActive = isSettings && location.pathname.startsWith('/ops-manager/settings')
+          const isLogout = item.href === '/login'
+          const isActive = !isLogout && location.pathname.startsWith(item.href)
           return (
             <div key={item.label} className={`sidebar-item-wrap${isActive ? ' active' : ''}`}>
               {isActive && (

@@ -1,5 +1,19 @@
 export const mockNotifications = [
   {
+    id: 'n_ma1',
+    type: 'mutual_aid',
+    title: 'MUTUAL AID: District Gasabo (10km)',
+    desc: 'Priority request for 2x Ambulance, 1x Fire Engine',
+    time: '1m ago',
+    read: false,
+    href: '#mutual-aid',
+    details: {
+      radius: 10,
+      priority: 'expedited',
+      resources: { ambulance: 2, fireTruck: 1, police: 0, heavyRescue: 0 }
+    }
+  },
+  {
     id: 'n1',
     type: 'critical',
     title: 'INC-2407 escalated to Operations Manager',

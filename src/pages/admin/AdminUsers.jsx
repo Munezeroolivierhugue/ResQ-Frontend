@@ -1,9 +1,9 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { UserPlus, Users, Monitor, Mail, UserX, ShieldCheck, ShieldX, Pencil, Key, Upload, Download, X } from 'lucide-react'
 import MetricCard from '../../components/dispatcher/MetricCard'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
-import AdminInviteUser from './AdminInviteUser'
 import { ADMIN_USERS, adminRoleBadge } from '../../data/mockAdminData'
 import { ADMIN_PENDING_INVITES } from '../../data/mockAdminData'
 
@@ -17,7 +17,7 @@ function statusVariant(s) {
 }
 
 export default function AdminUsers() {
-  const [showInvite, setShowInvite] = useState(false)
+  const navigate = useNavigate()
   const [roleFilter, setRoleFilter] = useState('All Roles')
   const [statusFilter, setStatusFilter] = useState('All')
 
@@ -27,7 +27,7 @@ export default function AdminUsers() {
         title="User Management"
         subtitle="All accounts, roles, and access control."
         actions={
-          <button type="button" className="dispatcher-btn-primary inline-flex items-center gap-2" onClick={() => setShowInvite(true)}>
+          <button type="button" className="dispatcher-btn-primary inline-flex items-center gap-2" onClick={() => navigate('/admin/users/invite')}>
             <UserPlus size={16} />
             Invite New User
           </button>
@@ -179,22 +179,6 @@ export default function AdminUsers() {
           Import Users
         </button>
       </div>
-
-      {showInvite && (
-        <div className="fixed inset-0 z-[350] flex justify-end" style={{ background: 'rgba(0,0,0,0.45)' }}>
-          <div className="w-full max-w-[920px] h-full overflow-y-auto bg-(--bg-base) border-l border-(--border) shadow-2xl relative">
-            <button
-              type="button"
-              className="absolute top-4 right-4 z-10 p-2 rounded-lg border border-(--border) bg-(--bg-surface) cursor-pointer"
-              onClick={() => setShowInvite(false)}
-              aria-label="Close"
-            >
-              <X size={18} />
-            </button>
-            <AdminInviteUser />
-          </div>
-        </div>
-      )}
     </div>
   )
 }
