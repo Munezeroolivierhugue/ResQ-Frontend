@@ -21,7 +21,7 @@ export default function DCUnits() {
 
   return (
     <div className="portal-page flex flex-col gap-6">
-      <DCPageHeader title="Unit Performance" subtitle={`All units assigned to ${district} District.`} />
+      <DCPageHeader title="Unit Performance" eyebrow="District Commander" subtitle={`All units assigned to ${district} District.`} />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <MetricCard label="Total Units" value="18" />
