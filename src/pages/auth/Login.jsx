@@ -32,7 +32,7 @@ export default function Login() {
     <AuthSplitLayout showTabs={<AuthTabs active="login" />}>
       <h1 className="auth-form-title">Command access</h1>
       <p className="auth-form-subtitle">
-        Authenticate with your provisioned credentials for the RESQ-AI ecosystem.
+        Authenticate with your provisioned credentials for the RESQ ecosystem.
       </p>
 
       {deviceRecognized && (

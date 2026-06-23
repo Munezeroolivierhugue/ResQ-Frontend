@@ -12,7 +12,6 @@ import {
   FormInput,
   EditableSummaryStat,
 } from '../../components/dispatcher/FormControls'
-import StatusBadge from '../../components/dispatcher/StatusBadge'
 import { mockIncidentClosure } from '../../data/mockIncidentClosureData'
 
 export default function IncidentClosure() {
@@ -40,12 +39,8 @@ export default function IncidentClosure() {
         breadcrumbCurrent="Incident report"
         title="Incident outcome & closure"
         subtitle={data.subtitle}
-        badges={
-          <>
-            <span className="dispatcher-case-badge">Case ID: {data.caseId}</span>
-            <StatusBadge label={`Incident status: ${data.status}`} variant="info" />
-          </>
-        }
+         badges={<span className="dispatcher-eyebrow">Incident closure</span>}
+    
       />
 
       <SurfaceCard className="mb-5" padding="p-5 md:p-6">

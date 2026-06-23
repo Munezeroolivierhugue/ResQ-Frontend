@@ -1,7 +1,3 @@
-/**
- * End-of-shift handover summary — post-shift analysis (replaces shift planner).
- */
-
 import {
   AlertTriangle,
   Clock,
@@ -14,7 +10,7 @@ import {
 } from 'lucide-react'
 
 export const mockShiftHandover = {
-  period: 'Operational Period Alpha-9',
+  period: 'Operational Period',
   generatedAt: 'October 24, 2025 at 08:00 AM',
   dispatcher: { name: 'Jean Bosco Nkurunziza', id: 'RESQ-OP-042', verified: true },
   metrics: [

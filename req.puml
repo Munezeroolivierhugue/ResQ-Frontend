@@ -1,0 +1,667 @@
+@startuml
+title RESQ - Complete Backend Class Diagram
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 55
+skinparam packageStyle rectangle
+
+' ===== PACKAGE: USERS & AUTH =====
+package "Users & Authentication" {
+
+  abstract class User {
+    - int userId
+    - string fullName
+    - string email
+    - string phone
+    - string passwordHash
+    - string role
+    - bool mfaEnabled
+    - string status
+    - datetime createdAt
+    - datetime lastLogin
+    + login()
+    + logout()
+    + updateProfile()
+    + resetPassword()
+  }
+
+  class Dispatcher {
+    - bool onShift
+    + receiveCall()
+    + logIncident()
+    + closeIncident()
+  }
+
+  class OperationsManager {
+    - int assignedDistrictId
+    + supervise()
+    + approveReallocation()
+    + takeCommand()
+  }
+
+  class EmergencyPlanner {
+    - int planningRegionId
+    + createPlan()
+    + runSimulation()
+  }
+
+  class DistrictCommander {
+    - int assignedDistrictId
+    + reviewReports()
+    + submitResourceRequest()
+  }
+
+  class Analyst {
+    + buildReport()
+    + monitorModels()
+  }
+
+  class FieldResponder {
+    - string unitId
+    - string fieldStatus
+    + updateStatus()
+    + submitFieldReport()
+    + requestBackup()
+  }
+
+  class SuperAdmin {
+    + manageUsers()
+    + configureSystem()
+  }
+
+  class Session {
+    - int sessionId
+    - int userId
+    - string ipAddress
+    - string device
+    - datetime startTime
+    - datetime lastActivity
+    + create()
+    + revoke()
+  }
+
+  class Role {
+    - int roleId
+    - string name
+    - string permissions
+    + hasPermission()
+  }
+
+  class MFADevice {
+    - int deviceId
+    - int userId
+    - string method
+    - bool active
+    + verify()
+  }
+}
+
+' ===== PACKAGE: GEOGRAPHY =====
+package "Geography" {
+
+  class District {
+    - int districtId
+    - string name
+    - string province
+    - string context
+    - float coverageTarget
+    + getUnits()
+    + getCoverageScore()
+  }
+
+  class Sector {
+    - int sectorId
+    - int districtId
+    - string name
+    + getIncidents()
+  }
+
+  class Location {
+    - int locationId
+    - float latitude
+    - float longitude
+    - string sector
+    - string cell
+    - string village
+    - string landmark
+    - float confidence
+    + geocode()
+    + identifyDistrict()
+  }
+
+  class Landmark {
+    - int landmarkId
+    - string name
+    - string type
+    - float latitude
+    - float longitude
+    + search()
+  }
+}
+
+' ===== PACKAGE: INCIDENTS =====
+package "Incident Management" {
+
+  class Incident {
+    - int incidentId
+    - string incidentRef
+    - string type
+    - string severity
+    - string status
+    - datetime callTime
+    - datetime occurrenceTime
+    - datetime dispatchTime
+    - datetime arrivalTime
+    - datetime closureTime
+    - string disposition
+    - bool verified
+    - bool isDuplicate
+    - int duplicateOfId
+    + classify()
+    + close()
+    + flagDuplicate()
+    + calculateResponseTime()
+  }
+
+  class Caller {
+    - int callerId
+    - string phoneNumber
+    - string identity
+    - int previousIncidents
+    - string trustLevel
+    - bool verified
+    + getHistory()
+  }
+
+  class CallRecord {
+    - int callId
+    - string phoneNumber
+    - datetime callTime
+    - int duration
+    - string status
+    + log()
+  }
+
+  class MissedCall {
+    - int missedCallId
+    - string phoneNumber
+    - datetime callTime
+    - int waitDuration
+    - string status
+    - int calledBackBy
+    + assignCallback()
+  }
+
+  class VerificationChecklist {
+    - int checklistId
+    - int incidentId
+    - bool callbackConfirmed
+    - bool locationVerified
+    - bool typeConfirmed
+    - bool lifeThreatAssessed
+    - bool specializedSupport
+    + isComplete()
+  }
+
+  class IncidentReport {
+    - int reportId
+    - int incidentId
+    - int casualties
+    - int arrests
+    - string propertyDamage
+    - string disposition
+    - string narrative
+    + generate()
+  }
+
+  class CaseReferral {
+    - int referralId
+    - int incidentId
+    - string targetDepartment
+    - string caseReference
+    - string notes
+    - datetime createdAt
+    + submit()
+  }
+}
+
+' ===== PACKAGE: DISPATCH & UNITS =====
+package "Dispatch & Resources" {
+
+  class Unit {
+    - int unitId
+    - string unitCode
+    - string type
+    - string status
+    - int districtId
+    - string capability
+    - int dutyHours
+    - bool online
+    - float currentLat
+    - float currentLng
+    - datetime lastSync
+    + updateStatus()
+    + updateLocation()
+  }
+
+  class Dispatch {
+    - int dispatchId
+    - int incidentId
+    - int unitId
+    - int dispatchedBy
+    - bool aiRecommended
+    - bool overridden
+    - string overrideReason
+    - float confidence
+    - int eta
+    - string route
+    - datetime createdAt
+    + confirm()
+    + override()
+    + immediateDispatch()
+  }
+
+  class FieldReport {
+    - int reportId
+    - int incidentId
+    - int unitId
+    - int personsInvolved
+    - bool injuries
+    - bool suspects
+    - string sceneStatus
+    - string description
+    - string agenciesInvolved
+    - string caseReference
+    - datetime submittedAt
+    + submit()
+    + addPhoto()
+  }
+
+  class BackupRequest {
+    - int backupId
+    - int incidentId
+    - int requestingUnitId
+    - string reason
+    - string notes
+    - datetime createdAt
+    + escalate()
+  }
+
+  class GPSPing {
+    - int pingId
+    - int unitId
+    - float latitude
+    - float longitude
+    - datetime timestamp
+    + record()
+  }
+}
+
+' ===== PACKAGE: MULTI-AGENCY =====
+package "Multi-Agency Coordination" {
+
+  class Agency {
+    - int agencyId
+    - string name
+    - string type
+    - string contactInfo
+    + notify()
+  }
+
+  class AgencyInvolvement {
+    - int involvementId
+    - int incidentId
+    - int agencyId
+    - string status
+    - datetime activatedAt
+    + activate()
+  }
+
+  class MutualAidRequest {
+    - int requestId
+    - int requestingDistrictId
+    - int sourceDistrictId
+    - string unitType
+    - int quantity
+    - int duration
+    - string reason
+    - string status
+    + submit()
+    + approve()
+    + decline()
+  }
+
+  class Broadcast {
+    - int broadcastId
+    - int sentBy
+    - string message
+    - string priority
+    - string targetArea
+    - datetime sentAt
+    + send()
+    + trackAcknowledgement()
+  }
+}
+
+' ===== PACKAGE: AI MODELS =====
+package "AI Engine" {
+
+  class AIModel {
+    - int modelId
+    - string modelName
+    - string algorithm
+    - float accuracy
+    - datetime lastTrained
+    - int trainingDataSize
+    - string status
+    + recommend()
+    + predict()
+    + retrain()
+    + detectDrift()
+  }
+
+  class AIRecommendation {
+    - int recommendationId
+    - int modelId
+    - int incidentId
+    - string recommendedUnit
+    - float confidence
+    - string reasoning
+    - datetime createdAt
+    + generate()
+  }
+
+  class AIDecisionLog {
+    - int logId
+    - int modelId
+    - int dispatchId
+    - int reviewedBy
+    - string decision
+    - string justification
+    - string outcome
+    - datetime createdAt
+    + record()
+  }
+
+  class Prediction {
+    - int predictionId
+    - int modelId
+    - string zone
+    - string predictedType
+    - float confidence
+    - datetime windowStart
+    - datetime windowEnd
+    + generate()
+  }
+
+  class HotspotAlert {
+    - int alertId
+    - string zone
+    - int incidentCount
+    - float percentIncrease
+    - string predominantType
+    - datetime detectedAt
+    + flag()
+  }
+}
+
+' ===== PACKAGE: PLANNING =====
+package "Planning & Coverage" {
+
+  class DeploymentPlan {
+    - int planId
+    - string name
+    - int districtId
+    - int createdBy
+    - datetime activeFrom
+    - datetime activeUntil
+    - float projectedCoverage
+    - string status
+    + create()
+    + simulate()
+    + submitForApproval()
+  }
+
+  class PositioningInstruction {
+    - int instructionId
+    - int planId
+    - string unitId
+    - string fromLocation
+    - string toLocation
+    - datetime moveTime
+  }
+
+  class Simulation {
+    - int simulationId
+    - string scenarioType
+    - int multiplier
+    - int duration
+    - string focusArea
+    - float projectedResponseTime
+    - float projectedCoverage
+    + run()
+    + saveScenario()
+  }
+
+  class CoverageGap {
+    - int gapId
+    - string zone
+    - float currentCoverage
+    - float targetCoverage
+    - string recommendation
+    + detect()
+  }
+
+  class ResourceRequest {
+    - int requestId
+    - int districtId
+    - int requestedBy
+    - string unitType
+    - int quantity
+    - string urgency
+    - string justification
+    - string status
+    + submit()
+    + attachData()
+  }
+
+  class Event {
+    - int eventId
+    - string name
+    - string type
+    - datetime eventDate
+    - string expectedImpact
+    + getImpact()
+  }
+}
+
+' ===== PACKAGE: REPORTING =====
+package "Reporting & Analytics" {
+
+  class ShiftReport {
+    - int reportId
+    - int submittedBy
+    - int districtId
+    - int totalIncidents
+    - float avgResponseTime
+    - float coverageScore
+    - float dispatchAccuracy
+    - int escalations
+    - string notes
+    - string status
+    - datetime shiftStart
+    - datetime shiftEnd
+    + generate()
+    + submit()
+  }
+
+  class ExecutiveReport {
+    - int reportId
+    - int districtId
+    - int generatedBy
+    - string period
+    - string assessment
+    - string status
+    + generate()
+    + submitToHQ()
+  }
+
+  class CustomReport {
+    - int reportId
+    - int createdBy
+    - string reportType
+    - string dateRange
+    - string scope
+    - string metrics
+    + build()
+    + export()
+    + schedule()
+  }
+
+  class UnitPerformance {
+    - int recordId
+    - int unitId
+    - float avgResponseTime
+    - int incidentsHandled
+    - float aiAcceptanceRate
+    - float performanceScore
+    + calculate()
+  }
+}
+
+' ===== PACKAGE: SYSTEM & SECURITY =====
+package "System & Security" {
+
+  class AuditLog {
+    - int logId
+    - int userId
+    - datetime timestamp
+    - string action
+    - string module
+    - string ipAddress
+    - string status
+    + record()
+    + export()
+  }
+
+  class SecurityEvent {
+    - int eventId
+    - string eventType
+    - string source
+    - string ipAddress
+    - string severity
+    - string status
+    - datetime timestamp
+    + flag()
+    + investigate()
+  }
+
+  class Integration {
+    - int integrationId
+    - string name
+    - string endpoint
+    - string status
+    - datetime lastSync
+    + testConnection()
+    + configure()
+  }
+
+  class Notification {
+    - int notificationId
+    - int userId
+    - string type
+    - string message
+    - string priority
+    - bool read
+    - datetime createdAt
+    + send()
+    + markRead()
+  }
+
+  class DataQualityRecord {
+    - int recordId
+    - string source
+    - float completeness
+    - float accuracy
+    - datetime checkedAt
+    + check()
+  }
+
+  class Backup {
+    - int backupId
+    - string type
+    - int size
+    - string location
+    - datetime createdAt
+    + run()
+    + restore()
+  }
+}
+
+' ===== INHERITANCE =====
+User <|-- Dispatcher
+User <|-- OperationsManager
+User <|-- EmergencyPlanner
+User <|-- DistrictCommander
+User <|-- Analyst
+User <|-- FieldResponder
+User <|-- SuperAdmin
+
+' ===== RELATIONSHIPS =====
+User "1" --> "0..*" Session : has
+User "1" --> "0..1" MFADevice : uses
+User "1" --> "1" Role : assignedTo
+User "1" --> "0..*" Notification : receives
+User "1" --> "0..*" AuditLog : generates
+
+District "1" o-- "0..*" Sector : contains
+District "1" o-- "0..*" Unit : owns
+District "1" --> "0..*" Incident : tags
+Sector "1" --> "0..*" Location : includes
+
+Dispatcher "1" --> "0..*" Incident : logs
+Incident "1" --> "1" Caller : reportedBy
+Incident "1" *-- "1" Location : locatedAt
+Incident "1" *-- "0..1" VerificationChecklist : has
+Incident "1" *-- "0..*" Dispatch : triggers
+Incident "1" *-- "0..*" FieldReport : produces
+Incident "1" *-- "0..1" IncidentReport : closedWith
+Incident "1" *-- "0..*" CaseReferral : refers
+Incident "1" --> "0..*" AgencyInvolvement : involves
+Caller "1" --> "0..*" CallRecord : makes
+
+Dispatch "1" --> "1" Unit : assigns
+Dispatch "1" --> "0..1" AIRecommendation : basedOn
+Unit "1" --> "0..*" FieldReport : files
+Unit "1" --> "0..*" GPSPing : emits
+Unit "1" --> "0..*" BackupRequest : requests
+Unit "1" --> "0..*" UnitPerformance : tracked
+
+AIModel "1" --> "0..*" AIRecommendation : produces
+AIModel "1" --> "0..*" Prediction : generates
+AIModel "1" --> "0..*" HotspotAlert : detects
+AIRecommendation "1" --> "0..*" AIDecisionLog : recordedIn
+
+AgencyInvolvement "0..*" --> "1" Agency : with
+OperationsManager "1" --> "0..*" MutualAidRequest : submits
+OperationsManager "1" --> "0..*" Broadcast : sends
+
+EmergencyPlanner "1" --> "0..*" DeploymentPlan : creates
+DeploymentPlan "1" *-- "0..*" PositioningInstruction : contains
+DeploymentPlan "1" --> "0..*" Unit : repositions
+EmergencyPlanner "1" --> "0..*" Simulation : runs
+EmergencyPlanner "1" --> "0..*" CoverageGap : analyses
+
+DistrictCommander "1" --> "0..*" ResourceRequest : submits
+DistrictCommander "1" --> "0..*" ExecutiveReport : generates
+OperationsManager "1" --> "0..*" ShiftReport : submits
+ShiftReport "1" --> "0..*" Incident : summarizes
+Analyst "1" --> "0..*" CustomReport : builds
+Analyst "1" --> "0..*" DataQualityRecord : monitors
+
+SuperAdmin "1" --> "0..*" Integration : manages
+SuperAdmin "1" --> "0..*" Backup : manages
+SuperAdmin "1" --> "0..*" SecurityEvent : reviews
+
+@enduml

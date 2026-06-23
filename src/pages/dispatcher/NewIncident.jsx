@@ -93,6 +93,7 @@ export default function NewIncident() {
     <div className="min-h-full bg-(--bg-base) flex flex-col">
       <header className="shrink-0 px-5 md:px-6 pt-5 pb-3 border-b border-(--border)">
         <div className="max-w-[1800px] mx-auto">
+          <span className="dispatcher-eyebrow">Emergency intake</span>
           <h1
             className="text-xl md:text-2xl font-bold text-(--text-primary) m-0 tracking-tight"
             style={{ fontFamily: 'var(--font-display)' }}

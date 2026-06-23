@@ -32,11 +32,7 @@ export default function IncidentHistory() {
 
       <div className="flex items-center justify-between mb-5">
         <div>
-          <div className="flex items-center gap-1.5 mb-1">
-            <span className="text-[12px] text-(--text-muted)">Dispatcher</span>
-            <ChevronRight size={12} className="text-(--text-muted)" />
-            <span className="text-[12px] text-(--text-secondary)">Incident History</span>
-          </div>
+          <span className="dispatcher-eyebrow">Incident log</span>
           <h1 className="text-2xl font-bold m-0" style={{ fontFamily: 'var(--font-display)' }}>Incident History</h1>
         </div>
         <button className="flex items-center gap-1.5 px-5 py-2.25 bg-transparent border border-(--border) text-(--text-primary) font-semibold text-[13px] rounded-lg cursor-pointer hover:bg-(--bg-elevated) hover:border-(--accent) transition-colors" style={{ fontFamily: 'var(--font-body)' }}>
