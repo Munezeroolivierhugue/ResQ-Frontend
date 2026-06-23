@@ -39,7 +39,7 @@ export default function DCDashboard() {
 
   return (
     <div className="portal-page flex flex-col gap-6">
-      <DCPageHeader title="District Command" subtitle="Performance overview · May 2026" />
+      <DCPageHeader title="District Command" eyebrow="Command overview" subtitle="Performance overview · May 2026" />
 
       <div className="portal-grid-kpi">
         <MetricCard icon={AlertCircle} label="Total Incidents (This Month)" value="312" hint="↑ 8% vs last month" hintTone="warning" />
