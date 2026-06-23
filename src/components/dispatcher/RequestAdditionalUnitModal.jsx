@@ -19,7 +19,7 @@ export default function RequestAdditionalUnitModal({ isOpen, onClose, onSubmit }
   }
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-(--bg-surface) border border-(--border) rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Header */}
