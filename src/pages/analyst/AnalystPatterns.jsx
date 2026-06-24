@@ -14,7 +14,6 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
-  Legend,
 } from 'recharts'
 import { Play, Download, Brain } from 'lucide-react'
 import { useThemeStore } from '../../store/themeStore'
@@ -86,38 +85,53 @@ export default function AnalystPatterns() {
         subtitle="Spatial clustering, temporal patterns, and correlation analysis."
       />
 
-      <div className="flex flex-wrap gap-2 items-center">
-        <select className="dispatcher-input h-9 w-36 text-[12px]" defaultValue="All Types">
-          <option>All Types</option>
-          <option>Theft</option>
-          <option>Traffic Accident</option>
-        </select>
-        <select className="dispatcher-input h-9 w-32 text-[12px]" defaultValue="All">
-          <option>All Severities</option>
-          <option>Critical</option>
-          <option>High</option>
-        </select>
-        <select className="dispatcher-input h-9 w-40 text-[12px]" defaultValue="All Districts">
-          <option>All Districts</option>
-          <option>Kigali</option>
-          <option>Gasabo</option>
-        </select>
-        <div className="flex flex-wrap gap-2 ml-auto">
-          {PERIODS.map((p) => (
-            <button
-              key={p}
-              type="button"
-              className="text-[11px] font-semibold px-3 py-1.5 rounded-full border cursor-pointer"
-              style={{
-                background: period === p ? 'var(--accent-ghost)' : 'var(--bg-elevated)',
-                borderColor: period === p ? 'var(--accent)' : 'var(--border)',
-                color: period === p ? 'var(--accent)' : 'var(--text-secondary)',
-              }}
-              onClick={() => setPeriod(p)}
-            >
-              {p}
-            </button>
-          ))}
+      <div className="dispatcher-surface p-5 rounded-xl border border-(--border) flex flex-wrap gap-6 items-end">
+        <label className="flex flex-col gap-2 flex-1 min-w-[150px]">
+          <span className="text-[11px] font-bold text-(--text-secondary) uppercase tracking-wider">Incident Type</span>
+          <select className="dispatcher-input h-10 text-[13px]" defaultValue="All Types">
+            <option>All Types</option>
+            <option>Theft</option>
+            <option>Traffic Accident</option>
+          </select>
+        </label>
+        
+        <label className="flex flex-col gap-2 flex-1 min-w-[150px]">
+          <span className="text-[11px] font-bold text-(--text-secondary) uppercase tracking-wider">Severity Level</span>
+          <select className="dispatcher-input h-10 text-[13px]" defaultValue="All">
+            <option>All Severities</option>
+            <option>Critical</option>
+            <option>High</option>
+          </select>
+        </label>
+        
+        <label className="flex flex-col gap-2 flex-1 min-w-[150px]">
+          <span className="text-[11px] font-bold text-(--text-secondary) uppercase tracking-wider">District / Region</span>
+          <select className="dispatcher-input h-10 text-[13px]" defaultValue="All Districts">
+            <option>All Districts</option>
+            <option>Kigali</option>
+            <option>Gasabo</option>
+          </select>
+        </label>
+        
+        <div className="flex flex-col gap-2 ml-auto">
+          <span className="text-[11px] font-bold text-(--text-secondary) uppercase tracking-wider text-right">Timeframe</span>
+          <div className="flex gap-2">
+            {PERIODS.map((p) => (
+              <button
+                key={p}
+                type="button"
+                className="text-[12px] font-semibold px-4 py-2 rounded-lg border transition-colors cursor-pointer"
+                style={{
+                  background: period === p ? 'var(--accent)' : 'var(--bg-elevated)',
+                  borderColor: period === p ? 'var(--accent)' : 'var(--border)',
+                  color: period === p ? 'white' : 'var(--text-secondary)',
+                }}
+                onClick={() => setPeriod(p)}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -176,7 +190,7 @@ export default function AnalystPatterns() {
                 </Circle>
               ))}
             </MapContainer>
-            <input type="range" className="w-full mt-3" min={0} max={100} defaultValue={80} />
+            <input type="range" className="w-full mt-3 accent-(--accent)" min={0} max={100} defaultValue={80} />
             <p className="text-[11px] text-(--text-muted) text-center m-0">Jan 2026 — May 2026 · Slide to animate patterns over time</p>
           </div>
           <div className="dispatcher-surface p-4 lg:flex-[35] min-w-0">
