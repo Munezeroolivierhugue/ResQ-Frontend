@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Pencil, Share2 } from 'lucide-react'
+import { Plus, Pencil, Share2, Calendar, Clock, FileText, Users, X } from 'lucide-react'
 import AnalystPageHeader from '../../components/analyst/AnalystPageHeader'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import { ANALYST_LIBRARY_ROWS, ANALYST_SCHEDULES } from '../../data/mockAnalystData'
@@ -47,12 +47,35 @@ export default function AnalystLibrary() {
 
       {tab === TABS[0] && (
         <>
-          <div className="flex flex-wrap gap-2">
-            <input className="dispatcher-input h-10 flex-1 min-w-[200px]" placeholder="Search by type, district, keyword..." />
-            <select className="dispatcher-input h-10 w-36 text-[12px]"><option>Type</option></select>
-            <select className="dispatcher-input h-10 w-36 text-[12px]"><option>Date range</option></select>
-            <select className="dispatcher-input h-10 w-32 text-[12px]"><option>Author</option></select>
-            <select className="dispatcher-input h-10 w-36 text-[12px]"><option>District</option></select>
+          <div className="dispatcher-surface p-5 rounded-xl border border-(--border) flex flex-wrap gap-6 items-end">
+            <label className="flex flex-col gap-2 flex-[2] min-w-[200px]">
+              <span className="text-[11px] font-bold text-(--text-secondary) uppercase tracking-wider">Search Reports</span>
+              <input className="dispatcher-input h-10 text-[13px]" placeholder="Search by type, district, keyword..." />
+            </label>
+            <label className="flex flex-col gap-2 flex-1 min-w-[120px]">
+              <span className="text-[11px] font-bold text-(--text-secondary) uppercase tracking-wider">Report Type</span>
+              <select className="dispatcher-input h-10 text-[13px]">
+                <option>All Types</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-2 flex-1 min-w-[120px]">
+              <span className="text-[11px] font-bold text-(--text-secondary) uppercase tracking-wider">Date Range</span>
+              <select className="dispatcher-input h-10 text-[13px]">
+                <option>All Dates</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-2 flex-1 min-w-[120px]">
+              <span className="text-[11px] font-bold text-(--text-secondary) uppercase tracking-wider">Author</span>
+              <select className="dispatcher-input h-10 text-[13px]">
+                <option>All Authors</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-2 flex-1 min-w-[120px]">
+              <span className="text-[11px] font-bold text-(--text-secondary) uppercase tracking-wider">District</span>
+              <select className="dispatcher-input h-10 text-[13px]">
+                <option>All Districts</option>
+              </select>
+            </label>
           </div>
 
           <div className={`flex gap-4 ${annotate ? '' : ''}`}>
@@ -170,20 +193,105 @@ export default function AnalystLibrary() {
       )}
 
       {showScheduleModal && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
-          <div className="dispatcher-surface p-6 w-full max-w-[520px]">
-            <h3 className="text-[15px] font-bold m-0 mb-4">Create Schedule</h3>
-            <div className="flex flex-col gap-3">
-              <input className="dispatcher-input h-10" placeholder="Schedule name" />
-              <select className="dispatcher-input h-10"><option>Report configuration</option></select>
-              <select className="dispatcher-input h-10"><option>Weekly</option><option>Daily</option></select>
-              <select className="dispatcher-input h-10"><option>Monday</option></select>
-              <input type="time" className="dispatcher-input h-10" defaultValue="07:00" />
-              <input className="dispatcher-input h-10" placeholder="Recipients (emails or roles)" />
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 backdrop-blur-sm transition-all duration-300" style={{ background: 'rgba(0,0,0,0.5)' }}>
+          <div className="dispatcher-surface p-6 w-full max-w-[560px] rounded-2xl shadow-2xl flex flex-col">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h3 className="text-[18px] font-bold m-0 text-(--text-primary)">Create Schedule</h3>
+                <p className="text-[12px] text-(--text-secondary) m-0 mt-1">Automate report delivery to stakeholders</p>
+              </div>
+              <button 
+                type="button" 
+                className="text-(--text-muted) hover:text-(--text-primary) bg-transparent border-none cursor-pointer p-1 rounded-lg hover:bg-(--bg-elevated) transition-colors"
+                onClick={() => setShowScheduleModal(false)}
+              >
+                <X size={20} />
+              </button>
             </div>
-            <div className="flex gap-2 mt-4 justify-end">
-              <button type="button" className="dispatcher-btn-ghost" onClick={() => setShowScheduleModal(false)}>Cancel</button>
-              <button type="button" className="dispatcher-btn-primary" onClick={() => setShowScheduleModal(false)}>Save Schedule</button>
+
+            <div className="flex flex-col gap-5">
+              {/* Configuration Section */}
+              <div className="flex flex-col gap-4">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[12px] font-bold text-(--text-secondary) uppercase tracking-wider flex items-center gap-1.5">
+                    <FileText size={14} className="text-(--accent)" /> Schedule Name
+                  </span>
+                  <input className="dispatcher-input h-10 w-full text-[13px]" placeholder="e.g., Weekly Executive Summary" />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[12px] font-bold text-(--text-secondary) uppercase tracking-wider flex items-center gap-1.5">
+                    Report Configuration
+                  </span>
+                  <select className="dispatcher-input h-10 w-full text-[13px]">
+                    <option>May Response Time Summary</option>
+                    <option>District Comparison Q1 2026</option>
+                    <option>Dispatch Model Audit</option>
+                  </select>
+                </label>
+              </div>
+
+              {/* Timing Section */}
+              <div className="grid grid-cols-2 gap-4 pt-1">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[12px] font-bold text-(--text-secondary) uppercase tracking-wider flex items-center gap-1.5">
+                    <Calendar size={14} className="text-(--accent)" /> Frequency
+                  </span>
+                  <select className="dispatcher-input h-10 w-full text-[13px]">
+                    <option>Weekly</option>
+                    <option>Daily</option>
+                    <option>Monthly</option>
+                  </select>
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[12px] font-bold text-(--text-secondary) uppercase tracking-wider flex items-center gap-1.5">
+                    Delivery Day
+                  </span>
+                  <select className="dispatcher-input h-10 w-full text-[13px]">
+                    <option>Monday</option>
+                    <option>Tuesday</option>
+                    <option>Wednesday</option>
+                    <option>Thursday</option>
+                    <option>Friday</option>
+                  </select>
+                </label>
+
+                <label className="flex flex-col gap-1.5 col-span-2 sm:col-span-1">
+                  <span className="text-[12px] font-bold text-(--text-secondary) uppercase tracking-wider flex items-center gap-1.5">
+                    <Clock size={14} className="text-(--accent)" /> Time (EAT)
+                  </span>
+                  <input type="time" className="dispatcher-input h-10 w-full text-[13px]" defaultValue="07:00" />
+                </label>
+              </div>
+
+              {/* Delivery Section */}
+              <div className="pt-1">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-[12px] font-bold text-(--text-secondary) uppercase tracking-wider flex items-center gap-1.5">
+                    <Users size={14} className="text-(--accent)" /> Recipients
+                  </span>
+                  <input className="dispatcher-input h-10 w-full text-[13px]" placeholder="Enter emails, roles, or groups..." />
+                  <span className="text-[11px] text-(--text-muted) mt-0.5">Separate multiple recipients with commas.</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-8 justify-end">
+              <button 
+                type="button" 
+                className="dispatcher-btn-ghost h-10 px-5 text-[13px]" 
+                onClick={() => setShowScheduleModal(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                className="dispatcher-btn-primary h-10 px-6 text-[13px]" 
+                onClick={() => setShowScheduleModal(false)}
+              >
+                Save Schedule
+              </button>
             </div>
           </div>
         </div>

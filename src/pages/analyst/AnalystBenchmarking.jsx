@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
+import { Search, Check } from 'lucide-react'
 import {
   LineChart,
   Line,
@@ -42,9 +43,28 @@ function responseColor(rt) {
   return 'var(--status-critical)'
 }
 
+const ALL_DISTRICTS = [...new Set(ANALYST_BENCHMARK_ROWS.map(r => r.district))].sort()
+
 export default function AnalystBenchmarking() {
   const [sigOn, setSigOn] = useState(true)
   const [selected, setSelected] = useState(['kicukiro', 'nyarugenge', 'gasabo', 'musanze', 'rubavu'])
+
+  const [showDistrictsModal, setShowDistrictsModal] = useState(false)
+  const [tableDistricts, setTableDistricts] = useState(ALL_DISTRICTS)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const filteredDistricts = useMemo(() => 
+    ALL_DISTRICTS.filter(d => d.toLowerCase().includes(searchQuery.toLowerCase())),
+  [searchQuery])
+
+  const toggleTableDistrict = (d) => {
+    setTableDistricts(prev => 
+      prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]
+    )
+  }
+
+  const selectAll = () => setTableDistricts(ALL_DISTRICTS)
+  const clearAll = () => setTableDistricts([])
 
   return (
     <div className="portal-page flex flex-col gap-5 min-w-[1024px]">
@@ -73,7 +93,11 @@ export default function AnalystBenchmarking() {
             </button>
           ))}
         </div>
-        <button type="button" className="dispatcher-btn-ghost text-[12px] h-9 ml-auto">
+        <button 
+          type="button" 
+          className="dispatcher-btn-ghost text-[12px] h-9 ml-auto"
+          onClick={() => setShowDistrictsModal(true)}
+        >
           Select Districts
         </button>
       </div>
@@ -108,7 +132,7 @@ export default function AnalystBenchmarking() {
             </tr>
           </thead>
           <tbody>
-            {ANALYST_BENCHMARK_ROWS.map((row) => (
+            {ANALYST_BENCHMARK_ROWS.filter(r => tableDistricts.includes(r.district) || tableDistricts.length === 0).map((row) => (
               <tr key={row.district} className="border-b border-(--border-subtle) dispatcher-table-row">
                 <td className="p-3 font-medium">
                   {row.district}
@@ -204,6 +228,68 @@ export default function AnalystBenchmarking() {
           ))}
         </div>
       </div>
+      {showDistrictsModal && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 backdrop-blur-sm" style={{ background: 'rgba(0,0,0,0.5)' }}>
+          <div className="dispatcher-surface p-6 w-full max-w-[600px] flex flex-col gap-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-[16px] font-bold m-0 text-(--text-primary)">Select Districts for Benchmarking</h3>
+              <button type="button" className="text-(--text-muted) hover:text-(--text-primary) bg-transparent border-none cursor-pointer" onClick={() => setShowDistrictsModal(false)}>✕</button>
+            </div>
+            
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-(--text-muted)" size={16} />
+              <input 
+                type="text" 
+                className="dispatcher-input w-full pl-9 h-10" 
+                placeholder="Search districts..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+
+            <div className="flex justify-between items-center border-b border-(--border) pb-2">
+              <span className="text-[12px] text-(--text-secondary) font-medium">{tableDistricts.length} selected</span>
+              <div className="flex gap-3">
+                <button type="button" className="text-[12px] text-(--accent) font-semibold bg-transparent border-none cursor-pointer hover:underline" onClick={selectAll}>Select All</button>
+                <button type="button" className="text-[12px] text-(--text-muted) font-semibold bg-transparent border-none cursor-pointer hover:underline" onClick={clearAll}>Clear All</button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[300px] overflow-y-auto pr-2">
+              {filteredDistricts.map(d => {
+                const isSelected = tableDistricts.includes(d)
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    className="flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer text-left"
+                    style={{
+                      background: isSelected ? 'var(--accent-ghost)' : 'var(--bg-elevated)',
+                      borderColor: isSelected ? 'var(--accent)' : 'var(--border)',
+                    }}
+                    onClick={() => toggleTableDistrict(d)}
+                  >
+                    <span className="text-[13px] font-medium" style={{ color: isSelected ? 'var(--accent)' : 'var(--text-primary)' }}>
+                      {d}
+                    </span>
+                    {isSelected && <Check size={16} className="text-(--accent)" />}
+                  </button>
+                )
+              })}
+              {filteredDistricts.length === 0 && (
+                <div className="col-span-full py-8 text-center text-(--text-muted) text-[13px]">
+                  No districts found matching "{searchQuery}"
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 mt-2">
+              <button type="button" className="dispatcher-btn-ghost h-10 px-5" onClick={() => setShowDistrictsModal(false)}>Cancel</button>
+              <button type="button" className="dispatcher-btn-primary h-10 px-6" onClick={() => setShowDistrictsModal(false)}>Apply Selection</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
