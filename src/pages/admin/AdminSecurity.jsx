@@ -5,10 +5,34 @@ import ConfirmDangerModal from '../../components/admin/ConfirmDangerModal'
 import { ADMIN_MFA_ROLES, ADMIN_ACTIVE_SESSIONS, ADMIN_IP_RANGES, adminRoleBadge } from '../../data/mockAdminData'
 
 export default function AdminSecurity() {
-  const [confirmRevoke, setConfirmRevoke] = useState(false)
+  const [sessions, setSessions] = useState(() => ADMIN_ACTIVE_SESSIONS.map((s) => ({ ...s })))
+  const [revokeId, setRevokeId] = useState(null)
+  const [toast, setToast] = useState(null)
+
+  function showToast(msg) {
+    setToast(msg)
+    setTimeout(() => setToast(null), 2500)
+  }
+
+  function handleConfirmRevoke() {
+    if (revokeId === 'all') {
+      setSessions([])
+      showToast('All sessions revoked')
+    } else {
+      setSessions((prev) => prev.filter((s) => s.session_id !== revokeId))
+      showToast('Session revoked')
+    }
+    setRevokeId(null)
+  }
 
   return (
     <div className="portal-page flex flex-col gap-5 min-w-[1024px]">
+      {toast && (
+        <div className="fixed bottom-5 right-5 z-[9999] dispatcher-surface px-4 py-2.5 text-[13px] font-medium shadow-lg" style={{ borderLeft: '3px solid var(--accent)' }}>
+          {toast}
+        </div>
+      )}
+
       <AdminPageHeader title="Security Management" subtitle="MFA compliance, sessions, and security policies." />
 
       <div className="dispatcher-surface p-4">
@@ -74,12 +98,12 @@ export default function AdminSecurity() {
       <div className="flex flex-col lg:flex-row gap-4">
         <div className="dispatcher-surface p-4 flex-1 min-w-0">
           <div className="flex flex-wrap justify-between gap-2 mb-4">
-            <span className="font-semibold text-[13px]">Active Sessions — 12 online</span>
+            <span className="font-semibold text-[13px]">Active Sessions — {sessions.length} online</span>
             <button
               type="button"
               className="text-[11px] font-bold px-3 py-1 rounded border cursor-pointer"
               style={{ borderColor: 'var(--status-critical)', color: 'var(--status-critical)' }}
-              onClick={() => setConfirmRevoke(true)}
+              onClick={() => setRevokeId('all')}
             >
               Revoke All Sessions
             </button>
@@ -91,28 +115,32 @@ export default function AdminSecurity() {
                   <th className="text-left p-2">User</th>
                   <th className="p-2">Role</th>
                   <th className="text-left p-2">Device</th>
-                  <th className="p-2">IP</th>
+                  <th className="p-2">IP Address</th>
                   <th className="p-2">Login</th>
                   <th className="p-2">Action</th>
                 </tr>
               </thead>
               <tbody>
-                {ADMIN_ACTIVE_SESSIONS.map((s) => {
+                {sessions.map((s) => {
                   const rb = adminRoleBadge(s.role)
                   return (
-                    <tr key={s.user + s.ip} className="border-b border-(--border-subtle)">
+                    <tr key={s.session_id} className="border-b border-(--border-subtle)">
                       <td className="p-2 font-medium">{s.user}</td>
                       <td className="p-2">
                         <span className="text-[10px] font-bold px-1.5 rounded" style={{ background: rb.bg, color: rb.color }}>{rb.label}</span>
                       </td>
                       <td className="p-2 text-(--text-secondary)">{s.device}</td>
-                      <td className="p-2 font-mono">{s.ip}</td>
-                      <td className="p-2 font-mono text-(--text-muted)">{s.login}</td>
+                      <td className="p-2 font-mono">{s.ip_address}</td>
+                      <td className="p-2 font-mono text-(--text-muted)">{s.start_time}</td>
                       <td className="p-2">
                         {s.self ? (
                           <span className="text-[10px] font-bold text-(--accent)">This device</span>
                         ) : (
-                          <button type="button" className="dispatcher-btn-ghost text-[10px] h-7 hover:border-(--status-critical) hover:text-(--status-critical)">
+                          <button
+                            type="button"
+                            className="dispatcher-btn-ghost text-[10px] h-7 hover:border-(--status-critical) hover:text-(--status-critical)"
+                            onClick={() => setRevokeId(s.session_id)}
+                          >
                             Revoke
                           </button>
                         )}
@@ -184,12 +212,16 @@ export default function AdminSecurity() {
       </div>
 
       <ConfirmDangerModal
-        open={confirmRevoke}
-        title="Revoke all sessions?"
-        message="This will log out ALL users immediately. Use only for security emergencies."
-        confirmLabel="Revoke All"
-        onConfirm={() => setConfirmRevoke(false)}
-        onCancel={() => setConfirmRevoke(false)}
+        open={revokeId !== null}
+        title={revokeId === 'all' ? 'Revoke all sessions?' : 'Revoke this session?'}
+        message={
+          revokeId === 'all'
+            ? 'This will log out ALL users immediately. Use only for security emergencies.'
+            : 'The user will be logged out immediately and must sign in again.'
+        }
+        confirmLabel={revokeId === 'all' ? 'Revoke All' : 'Revoke Session'}
+        onConfirm={handleConfirmRevoke}
+        onCancel={() => setRevokeId(null)}
       />
     </div>
   )
