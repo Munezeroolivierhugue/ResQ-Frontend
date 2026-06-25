@@ -15,7 +15,7 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import StatusBadge from '../dispatcher/StatusBadge'
-import { mockUnits } from '../../data/mockData'
+import { mockUnits } from '../../data/mockVehicles'
 import {
   INITIAL_REALLOCATION_RECS,
   REALLOCATION_REJECTION_REASONS,
