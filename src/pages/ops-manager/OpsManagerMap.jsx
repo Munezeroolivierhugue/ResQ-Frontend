@@ -6,7 +6,8 @@ import { getOpsManagerDistrict } from '../../utils/opsManagerDistrict'
 import { useThemeStore } from '../../store/themeStore'
 import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
 import { RWANDA_CENTER, RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../components/map/rwandaConstants'
-import { mockUnits, mockIncidents } from '../../data/mockData'
+import { mockIncidents } from '../../data/mockIncidents'
+import { mockUnits } from '../../data/mockVehicles'
 import 'leaflet/dist/leaflet.css'
 
 const LAYERS = ['All Units', 'Incidents', 'Coverage Rings', 'Traffic', 'Agency Units']
