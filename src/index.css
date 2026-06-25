@@ -20,6 +20,22 @@
     --status-info:        #2196C8;
     --status-info-bg:     rgba(33,150,200,0.12);
     --status-offline:     #5A6478;
+    --status-warning:     #D4A017; /* amber — duplicate detection banner */
+    --status-warning-bg:  rgba(212,160,23,0.15);
+    /* Severity tokens — derived from existing status palette */
+    --severity-critical:    #B9382F;
+    --severity-critical-bg: rgba(185,56,47,0.12);
+    --severity-high:        #F07820;
+    --severity-high-bg:     rgba(240,120,32,0.12);
+    --severity-medium:      #D4A017;
+    --severity-medium-bg:   rgba(212,160,23,0.12);
+    --severity-low:         #3DAA6A;
+    --severity-low-bg:      rgba(61,170,106,0.12);
+
+    /* Location source tokens */
+    --location-rough:   #2196C8; /* telecom rough area — blue, same as --status-info */
+    --location-precise: #3DAA6A; /* GPS precise — green, same as --status-low */
+    --location-manual:  #8A95B0; /* manual pin — muted secondary tone */
 
     --font-display: 'Inter', sans-serif;
     --font-body:    'Inter', sans-serif;
