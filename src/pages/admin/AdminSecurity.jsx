@@ -33,7 +33,7 @@ export default function AdminSecurity() {
         </div>
       )}
 
-      <AdminPageHeader title="Security Management" subtitle="MFA compliance, sessions, and security policies." />
+      <AdminPageHeader title="Security Management" subtitle="MFA compliance, sessions, and security policies." eyebrow="Super Admin Portal" badge="2 Open Alerts" />
 
       <div className="dispatcher-surface p-4">
         <div className="flex flex-wrap justify-between gap-3 mb-4">

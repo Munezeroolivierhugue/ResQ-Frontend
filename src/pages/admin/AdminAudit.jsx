@@ -61,6 +61,8 @@ export default function AdminAudit() {
       <AdminPageHeader
         title="Audit Trail"
         subtitle="Complete timestamped record of every system action."
+        eyebrow="Super Admin Portal"
+        badge="Compliance"
         actions={
           <button type="button" onClick={handleExport} className="dispatcher-btn-ghost inline-flex items-center gap-2">
             <Download size={14} />

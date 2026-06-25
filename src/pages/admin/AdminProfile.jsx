@@ -4,7 +4,7 @@ import SettingsProfileSection from '../../components/settings/SettingsProfileSec
 export default function AdminProfile() {
   return (
     <div className="portal-page">
-      <AdminPageHeader title="My Profile" subtitle="Super Admin account identity." />
+      <AdminPageHeader title="My Profile" subtitle="Super Admin account identity." eyebrow="Super Admin Portal" badge="ADM-0001" />
       <SettingsProfileSection
         initials="SA"
         roleLabel="SUPER ADMIN"

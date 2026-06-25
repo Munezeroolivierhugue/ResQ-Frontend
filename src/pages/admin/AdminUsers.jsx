@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { UserPlus, Users, Monitor, Mail, UserX, ShieldCheck, ShieldX, Pencil, Key, Upload, Download, X } from 'lucide-react'
+import { UserPlus, Users, Monitor, Mail, UserX, ShieldCheck, ShieldX, Pencil, Key, Upload, Download } from 'lucide-react'
 import MetricCard from '../../components/dispatcher/MetricCard'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
@@ -47,6 +47,8 @@ export default function AdminUsers() {
       <AdminPageHeader
         title="User Management"
         subtitle="All accounts, roles, and access control."
+        eyebrow="Super Admin Portal"
+        badge=" System Users"
         actions={
           <button type="button" className="dispatcher-btn-primary inline-flex items-center gap-2" onClick={() => navigate('/admin/users/invite')}>
             <UserPlus size={16} />

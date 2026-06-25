@@ -12,6 +12,8 @@ export default function AdminIntegrations() {
       <AdminPageHeader
         title="Integration Management"
         subtitle="External data connections and API configurations."
+        eyebrow="Super Admin Portal"
+        badge="Live Connections"
         actions={
           <button type="button" className="dispatcher-btn-primary inline-flex items-center gap-2">
             <Plug size={16} />

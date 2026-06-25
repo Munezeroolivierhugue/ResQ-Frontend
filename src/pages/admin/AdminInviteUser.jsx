@@ -20,6 +20,7 @@ import {
 import { ASSIGNED_ROLES, mockInvitedUsers } from '../../data/mockAuthData'
 import { mockAgencies } from '../../data/mockAgencies'
 import FieldLabel from '../../components/ui/FieldLabel'
+import AdminPageHeader from '../../components/admin/AdminPageHeader'
 
 const RECENT_LIMIT = 5
 
@@ -209,18 +210,12 @@ export default function AdminInviteUser() {
 
   return (
     <div className="portal-page aiu-root">
-      {/* ── Page header ── */}
-      <div className="aiu-page-header">
-        <div className="aiu-page-header-icon">
-          <UserPlus size={20} />
-        </div>
-        <div>
-          <h1 className="aiu-page-title">Create User &amp; Send Invitation</h1>
-          <p className="aiu-page-sub">
-            Super admin provisions accounts. Users complete registration via the invitation link.
-          </p>
-        </div>
-      </div>
+      <AdminPageHeader
+        title="Create User & Send Invitation"
+        subtitle="Super admin provisions accounts. Users complete registration via the invitation link."
+        eyebrow="Super Admin Portal"
+        badge="Account Provisioning"
+      />
 
       <div className="flex flex-col gap-6">
         {/* ── Top: Form / Success ── */}

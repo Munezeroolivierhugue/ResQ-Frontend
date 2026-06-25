@@ -30,7 +30,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="portal-page flex flex-col gap-5 min-w-[1024px]">
-      <AdminPageHeader title="System Health Overview" subtitle={`RESQ platform status · ${dateStr} · ${timeStr}`} />
+      <AdminPageHeader title="System Health Overview" subtitle={`RESQ platform status · ${dateStr} · ${timeStr}`} eyebrow="Super Admin Portal" badge="LIVE" />
 
       <div className="dispatcher-surface p-4">
         <div className="font-mono text-[10px] uppercase text-(--text-muted) mb-3">SYSTEM STATUS</div>
