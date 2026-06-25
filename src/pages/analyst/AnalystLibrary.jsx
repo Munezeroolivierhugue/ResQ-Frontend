@@ -16,6 +16,7 @@ export default function AnalystLibrary() {
       <AnalystPageHeader
         title="Report Library & Scheduled Delivery"
         subtitle="All reports, schedules, and access management."
+        badge="Report Library"
       />
 
       <div className="flex flex-wrap gap-2 border-b border-(--border) pb-2">
