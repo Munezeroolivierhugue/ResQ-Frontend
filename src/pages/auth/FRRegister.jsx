@@ -7,7 +7,7 @@ import FRAuthShell from '../../components/auth/FRAuthShell'
 
 export default function FRRegister() {
   const navigate = useNavigate()
-  const [form, setForm] = useState({ fullName: '', email: '', responderId: '', phone: '', password: '', confirmPassword: '' })
+  const [form, setForm] = useState({ full_name: '', email: '', responderId: '', phone: '', password: '', confirmPassword: '' })
   const [showPass, setShowPass] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 
@@ -25,25 +25,25 @@ export default function FRRegister() {
 
   return (
     <FRAuthShell>
-      <div className="fr-auth-card-wrap" style={{ overflowY: 'auto', flex: 1 }}>
+      <div className="fr-auth-card-wrap" style={{ overflowY: 'auto', flex: 1, justifyContent: 'flex-start', padding: '1.25rem 1.25rem 1.5rem', gap: '0.8rem' }}>
         <div className="fr-auth-tabs">
           <Link to="/fr/login" className="fr-auth-tab">LOGIN</Link>
           <span className="fr-auth-tab fr-auth-tab--active">SIGN UP</span>
         </div>
 
         <div className="fr-auth-logo">
-          <Siren size={36} strokeWidth={1.5} color="#ffffff" />
+          <Siren size={32} strokeWidth={1.5} color="#ffffff" />
           <span className="fr-auth-logo-name">RESQ</span>
           <span className="fr-auth-logo-sub">Vigilant Sentinel</span>
         </div>
 
-        <div className="fr-auth-card">
+        <div className="fr-auth-card" style={{ padding: '1.25rem 1.1rem' }}>
           <h2 className="fr-auth-card-title">Register Field Responder</h2>
-          <p className="fr-auth-card-sub">Create your secure responder account</p>
+          <p className="fr-auth-card-sub" style={{ marginBottom: '0.85rem' }}>Create your secure responder account</p>
 
-          <form onSubmit={handleSubmit} className="fr-auth-form">
+          <form onSubmit={handleSubmit} className="fr-auth-form" style={{ gap: '0.7rem' }}>
             {[
-              { k: 'fullName', label: 'Full Name', icon: User, placeholder: 'John Doe', type: 'text' },
+              { k: 'full_name', label: 'Full Name', icon: User, placeholder: 'John Doe', type: 'text' },
               { k: 'email', label: 'Professional Email', icon: Mail, placeholder: 'j.doe@agency.gov', type: 'email' },
               { k: 'responderId', label: 'Responder ID', icon: Hash, placeholder: 'FR-00000', type: 'text' },
               { k: 'phone', label: 'Phone Number', icon: Phone, placeholder: '+250 788 000 000', type: 'tel' },

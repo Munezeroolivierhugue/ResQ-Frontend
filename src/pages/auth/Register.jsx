@@ -9,7 +9,7 @@ import {
   PrimaryButton,
   PasswordStrength,
 } from '../../components/auth/AuthShared'
-import { ORGANIZATIONS, ASSIGNED_ROLES, JURISDICTIONS } from '../../data/mockAuthData'
+import { ORGANIZATIONS, ASSIGNED_ROLES } from '../../data/mockAuthData'
 
 export default function Register() {
   const navigate = useNavigate()
@@ -22,7 +22,6 @@ export default function Register() {
     phone: sessionStorage.getItem('resq-invite-phone') || '',
     organization: sessionStorage.getItem('resq-invite-org') || ORGANIZATIONS[0],
     role: sessionStorage.getItem('resq-invite-role') || 'dispatcher',
-    jurisdiction: JURISDICTIONS[0],
     password: '',
     confirmPassword: '',
   })
@@ -92,14 +91,6 @@ export default function Register() {
             ))}
           </AuthSelect>
         </AuthField>
-        <AuthField label="Jurisdiction selection" className="auth-field--full">
-          <AuthSelect value={form.jurisdiction} onChange={(e) => set('jurisdiction', e.target.value)}>
-            {JURISDICTIONS.map((j) => (
-              <option key={j} value={j}>{j}</option>
-            ))}
-          </AuthSelect>
-        </AuthField>
-
         <AuthField label="Access key creation" className="auth-field--full">
           <AuthInput
             type="password"
