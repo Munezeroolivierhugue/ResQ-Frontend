@@ -1,8 +1,11 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Brain, TrendingUp, AlertCircle, Cpu, X } from 'lucide-react'
 import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import { PLANNER_RECOMMENDATIONS, PLANNER_AI_INSIGHTS } from '../../data/mockPlannerData'
+import { mockReports } from '../../data/mockReports'
+import { getCurrentUser } from '../../utils/authSession'
+import { useNotificationsStore } from '../../store/notificationsStore'
 
 const WEEKLY_STATS = [
   ['Plans submitted', '7'],
@@ -34,6 +37,43 @@ function recVariant(status) {
 export default function PlannerReports() {
   const [recFilter, setRecFilter] = useState('All')
   const [analysisLen, setAnalysisLen] = useState(0)
+  const assessmentRef = useRef(null)
+  const notesRef = useRef(null)
+  const addNotification = useNotificationsStore((s) => s.addNotification)
+
+  function saveReport(isDraft) {
+    const currentUser = getCurrentUser()
+    const timestamp = new Date().toISOString()
+    const report = {
+      report_id: Math.random().toString(36).slice(2, 10),
+      report_type: 'PLANNER_INSIGHT',
+      created_by: currentUser?.user_id ?? null,
+      creator_role: 'emergency_planner',
+      district_id: currentUser?.district_id ?? null,
+      period: null,
+      total_incidents: null,
+      avg_response_time: null,
+      coverage_score: null,
+      dispatch_accuracy: null,
+      escalations: null,
+      content: assessmentRef.current?.value || notesRef.current?.value || '',
+      status: isDraft ? 'DRAFT' : 'PUBLISHED',
+      created_at: timestamp,
+      submitted_at: isDraft ? null : timestamp,
+    }
+    mockReports.push(report)
+    if (!isDraft) {
+      addNotification({
+        id: 'notif-' + Math.random().toString(36).slice(2, 10),
+        type: 'PLANNER_REPORT_PUBLISHED',
+        target_role: 'super_admin',
+        title: 'Planner Report Published',
+        message: 'Emergency Planner published a weekly insight report.',
+        timestamp,
+        read: false,
+      })
+    }
+  }
 
   const filteredRecs =
     recFilter === 'All'
@@ -67,6 +107,7 @@ export default function PlannerReports() {
 
           <label className="text-[13px] font-medium block mb-2">Your written analysis</label>
           <textarea
+            ref={assessmentRef}
             className="dispatcher-textarea w-full min-h-[140px] text-[13px]"
             placeholder="Summarize key findings, trends observed, and strategic recommendations for this week..."
             maxLength={3000}
@@ -76,13 +117,14 @@ export default function PlannerReports() {
 
           <label className="text-[13px] font-medium block mb-2 mt-4">Recommendations for OMs and District Commanders</label>
           <textarea
+            ref={notesRef}
             className="dispatcher-textarea w-full min-h-[100px] text-[13px]"
             placeholder="List actionable recommendations..."
           />
 
           <div className="flex flex-wrap gap-2 mt-4">
-            <button type="button" className="dispatcher-btn-ghost">Save Draft</button>
-            <button type="button" className="dispatcher-btn-primary inline-flex items-center gap-1.5">
+            <button type="button" className="dispatcher-btn-ghost" onClick={() => saveReport(true)}>Save Draft</button>
+            <button type="button" className="dispatcher-btn-primary inline-flex items-center gap-1.5" onClick={() => saveReport(false)}>
               Publish Report
             </button>
           </div>
@@ -124,20 +166,20 @@ export default function PlannerReports() {
                 <StatusBadge label={rec.status} variant={recVariant(rec.status)} />
               </div>
               <div className="text-[12px] font-medium">{rec.type}</div>
-              <div className="text-[11px] text-(--text-secondary) line-clamp-2 mt-0.5">{rec.desc}</div>
-              {rec.outcome && (
+              <div className="text-[11px] text-(--text-secondary) line-clamp-2 mt-0.5">{rec.content}</div>
+              {rec.result_summary && (
                 <div className="flex items-center gap-1 mt-1 text-[11px]" style={{ color: 'var(--status-low)' }}>
                   <TrendingUp size={12} />
-                  {rec.outcome}
+                  {rec.result_summary}
                 </div>
               )}
-              {rec.reason && (
+              {rec.rejection_reason && (
                 <div className="flex items-center gap-1 mt-1 text-[11px]" style={{ color: 'var(--status-critical)' }}>
                   <X size={12} />
-                  {rec.reason}
+                  {rec.rejection_reason}
                 </div>
               )}
-              <div className="font-mono text-[10px] text-(--text-muted) mt-1">{rec.date}</div>
+              <div className="font-mono text-[10px] text-(--text-muted) mt-1">{rec.created_at}</div>
             </div>
           ))}
         </div>

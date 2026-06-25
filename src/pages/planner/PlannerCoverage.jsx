@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { MapContainer, TileLayer, Circle, Tooltip } from 'react-leaflet'
 import {
   LineChart,
@@ -16,6 +16,8 @@ import {
 } from 'recharts'
 import { AlertTriangle } from 'lucide-react'
 import { useThemeStore } from '../../store/themeStore'
+import { getCurrentUser } from '../../utils/authSession'
+import { mockAuditLogs } from '../../data/mockAuditLogs'
 import MapInvalidateSize from '../../components/map/MapInvalidateSize'
 import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
@@ -45,6 +47,20 @@ function hourBarColor(pct) {
 
 export default function PlannerCoverage() {
   const { theme } = useThemeStore()
+  const navigate = useNavigate()
+
+  function handleCreatePlan(gap) {
+    const currentUser = getCurrentUser()
+    mockAuditLogs.push({
+      log_id: Math.random().toString(36).slice(2, 10),
+      user_id: currentUser?.user_id ?? null,
+      timestamp: new Date().toISOString(),
+      action: 'COVERAGE_GAP_TARGETED: ' + gap.zone,
+      module: 'PLANNER',
+      status: 'SUCCESS',
+    })
+    navigate(`/planner/deployment?zone=${encodeURIComponent(gap.zone)}`)
+  }
   const gapCount = PLANNER_COVERAGE_GAPS.length
 
   const legend = useMemo(
@@ -163,9 +179,13 @@ export default function PlannerCoverage() {
                     </td>
                     <td className="py-2">
                       <span className="text-(--text-secondary)">{row.rec}</span>
-                      <Link to="/planner/deployment" className="text-[11px] font-semibold text-(--accent) ml-1 no-underline hover:underline">
+                      <button
+                        type="button"
+                        className="text-[11px] font-semibold text-(--accent) ml-1 bg-transparent border-0 p-0 cursor-pointer hover:underline"
+                        onClick={() => handleCreatePlan(row)}
+                      >
                         Create Plan →
-                      </Link>
+                      </button>
                     </td>
                   </tr>
                 ))}
