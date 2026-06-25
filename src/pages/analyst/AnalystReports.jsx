@@ -58,6 +58,7 @@ export default function AnalystReports() {
         <AnalystPageHeader
           title="Custom Report Builder"
           subtitle="Build any report from any combination of system data."
+          badge="Reports"
         />
       </div>
     <div className="analyst-report-builder flex min-h-[calc(100vh-120px)]">
