@@ -1,4 +1,4 @@
-export default function AdminPageHeader({ title, subtitle, actions, eyebrow, badge }) {
+export default function AdminPageHeader({ title, subtitle, actions, badge }) {
   return (
     <div className="flex flex-wrap justify-between gap-4 items-start mb-6">
       <div>
