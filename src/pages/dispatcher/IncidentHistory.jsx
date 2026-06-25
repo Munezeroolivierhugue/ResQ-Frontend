@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ChevronRight, ChevronLeft, Download, Search } from 'lucide-react'
-import { mockHistoryIncidents } from '../../data/mockData'
+import { mockHistoryIncidents } from '../../data/mockIncidents'
 
 const severityColor = { critical: '#E8354A', high: '#F07820', medium: '#D4A017', low: '#3DAA6A' }
 
