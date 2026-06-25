@@ -8,6 +8,14 @@ import {
   ShieldAlert,
   Zap,
 } from 'lucide-react'
+import { mockShiftHandoverIncidents } from './mockIncidents'
+
+const TYPE_ICONS = {
+  'Medical emergency': HeartPulse,
+  'Traffic incident': Car,
+  'Unauthorized access': ShieldAlert,
+  'Power outage support': Zap,
+}
 
 export const mockShiftHandover = {
   period: 'Operational Period',
@@ -48,43 +56,9 @@ export const mockShiftHandover = {
     },
   ],
   peakBars: [20, 35, 28, 55, 40, 90, 70, 45],
-  incidents: [
-    {
-      id: 'RSQ-9281-Z',
-      type: 'Medical emergency',
-      typeIcon: HeartPulse,
-      timestamp: '23:14:05',
-      location: 'KN 212 St, Kigali',
-      outcome: 'Patient stabilized & transferred to CHUK',
-      status: 'resolved',
-    },
-    {
-      id: 'RSQ-9274-A',
-      type: 'Traffic incident',
-      typeIcon: Car,
-      timestamp: '22:41:18',
-      location: 'KG 11 Ave, Kicukiro',
-      outcome: 'Clearance completed, unit released',
-      status: 'resolved',
-    },
-    {
-      id: 'RSQ-9289-F',
-      type: 'Unauthorized access',
-      typeIcon: ShieldAlert,
-      timestamp: '02:08:44',
-      location: 'Remera sector, Gasabo',
-      outcome: 'Override applied — local protocol branch',
-      status: 'handover',
-    },
-    {
-      id: 'RSQ-9261-P',
-      type: 'Power outage support',
-      typeIcon: Zap,
-      timestamp: '01:22:11',
-      location: 'Nyamirambo, Nyarugenge',
-      outcome: 'Utility coordination logged, scene safe',
-      status: 'resolved',
-    },
-  ],
+  incidents: mockShiftHandoverIncidents.map(inc => ({
+    ...inc,
+    typeIcon: TYPE_ICONS[inc.type] || HelpCircle
+  })),
   totalRecords: 42,
 }
