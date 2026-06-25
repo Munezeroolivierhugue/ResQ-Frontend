@@ -58,7 +58,7 @@ export default function FRAssignment() {
 
       <div className="fr-key-numbers">
         {[
-          { val: String(a.etaMin), unit: 'min ETA', color: etaColor(a.etaMin) },
+          { val: String(a.eta_minutes), unit: 'min ETA', color: etaColor(a.eta_minutes) },
           { val: String(a.distanceKm), unit: 'km away', color: 'var(--text-primary)' },
           { val: a.priority, unit: 'priority', color: 'var(--status-critical)' },
         ].map((tile) => (

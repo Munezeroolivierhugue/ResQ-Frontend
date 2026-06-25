@@ -54,7 +54,7 @@ export default function FRFieldReport() {
   }
 
   const handleSubmit = () => {
-    submitReport()
+    submitReport({ persons, injuries, suspects, sceneStatus, description, actions, supportNeeded, followUp, agencies })
     showToast('Report submitted · Status: Available', 'success')
     navigate('/field-responder/shift-start')
   }
