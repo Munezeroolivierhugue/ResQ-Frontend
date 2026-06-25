@@ -1,4 +1,5 @@
 import { useMemo, useState, useRef, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { MapContainer, TileLayer, CircleMarker, Circle, Marker, Tooltip } from 'react-leaflet'
 import L from 'leaflet'
 import {
@@ -9,10 +10,10 @@ import {
   Truck,
   ShieldCheck,
   Radio,
-  MessageSquare,
   Mic,
   Play,
-  Square
+  Square,
+  CheckCircle,
 } from 'lucide-react'
 import FieldLabel from '../../components/ui/FieldLabel'
 import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
@@ -76,9 +77,25 @@ function StatusBadge({ label, color }) {
 }
 
 export default function ActiveIncident() {
+  const navigate = useNavigate()
   const [message, setMessage] = useState('')
   const [comms, setComms] = useState(mockUnifiedComms)
+  const [sceneComplete, setSceneComplete] = useState(false)
   const addNotification = useNotificationsStore((state) => state.addNotification)
+
+  const handleSceneComplete = () => {
+    setSceneComplete(true)
+    addNotification({
+      id: `scene-complete-${Date.now()}`,
+      type: 'scene_complete',
+      title: `Scene complete — ${activeIncident.incident_ref}`,
+      message: `Units released. Field report required for ${activeIncident.title}.`,
+      time: new Date().toISOString(),
+      read: false,
+      target_role: 'dispatcher',
+    })
+    setTimeout(() => navigate('/dispatcher/pending-reports'), 1800)
+  }
 
   // Voice recording state
   const [pttActive, setPttActive] = useState(false)
@@ -148,7 +165,7 @@ export default function ActiveIncident() {
   const mapPoints = useMemo(
     () => [
       [activeIncident.lat, activeIncident.lng],
-      ...activeIncidentUnits.map((u) => [u.lat, u.lng]),
+      ...activeIncidentUnits.map((u) => [u.current_lat, u.current_lng]),
     ],
     [],
   )
@@ -157,7 +174,7 @@ export default function ActiveIncident() {
 
   const mapLegend = useMemo(
     () => [
-      { color: MARKER_HEX.critical, label: `${activeIncident.id} · incident` },
+      { color: MARKER_HEX.critical, label: `${activeIncident.incident_ref} · incident` },
       { color: MARKER_HEX.fire, label: 'Fire units (FTK)' },
       { color: MARKER_HEX.medical, label: 'Medical (AMB)' },
       { color: MARKER_HEX.police, label: 'Police (POL)' },
@@ -185,8 +202,26 @@ export default function ActiveIncident() {
     setMessage('')
   }
 
+  const activeIncidentLevel = activeIncident.severity === 'critical' ? 4 : activeIncident.severity === 'high' ? 3 : activeIncident.severity === 'medium' ? 2 : 1;
+
   return (
-    <div className="flex flex-col h-full min-h-0 bg-(--bg-base) overflow-hidden">
+    <div className="flex flex-col h-full min-h-0 bg-(--bg-base) overflow-hidden relative">
+      {sceneComplete && (
+        <div className="absolute inset-x-0 top-0 z-[2000] flex justify-center pt-4 pointer-events-none">
+          <div
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border text-[13px] font-semibold"
+            style={{
+              background: 'var(--status-low-bg)',
+              color: 'var(--status-low)',
+              borderColor: 'var(--status-low)',
+              fontFamily: 'var(--font-display)',
+            }}
+          >
+            <CheckCircle size={15} />
+            Scene marked complete — redirecting to Pending Reports…
+          </div>
+        </div>
+      )}
       <header className="shrink-0 px-5 md:px-6 py-4 border-b border-(--border) bg-(--bg-surface)">
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
           <div className="min-w-0 flex-1">
@@ -199,10 +234,10 @@ export default function ActiveIncident() {
                   fontFamily: 'var(--font-display)',
                 }}
               >
-                Critical — level {activeIncident.level}
+                Critical — level {activeIncidentLevel}
               </span>
               <span className="text-[12px] font-bold text-(--accent)" style={{ fontFamily: 'var(--font-mono)' }}>
-                {activeIncident.id}
+                {activeIncident.incident_ref}
               </span>
             </div>
             <h1
@@ -238,6 +273,20 @@ export default function ActiveIncident() {
             >
               <AlertTriangle size={16} />
               Escalate to operations manager
+            </button>
+            <button
+              type="button"
+              disabled={sceneComplete}
+              onClick={handleSceneComplete}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border-none cursor-pointer text-[11px] font-bold uppercase tracking-wide disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                background: 'var(--status-medium)',
+                color: '#fff',
+                fontFamily: 'var(--font-display)',
+              }}
+            >
+              <CheckCircle size={16} />
+              Mark Scene Complete
             </button>
           </div>
         </div>
@@ -297,7 +346,7 @@ export default function ActiveIncident() {
               }}
             >
               <Tooltip direction="top" offset={[0, -14]}>
-                <strong>{activeIncident.id}</strong> — {activeIncident.type}
+                <strong>{activeIncident.incident_ref}</strong> — {activeIncident.incident_type}
                 <br />
                 {activeIncident.sector}, {activeIncident.district}
                 <br />
@@ -310,7 +359,7 @@ export default function ActiveIncident() {
             {activeIncidentUnits.map((unit) => (
               <CircleMarker
                 key={`ring-${unit.id}`}
-                center={[unit.lat, unit.lng]}
+                center={[unit.current_lat, unit.current_lng]}
                 radius={14}
                 pathOptions={{
                   color: MARKER_HEX[unit.colorKey],
@@ -325,11 +374,11 @@ export default function ActiveIncident() {
             {activeIncidentUnits.map((unit) => (
               <Marker
                 key={unit.id}
-                position={[unit.lat, unit.lng]}
+                position={[unit.current_lat, unit.current_lng]}
                 icon={unitMarkerIcon(unit)}
               >
                 <Tooltip direction="top" offset={[0, -18]}>
-                  <strong>{unit.id}</strong> — {unit.type}
+                  <strong>{unit.id}</strong> — {unit.vehicle_type}
                   <br />
                   {unit.role}
                   <br />
@@ -338,7 +387,7 @@ export default function ActiveIncident() {
                   {unit.timestamp ? ` · ${unit.timestamp}` : ''}
                   <br />
                   <span style={{ fontFamily: 'monospace' }}>
-                    {unit.lat.toFixed(4)}, {unit.lng.toFixed(4)} ({unit.accuracy})
+                    {unit.current_lat.toFixed(4)}, {unit.current_lng.toFixed(4)} ({unit.accuracy})
                   </span>
                 </Tooltip>
               </Marker>
@@ -400,7 +449,7 @@ export default function ActiveIncident() {
                         borderColor: `color-mix(in srgb, ${color} 30%, transparent)`,
                       }}
                     >
-                      <UnitTypeIcon type={unit.type} color={color} />
+                      <UnitTypeIcon type={unit.vehicle_type} color={color} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1">
@@ -417,7 +466,7 @@ export default function ActiveIncident() {
                         {unit.accuracy}
                       </div>
                       <div className="text-[10px] text-(--text-muted) mt-0.5" style={{ fontFamily: 'var(--font-mono)' }}>
-                        {unit.lat.toFixed(4)}, {unit.lng.toFixed(4)}
+                        {unit.current_lat.toFixed(4)}, {unit.current_lng.toFixed(4)}
                       </div>
                     </div>
                   </div>
