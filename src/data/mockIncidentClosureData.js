@@ -1,16 +1,18 @@
-/**
- * Post-incident closure report — filed after incident is closed.
- * Aligns with INC-2403 (Fire, Nyamirambo) operational context.
- */
+import { mockIncidentClosures } from './mockIncidentClosures'
+import { mockVehicles } from './mockVehicles'
+
+const baseClosure = mockIncidentClosures[0];
+
+const getExtendedUnit = (id, overrides) => {
+  const v = mockVehicles.find(u => u.id === id);
+  return {
+    ...v,
+    ...overrides
+  };
+};
 
 export const mockIncidentClosure = {
-  caseId: 'RW-2940-M',
-  incidentId: 'INC-2403',
-  codename: 'Sigma-4',
-  status: 'Final resolution',
-  title: 'Structure fire & medical standby — Nyamirambo',
-  subtitle:
-    'Finalize the operational report for Incident Sigma-4. Ensure all dispatched units are accounted for before formal closure of the case file.',
+  ...baseClosure,
   dispositionOptions: [
     { value: 'arrests', label: 'Arrest(s) made' },
     { value: 'medical', label: 'Medical transport only' },
@@ -26,10 +28,10 @@ export const mockIncidentClosure = {
   defaultDisposition: 'arrests',
   defaultRecovery: 'full',
   units: [
-    { id: 'T-14', role: 'Tactical', status: 'Ready to release', statusTone: 'ready', cleared: true },
-    { id: 'T-22', role: 'Intercept', status: 'Ready to release', statusTone: 'ready', cleared: true },
-    { id: 'M-09', role: 'Medical', status: 'Wrapping logs', statusTone: 'pending', cleared: false },
-    { id: 'FTK-02', role: 'Fire suppression', status: 'Ready to release', statusTone: 'ready', cleared: true },
+    getExtendedUnit('T-14', { role: 'Tactical', status: 'Ready to release', statusTone: 'ready', cleared: true }),
+    getExtendedUnit('T-22', { role: 'Intercept', status: 'Ready to release', statusTone: 'ready', cleared: true }),
+    getExtendedUnit('M-09', { role: 'Medical', status: 'Wrapping logs', statusTone: 'pending', cleared: false }),
+    getExtendedUnit('FTK-02', { role: 'Fire suppression', status: 'Ready to release', statusTone: 'ready', cleared: true }),
   ],
   timelineElapsed: '42m 14s',
   timeline: [
