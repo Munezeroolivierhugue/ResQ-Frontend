@@ -19,7 +19,6 @@ import AdminSettings from './pages/admin/AdminSettings'
 import AdminRoute from './components/layout/AdminRoute'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminIntegrations from './pages/admin/AdminIntegrations'
-import AdminAIConfig from './pages/admin/AdminAIConfig'
 import AdminAudit from './pages/admin/AdminAudit'
 import AdminSecurity from './pages/admin/AdminSecurity'
 import AdminProfile from './pages/admin/AdminProfile'
@@ -99,7 +98,6 @@ import FieldResponderHelp from './pages/field-responder/Help'
 import OpsManagerHelp from './pages/ops-manager/Help'
 import PlannerHelp from './pages/planner/Help'
 
-const dispatcher = { name: 'Jean Bosco', role: 'DISPATCHER' }
 export default function App() {
   return (
     <BrowserRouter>
@@ -126,7 +124,6 @@ export default function App() {
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="integrations" element={<AdminIntegrations />} />
-            <Route path="ai-config" element={<AdminAIConfig />} />
             <Route path="audit" element={<AdminAudit />} />
             <Route path="security" element={<AdminSecurity />} />
             <Route path="profile" element={<AdminProfile />} />
@@ -230,24 +227,24 @@ export default function App() {
         </Route>
 
         {/* Dispatcher portal */}
-        <Route path="/dispatcher" element={<AppShell user={dispatcher} />}>
-          <Route index element={<LiveDispatchMap />} />
-          <Route path="new-incident" element={<NewIncident />} />
-          <Route path="ai-engine" element={<AIDispatchEngine />} />
-          <Route path="active-incident" element={<ActiveIncident />} />
-          <Route path="queue" element={<Navigate to="/dispatcher/active-incident" replace />} />
-          <Route path="history" element={<IncidentHistory />} />
-          <Route path="incident-report" element={<IncidentClosure />} />
-          <Route path="pending-reports" element={<PendingReports />} />
-          <Route path="missed-calls" element={<MissedCalls />} />
-          <Route path="shift-handover" element={<ShiftHandover />} />
-          <Route path="shifts" element={<Navigate to="/dispatcher/shift-handover" replace />} />
-          <Route path="profile" element={<MyProfile />} />
-          <Route path="settings" element={<Navigate to="/dispatcher/settings/profile" replace />} />
-          <Route path="settings/:section" element={<DispatcherSettings />} />
-          <Route path="notifications" element={<Notifications />} />
-          <Route path="help" element={<DispatcherHelp />} />
-          <Route element={<DispatcherRoute />}>
+        <Route path="/dispatcher" element={<DispatcherRoute />}>
+          <Route element={<AppShell />}>
+            <Route index element={<LiveDispatchMap />} />
+            <Route path="new-incident" element={<NewIncident />} />
+            <Route path="ai-engine" element={<AIDispatchEngine />} />
+            <Route path="active-incident" element={<ActiveIncident />} />
+            <Route path="queue" element={<Navigate to="/dispatcher/active-incident" replace />} />
+            <Route path="history" element={<IncidentHistory />} />
+            <Route path="incident-report" element={<IncidentClosure />} />
+            <Route path="pending-reports" element={<PendingReports />} />
+            <Route path="missed-calls" element={<MissedCalls />} />
+            <Route path="shift-handover" element={<ShiftHandover />} />
+            <Route path="shifts" element={<Navigate to="/dispatcher/shift-handover" replace />} />
+            <Route path="profile" element={<MyProfile />} />
+            <Route path="settings" element={<Navigate to="/dispatcher/settings/profile" replace />} />
+            <Route path="settings/:section" element={<DispatcherSettings />} />
+            <Route path="notifications" element={<Notifications />} />
+            <Route path="help" element={<DispatcherHelp />} />
             <Route path="dispatch-immediate/:incidentId" element={<DispatchImmediate />} />
           </Route>
         </Route>
