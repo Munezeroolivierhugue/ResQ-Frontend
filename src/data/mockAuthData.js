@@ -6,13 +6,13 @@ export const ORGANIZATIONS = [
 ]
 
 export const ASSIGNED_ROLES = [
-  { value: 'dispatcher', label: 'Dispatcher', portal: '/dispatcher' },
+  { value: 'dispatcher',         label: 'Dispatcher',         portal: '/dispatcher'                  },
   { value: 'district_commander', label: 'District Commander', portal: '/district-commander/dashboard' },
-  { value: 'ops_manager', label: 'Operations Manager', portal: '/ops-manager/dashboard' },
-  { value: 'emergency_planner', label: 'Emergency Planner', portal: '/planner/dashboard' },
-  { value: 'field_responder', label: 'Field Responder', portal: '/field-responder/shift-start' },
-  { value: 'analyst', label: 'Analyst', portal: '/analyst/dashboard' },
-  { value: 'super_admin', label: 'Super Admin', portal: '/admin/dashboard' },
+  { value: 'ops_manager',        label: 'Operations Manager', portal: '/ops-manager/dashboard'        },
+  { value: 'emergency_planner',  label: 'Emergency Planner',  portal: '/planner/dashboard'            },
+  { value: 'field_responder',    label: 'Field Responder',    portal: '/field-responder/shift-start'  },
+  { value: 'analyst',            label: 'Analyst',            portal: '/analyst/dashboard'            },
+  { value: 'super_admin',        label: 'Super Admin',        portal: '/admin/dashboard'              },
 ]
 
 export const JURISDICTIONS = [
@@ -40,51 +40,51 @@ export const MFA_SETUP_OPTIONS = [
   },
 ]
 
-/** Mock users "created" by admin (session demo). */
+/** Mock users "created" by admin (session demo). fullName → full_name; invitedAt → created_at */
 export const mockInvitedUsers = [
   {
     id: 'USR-001',
-    fullName: 'Marie Claire Uwimana',
+    full_name: 'Marie Claire Uwimana',
     email: 'm.uwimana@rnp.gov.rw',
     phone: '+250788456789',
     role: 'dispatcher',
     status: 'pending',
-    invitedAt: '2026-05-18',
+    created_at: '2026-05-18',
   },
   {
     id: 'USR-002',
-    fullName: 'Patrick Nshimiyimana',
+    full_name: 'Patrick Nshimiyimana',
     email: 'p.nshimiyimana@rnp.gov.rw',
     phone: '+250788112233',
     role: 'ops_manager',
     status: 'active',
-    invitedAt: '2026-05-12',
+    created_at: '2026-05-12',
   },
   {
     id: 'USR-003',
-    fullName: 'Grace Ingabire',
+    full_name: 'Grace Ingabire',
     email: 'g.ingabire@rnp.gov.rw',
     phone: '+250788998877',
     role: 'analyst',
     status: 'pending',
-    invitedAt: '2026-05-17',
+    created_at: '2026-05-17',
   },
   {
     id: 'USR-004',
-    fullName: 'Eric Habimana',
+    full_name: 'Eric Habimana',
     email: 'e.habimana@rnp.gov.rw',
     phone: '+250788334455',
     role: 'field_responder',
     status: 'active',
-    invitedAt: '2026-05-10',
+    created_at: '2026-05-10',
   },
   {
     id: 'USR-005',
-    fullName: 'Chantal Mukamana',
+    full_name: 'Chantal Mukamana',
     email: 'c.mukamana@rnp.gov.rw',
     phone: '+250788667788',
     role: 'emergency_planner',
     status: 'pending',
-    invitedAt: '2026-05-19',
+    created_at: '2026-05-19',
   },
 ]
