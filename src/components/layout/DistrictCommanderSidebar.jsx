@@ -55,7 +55,7 @@ function NavItem({ item, isActive, onClose, badgeCount }) {
         {badgeCount > 0 && (
           <span
             className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full"
-            style={{ background: 'var(--status-medium-bg)', color: 'var(--status-medium)' }}
+            style={{ background: 'var(--accent)', color: '#ffffff' }}
           >
             {badgeCount}
           </span>
