@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { Flag } from 'lucide-react'
 import BottomSheet, { BottomSheetClose } from './BottomSheet'
-import { FR_FLAG_OPTIONS } from '../../data/mockFieldResponderData'
+import { FR_FLAG_OPTIONS, FR_OFFICER } from '../../data/mockFieldResponderData'
+import { mockAuditLogs } from '../../data/mockAuditLogs'
+import { generateUuid } from '../../utils/formHelpers'
 import { useFieldResponderStore } from '../../store/fieldResponderStore'
 
 export default function FlagIssueModal({ open, onClose }) {
@@ -11,6 +13,15 @@ export default function FlagIssueModal({ open, onClose }) {
 
   const submit = () => {
     if (!selected) return
+    mockAuditLogs.push({
+      log_id: generateUuid(),
+      user_id: FR_OFFICER.user_id,
+      timestamp: new Date().toISOString(),
+      action: `DISPATCH_FLAGGED: ${selected}`,
+      module: 'FIELD_RESPONDER',
+      ip_address: null,
+      status: 'SUCCESS',
+    })
     showToast('Flag submitted · Dispatcher notified', 'warning')
     setSelected('')
     setNotes('')
