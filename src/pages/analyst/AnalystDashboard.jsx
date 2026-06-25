@@ -45,7 +45,7 @@ export default function AnalystDashboard() {
 
   return (
     <div className="portal-page flex flex-col gap-5 min-w-[1024px]">
-      <AnalystPageHeader title="Analyst Dashboard" subtitle={`System intelligence overview · ${dateStr}`} />
+      <AnalystPageHeader title="Analyst Dashboard" subtitle={`System intelligence overview · ${dateStr}`} badge="Dashboard" />
 
       <div className="portal-grid-4">
         <MetricCard icon={FileBarChart} label="Reports Generated (Month)" value="24" hint="↑ 3 vs last month" hintTone="positive" />
