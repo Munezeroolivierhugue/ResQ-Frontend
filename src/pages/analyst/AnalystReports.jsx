@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import {
   Play,
   BarChart3,
@@ -24,6 +24,11 @@ import {
   ReferenceLine,
 } from 'recharts'
 import AnalystPageHeader from '../../components/analyst/AnalystPageHeader'
+import SettingsToast from '../../components/settings/SettingsToast'
+import { getCurrentUser } from '../../utils/authSession'
+import { mockReports } from '../../data/mockReports'
+import { useNotificationsStore } from '../../store/notificationsStore'
+import { ANALYST_LIBRARY_ROWS } from '../../data/mockAnalystData'
 import {
   ANALYST_REPORT_METRICS,
   ANALYST_RESPONSE_TREND,
@@ -49,8 +54,71 @@ export default function AnalystReports() {
   const [metrics, setMetrics] = useState(() =>
     Object.fromEntries(ANALYST_REPORT_METRICS.map((m) => [m.id, m.default]))
   )
+  const [toast, setToast] = useState('')
+  const [lastReportId, setLastReportId] = useState(null)
+  const reportNameRef = useRef(null)
+  const addNotification = useNotificationsStore((s) => s.addNotification)
 
   const toggleMetric = (id) => setMetrics((m) => ({ ...m, [id]: !m[id] }))
+
+  function showToast(msg) {
+    setToast(msg)
+    setTimeout(() => setToast(''), 3000)
+  }
+
+  function generateReport() {
+    const currentUser = getCurrentUser()
+    const selectedMetrics = ANALYST_REPORT_METRICS.filter((m) => metrics[m.id]).map((m) => m.label)
+    const reportName = reportNameRef.current?.value || 'Untitled Report'
+    const timestamp = new Date().toISOString()
+    const reportId = Math.random().toString(36).slice(2, 10)
+    const report = {
+      report_id: reportId,
+      report_type: 'ANALYST_CUSTOM',
+      created_by: currentUser?.user_id ?? null,
+      creator_role: 'analyst',
+      district_id: currentUser?.district_id ?? null,
+      period: range,
+      total_incidents: null,
+      avg_response_time: null,
+      coverage_score: null,
+      dispatch_accuracy: null,
+      escalations: null,
+      content: reportName + ' (' + selectedMetrics.join(', ') + ')',
+      status: 'GENERATED',
+      created_at: timestamp,
+      submitted_at: null,
+    }
+    mockReports.push(report)
+    ANALYST_LIBRARY_ROWS.unshift({
+      report_name: reportName,
+      report_type: 'ANALYST_CUSTOM',
+      district: geo,
+      created_by: currentUser?.full_name || 'You',
+      created_at: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+      shared_with: '—',
+    })
+    setLastReportId(reportId)
+    showToast('Report generated.')
+  }
+
+  function postToLibrary() {
+    if (!lastReportId) return
+    const idx = mockReports.findIndex((r) => r.report_id === lastReportId)
+    if (idx !== -1) mockReports[idx].status = 'PUBLISHED'
+    const currentUser = getCurrentUser()
+    const timestamp = new Date().toISOString()
+    addNotification({
+      id: 'notif-' + Math.random().toString(36).slice(2, 10),
+      type: 'ANALYST_REPORT_PUBLISHED',
+      target_role: 'super_admin',
+      title: 'Analyst Report Published',
+      message: 'Analyst posted a custom report to the Report Library.',
+      timestamp,
+      read: false,
+    })
+    showToast('Report published to library.')
+  }
 
   return (
     <div className="flex flex-col min-w-[1024px] -mx-0">
@@ -69,7 +137,7 @@ export default function AnalystReports() {
         <div className="flex flex-col gap-3">
           <label className="dispatcher-field">
             <span className="text-[12px] font-medium">Report name</span>
-            <input className="dispatcher-input h-10" placeholder="e.g. Weekly Kigali Response Time Summary" />
+            <input ref={reportNameRef} className="dispatcher-input h-10" placeholder="e.g. Weekly Kigali Response Time Summary" />
           </label>
           <label className="dispatcher-field">
             <span className="text-[12px] font-medium">Report type</span>
@@ -173,7 +241,7 @@ export default function AnalystReports() {
           <label className="flex items-center gap-2 text-[12px]"><input type="checkbox" defaultChecked /> Show benchmark lines</label>
           <label className="flex items-center gap-2 text-[12px]"><input type="checkbox" defaultChecked /> Show trend lines</label>
           <label className="flex items-center gap-2 text-[12px]"><input type="checkbox" /> AI recommendation overlay</label>
-          <button type="button" className="dispatcher-btn-primary w-full h-12 font-bold text-[13px] inline-flex items-center justify-center gap-2">
+          <button type="button" className="dispatcher-btn-primary w-full h-12 font-bold text-[13px] inline-flex items-center justify-center gap-2" onClick={generateReport}>
             <Play size={16} />
             GENERATE REPORT
           </button>
@@ -284,7 +352,7 @@ export default function AnalystReports() {
           <UserPlus size={14} />
           Share with Commander
         </button>
-        <button type="button" className="dispatcher-btn-ghost w-full mb-2 inline-flex items-center justify-center gap-2">
+        <button type="button" className="dispatcher-btn-ghost w-full mb-2 inline-flex items-center justify-center gap-2" onClick={postToLibrary} disabled={!lastReportId}>
           <Library size={14} />
           Post to Report Library
         </button>
@@ -298,9 +366,12 @@ export default function AnalystReports() {
         </select>
         <input type="time" className="dispatcher-input h-9 w-full mb-2" defaultValue="07:00" />
         <input className="dispatcher-input h-9 w-full mb-2" placeholder="Add emails or roles..." />
+        {/* NOTE: Report scheduling has no report_schedules table in the schema.
+             Save Schedule is decorative until the table is added. */}
         <button type="button" className="dispatcher-btn-outline w-full text-[12px]">Save Schedule</button>
       </aside>
     </div>
+    <SettingsToast show={!!toast} message={toast} />
     </div>
   )
 }

@@ -72,20 +72,20 @@ export default function AnalystLibrary() {
                 </thead>
                 <tbody>
                   {ANALYST_LIBRARY_ROWS.map((row) => (
-                    <tr key={row.name} className="border-b border-(--border-subtle) dispatcher-table-row">
-                      <td className="p-3 font-medium">{row.name}</td>
-                      <td className="p-3">{row.type}</td>
+                    <tr key={row.report_name} className="border-b border-(--border-subtle) dispatcher-table-row">
+                      <td className="p-3 font-medium">{row.report_name}</td>
+                      <td className="p-3">{row.report_type}</td>
                       <td className="p-3">{row.district}</td>
-                      <td className="p-3">{row.author}</td>
-                      <td className="p-3 font-mono">{row.generated}</td>
-                      <td className="p-3">{row.shared}</td>
+                      <td className="p-3">{row.created_by}</td>
+                      <td className="p-3 font-mono">{row.created_at}</td>
+                      <td className="p-3">{row.shared_with}</td>
                       <td className="p-3">
                         <div className="flex flex-wrap gap-1">
                           <button type="button" className="dispatcher-btn-ghost text-[10px] h-7 px-2">Preview</button>
                           <button
                             type="button"
                             className="dispatcher-btn-ghost text-[10px] h-7 px-2 inline-flex items-center gap-0.5"
-                            onClick={() => setAnnotate(row.name)}
+                            onClick={() => setAnnotate(row.report_name)}
                           >
                             <Pencil size={10} />
                             Annotate
@@ -115,6 +115,8 @@ export default function AnalystLibrary() {
                   <option>Recommendation</option>
                   <option>Context Note</option>
                 </select>
+                {/* NOTE: Report annotations have no report_annotations column in the schema.
+                     Save Annotation is decorative until the column is added. */}
                 <button type="button" className="dispatcher-btn-primary w-full mt-3 text-[12px]">Save Annotation</button>
                 <button type="button" className="dispatcher-btn-ghost w-full mt-2 text-[12px]" onClick={() => setAnnotate(null)}>
                   Cancel
