@@ -6,6 +6,9 @@ import SectionTitle from '../../components/dispatcher/SectionTitle'
 import DCPageHeader from '../../components/district-commander/DCPageHeader'
 import { getDistrictCommanderDistrict } from '../../utils/districtCommanderSession'
 import { DC_RESOURCE_REQUESTS, getRequestBorderColor } from '../../data/mockDistrictCommanderData'
+import { mockResourceRequests } from '../../data/mockResourceRequests'
+import { getCurrentUser } from '../../utils/authSession'
+import { useNotificationsStore } from '../../store/notificationsStore'
 
 const FILTERS = ['All', 'Pending', 'Approved', 'Declined']
 
@@ -17,11 +20,13 @@ function statusVariant(status) {
 
 export default function DCResources() {
   const district = getDistrictCommanderDistrict()
+  const addNotification = useNotificationsStore((s) => s.addNotification)
   const [filter, setFilter] = useState('All')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [requests, setRequests] = useState(() => DC_RESOURCE_REQUESTS.map((r) => ({ ...r })))
 
-  const history = DC_RESOURCE_REQUESTS.filter((r) => {
+  const history = requests.filter((r) => {
     const matchesFilter = filter === 'All' || r.status === filter.toUpperCase()
     if (!matchesFilter) return false
     
@@ -29,13 +34,39 @@ export default function DCResources() {
     const q = searchQuery.toLowerCase()
     return (
       r.id.toLowerCase().includes(q) ||
-      r.unitType.toLowerCase().includes(q) ||
+      r.unit_type.toLowerCase().includes(q) ||
       r.detail.toLowerCase().includes(q)
     )
   })
 
   const handleRequestSubmit = (data) => {
-    console.log('HQ resource request submitted:', data)
+    const currentUser = getCurrentUser()
+    const timestamp = new Date().toISOString()
+    const newRequest = {
+      id: 'REQ-' + Math.random().toString(36).slice(2, 7).toUpperCase(),
+      request_id: 'req-' + Math.random().toString(36).slice(2, 10),
+      district_id: currentUser?.district_id ?? null,
+      requested_by: currentUser?.user_id ?? null,
+      unit_type: data.unitType,
+      quantity: parseInt(data.qty, 10),
+      urgency: data.urgency,
+      justification: data.justification,
+      status: 'PENDING',
+      created_at: timestamp,
+      submitted_at: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+      detail: 'Under review at HQ',
+    }
+    mockResourceRequests.push(newRequest)
+    setRequests((prev) => [newRequest, ...prev])
+    addNotification({
+      id: 'notif-' + Math.random().toString(36).slice(2, 10),
+      type: 'RESOURCE_REQUEST',
+      target_role: 'super_admin',
+      title: 'Resource Request Submitted',
+      message: `DC requested ${newRequest.quantity}x ${newRequest.unit_type} — ${newRequest.urgency.split(' ')[0]} urgency.`,
+      timestamp,
+      read: false,
+    })
   }
 
   return (
@@ -103,9 +134,9 @@ export default function DCResources() {
                 {history.map((req) => (
                   <tr key={req.id} className="border-b border-(--border-subtle) last:border-0 hover:bg-(--bg-elevated) transition-colors">
                     <td className="py-3 font-mono font-bold text-(--accent) text-[12px] pr-4">{req.id}</td>
-                    <td className="py-3 text-[12px] text-(--text-secondary) pr-4 whitespace-nowrap">{req.submitted}</td>
-                    <td className="py-3 text-[13px] text-(--text-primary) pr-4">{req.unitType}</td>
-                    <td className="py-3 text-[13px] text-(--text-primary) pr-4">{req.qty}</td>
+                    <td className="py-3 text-[12px] text-(--text-secondary) pr-4 whitespace-nowrap">{req.submitted_at}</td>
+                    <td className="py-3 text-[13px] text-(--text-primary) pr-4">{req.unit_type}</td>
+                    <td className="py-3 text-[13px] text-(--text-primary) pr-4">{req.quantity}</td>
                     <td className="py-3 pr-4"><StatusBadge label={req.status} variant={statusVariant(req.status)} /></td>
                     <td className="py-3 text-[12px] text-(--text-secondary)">{req.detail}</td>
                   </tr>

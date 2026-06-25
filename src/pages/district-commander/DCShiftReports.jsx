@@ -7,6 +7,13 @@ import {
   DC_SHIFT_REPORTS,
   getReportStatusVariant,
 } from '../../data/mockDistrictCommanderData'
+import { mockAuditLogs } from '../../data/mockAuditLogs'
+import { getCurrentUser } from '../../utils/authSession'
+import { useNotificationsStore } from '../../store/notificationsStore'
+
+// NOTE FOR BACKEND: reports table currently lacks reviewed_by (UUID) and reviewed_at (TIMESTAMP)
+// columns per schema Section 3.13.28. These fields are written to the mock and to audit_logs.
+// Backend can add the columns later; audit_logs alone is sufficient as a fallback.
 
 const FILTERS = ['All', 'Pending Review', 'Reviewed', 'Flagged']
 
@@ -18,8 +25,13 @@ function matchFilter(status, filter) {
   return true
 }
 
+function generateId() {
+  return 'log-' + Math.random().toString(36).slice(2, 10)
+}
+
 export default function DCShiftReports() {
   const location = useLocation()
+  const addNotification = useNotificationsStore((s) => s.addNotification)
   const [reports, setReports] = useState(() => DC_SHIFT_REPORTS.map((r) => ({ ...r })))
   const [filter, setFilter] = useState('All')
   const [search, setSearch] = useState('')
@@ -50,8 +62,50 @@ export default function DCShiftReports() {
   }
 
   const updateStatus = (id, status, message) => {
-    setReports((list) => list.map((r) => (r.id === id ? { ...r, status } : r)))
+    const currentUser = getCurrentUser()
+    const timestamp = new Date().toISOString()
+    const action = status === 'REVIEWED' ? 'SHIFT_REPORT_REVIEWED' : 'SHIFT_REPORT_FLAGGED'
+
+    // Persist to mock array (mirrors DB write — backend adds reviewed_by/reviewed_at columns)
+    const target = DC_SHIFT_REPORTS.find((r) => r.id === id)
+    if (target) {
+      target.status = status
+      target.reviewed_by = currentUser?.user_id ?? null
+      target.reviewed_at = timestamp
+    }
+
+    // Update local UI state
+    setReports((list) =>
+      list.map((r) =>
+        r.id === id
+          ? { ...r, status, reviewed_by: currentUser?.user_id ?? null, reviewed_at: timestamp }
+          : r
+      )
+    )
     setPanelMessage(message)
+
+    // Write to audit log
+    mockAuditLogs.push({
+      log_id: generateId(),
+      user_id: currentUser?.user_id ?? 'unknown',
+      timestamp,
+      action,
+      module: 'DISTRICT_COMMANDER',
+      status: 'SUCCESS',
+    })
+
+    // Fire notification to OM if flagged
+    if (status === 'FLAGGED') {
+      addNotification({
+        id: generateId(),
+        type: 'SHIFT_REPORT_FLAGGED',
+        target_role: 'operations_manager',
+        title: 'Shift Report Flagged',
+        message: `Report ${id} has been flagged by District Commander for discussion.`,
+        timestamp,
+        read: false,
+      })
+    }
   }
 
   return (
@@ -113,9 +167,9 @@ export default function DCShiftReports() {
                 <td className="py-3 px-3 font-mono font-bold text-(--accent)">{row.id}</td>
                 <td className="py-3 px-3">{row.om}</td>
                 <td className="py-3 px-3 font-mono text-(--text-secondary)">{row.shift}</td>
-                <td className="py-3 px-3 text-(--text-secondary)">{row.submitted}</td>
+                <td className="py-3 px-3 text-(--text-secondary)">{row.submitted_at}</td>
                 <td className="py-3 px-3 font-mono">{row.incidents}</td>
-                <td className="py-3 px-3 font-mono">{row.avgResponse}</td>
+                <td className="py-3 px-3 font-mono">{row.avg_response_time}</td>
                 <td className="py-3 px-3">
                   <StatusBadge label={row.status} variant={getReportStatusVariant(row.status)} />
                 </td>
@@ -161,7 +215,7 @@ export default function DCShiftReports() {
                 </div>
                 <div className="text-[13px] font-semibold text-(--text-primary) mt-1">{selected.om}</div>
                 <div className="text-[12px] text-(--text-secondary)">{selected.shift}</div>
-                <div className="text-[11px] font-mono text-(--text-muted) mt-0.5">Submitted {selected.submitted}</div>
+                <div className="text-[11px] font-mono text-(--text-muted) mt-0.5">Submitted {selected.submitted_at}</div>
               </div>
               <button type="button" className="dispatcher-btn-icon shrink-0" onClick={() => setSelectedId(null)} aria-label="Close">
                 <X size={18} />
@@ -189,7 +243,7 @@ export default function DCShiftReports() {
                     ['Total Incidents', selected.metrics.incidents],
                     ['Avg Response', selected.metrics.avgResponse],
                     ['Coverage Score', selected.metrics.coverage],
-                    ['AI Acceptance', selected.metrics.aiRate],
+                    ['AI Acceptance', selected.metrics.ai_acceptance_rate],
                   ].map(([label, val]) => (
                     <div key={label} className="dispatcher-summary-stat">
                       <div className="field-label mb-0.5">{label}</div>

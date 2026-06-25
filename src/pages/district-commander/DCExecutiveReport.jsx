@@ -8,17 +8,62 @@ import {
   DC_SIGNIFICANT_EVENTS,
   DC_REPORT_ARCHIVE,
 } from '../../data/mockDistrictCommanderData'
+import { mockReports } from '../../data/mockReports'
+import { getCurrentUser } from '../../utils/authSession'
+import { useNotificationsStore } from '../../store/notificationsStore'
 
 export default function DCExecutiveReport() {
+  const addNotification = useNotificationsStore((s) => s.addNotification)
   const [tab, setTab] = useState('current')
   const [assessment, setAssessment] = useState('')
   const [recommendations, setRecommendations] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [pdfModal, setPdfModal] = useState(null)
+  const [archive, setArchive] = useState(() => DC_REPORT_ARCHIVE.map((r) => ({ ...r })))
 
   const assessmentOk = assessment.trim().length >= 50
   const recommendationsOk = recommendations.trim().length >= 50
   const canSubmit = assessmentOk && recommendationsOk && !submitted
+
+  const handleSubmit = () => {
+    const currentUser = getCurrentUser()
+    const timestamp = new Date().toISOString()
+    const report = {
+      report_id: 'rpt-' + Math.random().toString(36).slice(2, 10),
+      report_type: 'EXECUTIVE',
+      created_by: currentUser?.user_id ?? null,
+      creator_role: 'district_commander',
+      district_id: currentUser?.district_id ?? null,
+      period: '2026-05',
+      total_incidents: 312,
+      avg_response_time: 7.4,
+      coverage_score: 91,
+      dispatch_accuracy: null,
+      escalations: null,
+      content: assessment + '\n\nRecommendations:\n' + recommendations,
+      status: 'SUBMITTED',
+      created_at: timestamp,
+      submitted_at: timestamp,
+    }
+    mockReports.push(report)
+    const archiveEntry = {
+      period: 'May 2026',
+      submitted_at: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+      status: 'SUBMITTED',
+    }
+    DC_REPORT_ARCHIVE.unshift(archiveEntry)
+    setArchive((prev) => [archiveEntry, ...prev])
+    addNotification({
+      id: 'notif-' + Math.random().toString(36).slice(2, 10),
+      type: 'EXECUTIVE_REPORT_SUBMITTED',
+      target_role: 'super_admin',
+      title: 'Executive Report Submitted',
+      message: 'District Commander submitted the May 2026 executive report.',
+      timestamp,
+      read: false,
+    })
+    setSubmitted(true)
+  }
 
   return (
     <div className="portal-page">
@@ -68,7 +113,7 @@ export default function DCExecutiveReport() {
                 type="button"
                 className="dispatcher-btn-primary text-[12px] inline-flex items-center gap-1.5"
                 disabled={!canSubmit}
-                onClick={() => setSubmitted(true)}
+                onClick={handleSubmit}
               >
                 <Send size={14} />
                 Submit to Headquarters
@@ -182,7 +227,7 @@ export default function DCExecutiveReport() {
               type="button"
               className="dispatcher-btn-primary inline-flex items-center gap-2"
               disabled={!canSubmit}
-              onClick={() => setSubmitted(true)}
+              onClick={handleSubmit}
             >
               <Send size={16} />
               Submit to Headquarters
@@ -203,10 +248,10 @@ export default function DCExecutiveReport() {
               </tr>
             </thead>
             <tbody>
-              {DC_REPORT_ARCHIVE.map((row) => (
+              {archive.map((row) => (
                 <tr key={row.period} className="border-b border-(--border-subtle)">
                   <td className="py-3 px-3 font-semibold">{row.period}</td>
-                  <td className="py-3 px-3 text-(--text-secondary)">{row.submitted}</td>
+                  <td className="py-3 px-3 text-(--text-secondary)">{row.submitted_at}</td>
                   <td className="py-3 px-3">
                     <StatusBadge label={row.status} variant="resolved" />
                   </td>

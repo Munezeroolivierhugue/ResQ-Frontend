@@ -8,6 +8,9 @@ import { RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../component
 import DCPageHeader from '../../components/district-commander/DCPageHeader'
 import { getDistrictCommanderDistrict } from '../../utils/districtCommanderSession'
 import { DC_COVERAGE_SECTORS, DC_COVERAGE_RECOMMENDATIONS } from '../../data/mockDistrictCommanderData'
+import { mockReallocations } from '../../data/mockReallocations'
+import { getCurrentUser } from '../../utils/authSession'
+import { useNotificationsStore } from '../../store/notificationsStore'
 import 'leaflet/dist/leaflet.css'
 
 /** Default view before MapFitBounds runs — Nyarugenge sector cluster */
@@ -36,8 +39,35 @@ export default function DCCoverage() {
     'Sector Labels': true,
   })
   const [recs, setRecs] = useState(() => DC_COVERAGE_RECOMMENDATIONS.map((r) => ({ ...r })))
+  const addNotification = useNotificationsStore((s) => s.addNotification)
 
   const toggle = (name) => setLayers((p) => ({ ...p, [name]: !p[name] }))
+
+  const approveRec = (rec) => {
+    const currentUser = getCurrentUser()
+    const timestamp = new Date().toISOString()
+    mockReallocations.push({
+      reallocation_id: 'real-' + Math.random().toString(36).slice(2, 10),
+      vehicle_id: null,
+      from_zone: null,
+      to_zone: rec.zone || rec.text,
+      approved_by: currentUser?.user_id ?? null,
+      ai_recommended: true,
+      status: 'APPROVED',
+      reason: rec.text,
+      created_at: timestamp,
+    })
+    addNotification({
+      id: 'notif-' + Math.random().toString(36).slice(2, 10),
+      type: 'COVERAGE_RECOMMENDATION_APPROVED',
+      target_role: 'operations_manager',
+      title: 'Coverage Recommendation Approved',
+      message: rec.text,
+      timestamp,
+      read: false,
+    })
+    setRecs((list) => list.map((r) => (r.id === rec.id ? { ...r, approved: true } : r)))
+  }
 
   const atRisk = DC_COVERAGE_SECTORS.filter((s) => s.coverage < 65).length
   const overall = Math.round(
@@ -170,9 +200,7 @@ export default function DCCoverage() {
                           }
                         : undefined
                     }
-                    onClick={() =>
-                      setRecs((list) => list.map((r) => (r.id === rec.id ? { ...r, approved: true } : r)))
-                    }
+                    onClick={() => approveRec(rec)}
                   >
                     {rec.approved ? 'Approved ✓' : 'Approve for OM'}
                   </button>

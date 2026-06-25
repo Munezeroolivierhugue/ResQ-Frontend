@@ -4,6 +4,12 @@ import MetricCard from '../../components/dispatcher/MetricCard'
 import DCPageHeader from '../../components/district-commander/DCPageHeader'
 import { getDistrictCommanderDistrict } from '../../utils/districtCommanderSession'
 import { DC_UNITS, getPerformanceScoreStyle } from '../../data/mockDistrictCommanderData'
+import { mockAuditLogs } from '../../data/mockAuditLogs'
+import { getCurrentUser } from '../../utils/authSession'
+
+// NOTE FOR BACKEND: vehicles table lacks supervisor_note, note_updated_by, note_updated_at
+// per schema Section 3.13.39. Notes are also written to audit_logs as fallback.
+// Backend can add the columns later or use audit_logs as the persistent store.
 
 export default function DCUnits() {
   const district = getDistrictCommanderDistrict()
@@ -14,7 +20,30 @@ export default function DCUnits() {
   const attention = units.filter((u) => u.score < 70)
 
   const saveNote = (id) => {
-    setUnits((list) => list.map((u) => (u.id === id ? { ...u, note: draftNote } : u)))
+    const currentUser = getCurrentUser()
+    const timestamp = new Date().toISOString()
+    // Persist to mock array
+    const target = DC_UNITS.find((u) => u.id === id)
+    if (target) {
+      target.supervisor_note = draftNote
+      target.note_updated_by = currentUser?.user_id ?? null
+      target.note_updated_at = timestamp
+    }
+    setUnits((list) =>
+      list.map((u) =>
+        u.id === id
+          ? { ...u, supervisor_note: draftNote, note_updated_by: currentUser?.user_id ?? null, note_updated_at: timestamp }
+          : u
+      )
+    )
+    mockAuditLogs.push({
+      log_id: 'log-' + Math.random().toString(36).slice(2, 10),
+      user_id: currentUser?.user_id ?? 'unknown',
+      timestamp,
+      action: 'UNIT_NOTE_UPDATED: ' + id,
+      module: 'DISTRICT_COMMANDER',
+      status: 'SUCCESS',
+    })
     setNoteFor(null)
     setDraftNote('')
   }
@@ -55,10 +84,10 @@ export default function DCUnits() {
                 <Fragment key={u.id}>
                   <tr className="border-b border-(--border-subtle) group">
                     <td className="py-3 px-3 font-mono font-bold text-(--accent)">{u.id}</td>
-                    <td className="py-3 px-3">{u.type}</td>
+                    <td className="py-3 px-3">{u.unit_type}</td>
                     <td className="py-3 px-3 font-mono">{u.incidents}</td>
-                    <td className="py-3 px-3 font-mono">{u.avgResponse}</td>
-                    <td className="py-3 px-3 font-mono">{u.aiRate}%</td>
+                    <td className="py-3 px-3 font-mono">{u.avg_response_time}</td>
+                    <td className="py-3 px-3 font-mono">{u.ai_acceptance_rate}%</td>
                     <td className="py-3 px-3">
                       <span
                         className="inline-flex px-2 py-0.5 rounded text-[11px] font-bold font-mono"
@@ -74,7 +103,7 @@ export default function DCUnits() {
                         className="opacity-60 group-hover:opacity-100 text-(--text-muted) hover:text-(--accent) bg-transparent border-none cursor-pointer"
                         onClick={() => {
                           setNoteFor(u.id)
-                          setDraftNote(u.note || '')
+                          setDraftNote(u.supervisor_note || '')
                         }}
                         aria-label="Add note"
                       >
@@ -124,7 +153,7 @@ export default function DCUnits() {
               <li key={u.id}>
                 <span className="font-mono font-bold text-(--accent)">{u.id}</span> — Below performance threshold
                 {u.score < 70 ? ' — consider retraining or review' : ''}
-                {u.note ? ` · Note: ${u.note}` : ''}
+                {u.supervisor_note ? ` · Note: ${u.supervisor_note}` : ''}
               </li>
             ))}
           </ul>
