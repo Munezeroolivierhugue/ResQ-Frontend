@@ -44,6 +44,7 @@ export default function AnalystDataQuality() {
       <AnalystPageHeader
         title="Data Quality Dashboard"
         subtitle="Health, completeness, and accuracy of all data sources."
+        badge="Data Quality"
       />
 
       <div className="dispatcher-surface overflow-x-auto">
