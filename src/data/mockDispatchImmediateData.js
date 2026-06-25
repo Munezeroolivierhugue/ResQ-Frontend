@@ -1,4 +1,5 @@
-import { mockIncidents, mockUnits } from './mockData'
+import { mockIncidents } from './mockIncidents'
+import { mockVehicles } from './mockVehicles'
 
 export const DEFAULT_IMMEDIATE_INCIDENT_ID = 'INC-2409'
 
@@ -12,15 +13,35 @@ export const mockImmediateAssessment = {
   confidence: 'HIGH CONFIDENCE',
 }
 
+const getExtendedUnit = (id, overrides) => {
+  const v = mockVehicles.find(u => u.id === id);
+  return {
+    ...v,
+    ...overrides
+  };
+};
+
 export const mockNearestUnits = [
-  { id: 'P-07', type: 'Police Van', distance: '1.2 km', eta: '~3 min', status: 'AVAILABLE' },
-  { id: 'POL-12', type: 'Police', distance: '2.4 km', eta: '~5 min', status: 'AVAILABLE' },
-  { id: 'AMB-11', type: 'Ambulance', distance: '3.1 km', eta: '~7 min', status: 'STANDBY' },
-]
+  getExtendedUnit('P-07', {
+    distance: '1.2 km',
+    eta: '~3 min',
+    status: 'AVAILABLE',
+  }),
+  getExtendedUnit('POL-12', {
+    distance: '2.4 km',
+    eta: '~5 min',
+    status: 'AVAILABLE',
+  }),
+  getExtendedUnit('AMB-11', {
+    distance: '3.1 km',
+    eta: '~7 min',
+    status: 'STANDBY',
+  })
+];
 
 export function getImmediateIncident(incidentId) {
-  const base = mockIncidents.find((i) => i.id === incidentId)
-    || mockIncidents.find((i) => i.id === DEFAULT_IMMEDIATE_INCIDENT_ID)
+  const base = mockIncidents.find((i) => i.incident_ref === incidentId || i.id === incidentId)
+    || mockIncidents.find((i) => i.incident_ref === DEFAULT_IMMEDIATE_INCIDENT_ID || i.id === DEFAULT_IMMEDIATE_INCIDENT_ID)
   if (!base) return null
   return {
     ...base,
@@ -36,11 +57,11 @@ export function getImmediateIncident(incidentId) {
 export function getCriticalUnassignedIncident() {
   return mockIncidents.find(
     (i) => i.severity === 'critical' && !i.unit && i.status !== 'resolved',
-  ) || mockIncidents.find((i) => i.id === DEFAULT_IMMEDIATE_INCIDENT_ID)
+  ) || mockIncidents.find((i) => i.incident_ref === DEFAULT_IMMEDIATE_INCIDENT_ID || i.id === DEFAULT_IMMEDIATE_INCIDENT_ID)
 }
 
 export function getAvailableUnitsForMap() {
-  return mockUnits.filter((u) => u.status === 'available' || u.status === 'idle')
+  return mockVehicles.filter((u) => u.status === 'available' || u.status === 'idle')
 }
 
 /** Simulated live call transcript for keyword-based type detection. */
