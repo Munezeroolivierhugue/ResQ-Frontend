@@ -1,25 +1,32 @@
 import { useLocation, Link } from 'react-router-dom'
 import {
   Map, Zap, Bot, Radio, ScrollText, FileCheck, ClipboardList,
-  Settings, HelpCircle, LogOut, Siren, X,
+  Settings, HelpCircle, LogOut, Siren, X, FileClock, PhoneMissed,
 } from 'lucide-react'
 import SidebarToggle from './SidebarToggle'
 import { useSidebarClasses } from '../../hooks/useSidebarClasses'
+import { mockIncidents } from '../../data/mockIncidents'
+import { mockMissedCalls } from '../../data/mockMissedCalls'
+
+const pendingReportsCount = mockIncidents.filter((i) => i.status === 'PENDING_REPORT').length
+const missedCallsCount = mockMissedCalls.filter((c) => c.status === 'pending').length
 
 const NAV_ITEMS = [
-  { icon: Map, label: 'Live Dispatch Map', href: '/dispatcher' },
-  { icon: Zap, label: 'New Incident', href: '/dispatcher/new-incident' },
-  { icon: Bot, label: 'AI Dispatch Engine', href: '/dispatcher/ai-engine' },
-  { icon: Radio, label: 'Active Incident', href: '/dispatcher/active-incident' },
-  { icon: ScrollText, label: 'Incident History', href: '/dispatcher/history' },
-  { icon: FileCheck, label: 'Incident Report', href: '/dispatcher/incident-report' },
-  { icon: ClipboardList, label: 'Shift Handover', href: '/dispatcher/shift-handover' },
+  { icon: Map,          label: 'Live Dispatch Map', href: '/dispatcher' },
+  { icon: Zap,          label: 'New Incident',       href: '/dispatcher/new-incident' },
+  { icon: Bot,          label: 'AI Dispatch Engine', href: '/dispatcher/ai-engine' },
+  { icon: Radio,        label: 'Active Incident',    href: '/dispatcher/active-incident' },
+  { icon: ScrollText,   label: 'Incident History',   href: '/dispatcher/history' },
+  { icon: FileCheck,    label: 'Incident Report',    href: '/dispatcher/incident-report' },
+  { icon: ClipboardList,label: 'Shift Handover',     href: '/dispatcher/shift-handover' },
+  { icon: FileClock,    label: 'Pending Reports',    href: '/dispatcher/pending-reports', badge: pendingReportsCount },
+  { icon: PhoneMissed,  label: 'Missed Calls',       href: '/dispatcher/missed-calls',   badge: missedCallsCount },
 ]
 
 const BOTTOM_ITEMS = [
-  { icon: Settings, label: 'Settings', href: '/dispatcher/settings' },
-  { icon: HelpCircle, label: 'Help', href: '/dispatcher/help' },
-  { icon: LogOut, label: 'Logout', href: '/login', danger: true },
+  { icon: Settings,   label: 'Settings', href: '/dispatcher/settings' },
+  { icon: HelpCircle, label: 'Help',     href: '/dispatcher/help' },
+  { icon: LogOut,     label: 'Logout',   href: '/login', danger: true },
 ]
 
 function NavItem({ item, isActive, onClose }) {
@@ -40,6 +47,23 @@ function NavItem({ item, isActive, onClose }) {
       >
         <span className="sidebar-icon"><Icon size={18} /></span>
         <span className="sidebar-label">{item.label}</span>
+        {item.badge > 0 && (
+          <span
+            className="ml-auto shrink-0"
+            style={{
+              background: 'var(--status-critical)',
+              color: '#fff',
+              fontSize: '9px',
+              fontWeight: 700,
+              padding: '1px 6px',
+              borderRadius: '10px',
+              fontFamily: 'var(--font-display)',
+              lineHeight: '16px',
+            }}
+          >
+            {item.badge}
+          </span>
+        )}
       </Link>
     </div>
   )
