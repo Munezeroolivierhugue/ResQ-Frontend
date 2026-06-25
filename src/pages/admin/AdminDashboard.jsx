@@ -87,7 +87,7 @@ export default function AdminDashboard() {
                 <StatusBadge label={int.status} variant={int.status === 'OPERATIONAL' ? 'resolved' : 'handover'} />
               </div>
               <div className="font-mono text-[11px] text-(--text-muted)">
-                Last sync: {int.sync} · Response: {int.ms}
+                Last sync: {int.last_sync} · Response: {int.ms}
               </div>
               {int.error && <p className="text-[11px] m-0 mt-1" style={{ color: 'var(--status-medium)' }}>{int.error}</p>}
               <button type="button" className="dispatcher-btn-ghost text-[11px] h-7 mt-2 w-full">Test Connection</button>
@@ -107,7 +107,7 @@ export default function AdminDashboard() {
           <div className="dispatcher-surface p-3 max-h-[380px] overflow-y-auto">
             {ADMIN_ACTIVITY_LOG.map((e) => (
               <div key={e.time + e.action} className="flex gap-3 py-2 border-b border-(--border-subtle) last:border-0">
-                <span className="w-2 h-2 rounded-full shrink-0 mt-1.5" style={{ background: logLevelColor(e.level) }} />
+                <span className="w-2 h-2 rounded-full shrink-0 mt-1.5" style={{ background: logLevelColor(e.status) }} />
                 <div className="flex-1 min-w-0">
                   <div className="text-[13px] text-(--text-primary)">{e.action}</div>
                   <div className="text-[11px] text-(--text-secondary) mt-0.5">{e.user}</div>

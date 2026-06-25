@@ -16,13 +16,34 @@ function statusVariant(s) {
   return 'critical'
 }
 
+function showToast(setToast, msg) {
+  setToast(msg)
+  setTimeout(() => setToast(null), 2500)
+}
+
 export default function AdminUsers() {
   const navigate = useNavigate()
+  const [users, setUsers] = useState(() => ADMIN_USERS.map((u) => ({ ...u })))
   const [roleFilter, setRoleFilter] = useState('All Roles')
   const [statusFilter, setStatusFilter] = useState('All')
+  const [toast, setToast] = useState(null)
+
+  function handleActivate(user_id) {
+    setUsers((prev) => prev.map((u) => u.user_id === user_id ? { ...u, status: 'ACTIVE' } : u))
+    showToast(setToast, 'User activated')
+  }
+
+  function handleAction(msg) {
+    showToast(setToast, msg)
+  }
 
   return (
     <div className="portal-page flex flex-col gap-5 min-w-[1024px]">
+      {toast && (
+        <div className="fixed bottom-5 right-5 z-[9999] dispatcher-surface px-4 py-2.5 text-[13px] font-medium shadow-lg" style={{ borderLeft: '3px solid var(--accent)' }}>
+          {toast}
+        </div>
+      )}
       <AdminPageHeader
         title="User Management"
         subtitle="All accounts, roles, and access control."
@@ -100,11 +121,11 @@ export default function AdminUsers() {
             </tr>
           </thead>
           <tbody>
-            {ADMIN_USERS.map((u) => {
+            {users.map((u) => {
               const rb = adminRoleBadge(u.role)
               return (
                 <tr
-                  key={u.email}
+                  key={u.user_id}
                   className="border-b border-(--border-subtle) dispatcher-table-row group"
                   style={{
                     background: u.tint === 'medium' ? 'var(--status-medium-bg)' : u.tint === 'critical' ? 'var(--status-critical-bg)' : undefined,
@@ -134,7 +155,7 @@ export default function AdminUsers() {
                   <td className="p-3">
                     <StatusBadge label={u.status} variant={statusVariant(u.status)} />
                   </td>
-                  <td className="p-3 font-mono text-(--text-muted)">{u.lastLogin}</td>
+                  <td className="p-3 font-mono text-(--text-muted)">{u.last_login}</td>
                   <td className="p-3">
                     <span className="flex items-center gap-1 text-[11px]">
                       <span
@@ -145,13 +166,16 @@ export default function AdminUsers() {
                     </span>
                   </td>
                   <td className="p-3">
-                    {u.mfa ? <ShieldCheck size={16} style={{ color: 'var(--status-low)' }} /> : <ShieldX size={16} style={{ color: 'var(--status-critical)' }} />}
+                    {u.mfa_enabled ? <ShieldCheck size={16} style={{ color: 'var(--status-low)' }} /> : <ShieldX size={16} style={{ color: 'var(--status-critical)' }} />}
                   </td>
                   <td className="p-3">
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button type="button" className="dispatcher-btn-icon" aria-label="Edit"><Pencil size={14} /></button>
-                      <button type="button" className="dispatcher-btn-icon" aria-label="Suspend"><UserX size={14} /></button>
-                      <button type="button" className="dispatcher-btn-icon" aria-label="Reset password"><Key size={14} /></button>
+                      {u.status === 'PENDING' && (
+                        <button type="button" className="dispatcher-btn-ghost text-[10px] h-7 px-2" style={{ color: 'var(--status-low)' }} onClick={() => handleActivate(u.user_id)}>Activate</button>
+                      )}
+                      <button type="button" className="dispatcher-btn-icon" aria-label="Edit" onClick={() => handleAction('Action recorded')}><Pencil size={14} /></button>
+                      <button type="button" className="dispatcher-btn-icon" aria-label="Suspend" onClick={() => handleAction('Action recorded')}><UserX size={14} /></button>
+                      <button type="button" className="dispatcher-btn-icon" aria-label="Reset password" onClick={() => handleAction('Action recorded')}><Key size={14} /></button>
                     </div>
                   </td>
                 </tr>
