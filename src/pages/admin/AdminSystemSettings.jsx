@@ -1,15 +1,14 @@
 import { useState } from 'react'
-import { useParams, NavLink, Navigate } from 'react-router-dom'
-import { Settings, Bell, Database, Save, Megaphone } from 'lucide-react'
+import { useParams, Navigate } from 'react-router-dom'
+import { Settings, Database, Save, Megaphone } from 'lucide-react'
 import SettingsNavLayout from '../../components/settings/SettingsNavLayout'
-import { SettingsToggleRow, SettingsGroup } from '../../components/settings/SettingsToggle'
+import { SettingsGroup } from '../../components/settings/SettingsToggle'
 
 const NAV = [
-  { id: 'general', label: 'General', icon: Settings },
-  { id: 'notifications', label: 'Notifications', icon: Bell },
-  { id: 'retention', label: 'Data Retention', icon: Database },
-  { id: 'backup', label: 'Backup', icon: Save },
-  { id: 'announcements', label: 'Announcements', icon: Megaphone },
+  { id: 'general',       label: 'General',        icon: Settings  },
+  { id: 'retention',     label: 'Data Retention', icon: Database  },
+  { id: 'backup',        label: 'Backup',         icon: Save      },
+  { id: 'announcements', label: 'Announcements',  icon: Megaphone },
 ]
 
 const RETENTION = [
@@ -65,23 +64,6 @@ export default function AdminSystemSettings() {
         </SettingsGroup>
       )}
 
-      {section === 'notifications' && (
-        <SettingsGroup title="System-Wide Alert Settings">
-          <div className="text-[11px] font-bold text-(--text-muted) uppercase mb-2">Critical Alerts</div>
-          <SettingsToggleRow label="Officer Needs Assistance — All channels" checked onChange={() => {}} />
-          <SettingsToggleRow label="AI Model Below Threshold — Email + Dashboard" checked onChange={() => {}} />
-          <SettingsToggleRow label="Integration Disconnected — SMS + Email + Dashboard" checked onChange={() => {}} />
-          <div className="text-[11px] font-bold text-(--text-muted) uppercase mb-2 mt-4">Operational Alerts</div>
-          <SettingsToggleRow label="Coverage Below Target — Dashboard" checked onChange={() => {}} />
-          <SettingsToggleRow label="Dispatch Queue Overload — Dashboard" checked onChange={() => {}} />
-          <SettingsToggleRow label="Scheduled Job Failed — Email" checked onChange={() => {}} />
-          <label className="dispatcher-field mt-4">
-            <span className="text-[12px]">Unanswered call escalation after</span>
-            <select className="dispatcher-input h-10 w-48" defaultValue="90 seconds"><option>90 seconds</option></select>
-          </label>
-        </SettingsGroup>
-      )}
-
       {section === 'retention' && (
         <SettingsGroup title="Data Retention Policies">
           <p className="text-[12px] text-(--text-muted) m-0 mb-4">How long each data type is retained for compliance.</p>
@@ -114,9 +96,9 @@ export default function AdminSystemSettings() {
       {section === 'backup' && (
         <SettingsGroup title="Backup Management">
           {[
-            { type: 'Daily Backup', last: 'Today 13:00', size: '2.4 GB', next: 'Tomorrow 13:00', loc: 'Cloud Storage', status: 'COMPLETED' },
-            { type: 'Weekly Backup', last: 'May 25 03:00', size: '18.7 GB', next: 'Jun 1 03:00', loc: 'Cloud + Local', status: 'COMPLETED' },
-            { type: 'Monthly Archive', last: 'May 1 02:00', size: '84.2 GB', next: 'Jun 1 02:00', loc: 'Offsite Archive', status: 'COMPLETED' },
+            { type: 'Daily Backup', last: 'Today 13:00', size_mb: 2400, next: 'Tomorrow 13:00', location: 'Cloud Storage', status: 'COMPLETED' },
+            { type: 'Weekly Backup', last: 'May 25 03:00', size_mb: 18700, next: 'Jun 1 03:00', location: 'Cloud + Local', status: 'COMPLETED' },
+            { type: 'Monthly Archive', last: 'May 1 02:00', size_mb: 84200, next: 'Jun 1 02:00', location: 'Offsite Archive', status: 'COMPLETED' },
           ].map((b) => (
             <div key={b.type} className="dispatcher-surface p-4 mb-3">
               <div className="flex justify-between mb-2">
@@ -124,9 +106,9 @@ export default function AdminSystemSettings() {
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={{ background: 'var(--status-low-bg)', color: 'var(--status-low)' }}>{b.status}</span>
               </div>
               <div className="grid grid-cols-2 gap-2 text-[12px] font-mono text-(--text-secondary) mb-3">
-                <span>Last: {b.last} · {b.size}</span>
+                <span>Last: {b.last} · {b.size_mb} MB</span>
                 <span>Next: {b.next}</span>
-                <span className="col-span-2">Location: {b.loc}</span>
+                <span className="col-span-2">Location: {b.location}</span>
               </div>
               <div className="flex gap-2">
                 <button type="button" className="dispatcher-btn-ghost text-[11px] h-8 flex-1">Run Now</button>

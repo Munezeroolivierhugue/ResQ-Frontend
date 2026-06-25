@@ -17,7 +17,8 @@ import {
   Sparkles,
   Building2,
 } from 'lucide-react'
-import { ASSIGNED_ROLES, mockInvitedUsers, ORGANIZATIONS } from '../../data/mockAuthData'
+import { ASSIGNED_ROLES, mockInvitedUsers } from '../../data/mockAuthData'
+import { mockAgencies } from '../../data/mockAgencies'
 import FieldLabel from '../../components/ui/FieldLabel'
 
 const RECENT_LIMIT = 5
@@ -62,17 +63,22 @@ function getInitials(name) {
 
 function getAvatarColor(name) {
   const colors = [
-    '#2196C8', '#879D1F', '#9B4DCA', '#E8354A',
-    '#F07820', '#3DAA6A', '#D4A017', '#5A6478',
+    'var(--accent)',
+    'var(--status-critical)',
+    'var(--status-medium)',
+    'var(--status-low)',
+    'var(--status-high)',
   ]
   let hash = 0
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
   return colors[Math.abs(hash) % colors.length]
 }
 
+const DEFAULT_AGENCY_ID = mockAgencies.find((a) => a.is_default)?.agency_id || mockAgencies[0]?.agency_id
+
 function RecentProvisionedPanel() {
   const recent = [...mockInvitedUsers]
-    .sort((a, b) => (b.invitedAt > a.invitedAt ? 1 : -1))
+    .sort((a, b) => (b.created_at > a.created_at ? 1 : -1))
     .slice(0, RECENT_LIMIT)
 
   if (recent.length === 0) {
@@ -104,17 +110,17 @@ function RecentProvisionedPanel() {
         {recent.map((u) => {
           const roleLabel = ASSIGNED_ROLES.find((r) => r.value === u.role)?.label || u.role
           const isActive = u.status === 'active'
-          const color = getAvatarColor(u.fullName)
+          const color = getAvatarColor(u.full_name)
           return (
             <div key={u.id} className="aiu-recent-row">
               <div
                 className="aiu-avatar"
-                style={{ background: color + '22', color }}
+                style={{ background: `color-mix(in srgb, ${color} 15%, transparent)`, color }}
               >
-                {getInitials(u.fullName)}
+                {getInitials(u.full_name)}
               </div>
               <div className="aiu-recent-info">
-                <p className="aiu-recent-name">{u.fullName}</p>
+                <p className="aiu-recent-name">{u.full_name}</p>
                 <p className="aiu-recent-email">{u.email}</p>
               </div>
               <div className="aiu-recent-badges">
@@ -140,7 +146,7 @@ export default function AdminInviteUser() {
     fullName: '',
     email: '',
     phone: '',
-    organization: ORGANIZATIONS[0],
+    agency_id: DEFAULT_AGENCY_ID,
     role: 'dispatcher',
     district: '',
   })
@@ -175,14 +181,14 @@ export default function AdminInviteUser() {
       fullName: form.fullName,
       email: form.email,
       phone: form.phone,
+      agency_id: form.agency_id,
       role: form.role,
       ...(showDistrictField ? { district: form.district } : {}),
     }
-    console.log('Invitation payload:', payload)
     sessionStorage.setItem('resq-invite-email', form.email)
     sessionStorage.setItem('resq-invite-name', form.fullName)
     sessionStorage.setItem('resq-invite-phone', form.phone)
-    sessionStorage.setItem('resq-invite-org', form.organization)
+    sessionStorage.setItem('resq-invite-agency-id', form.agency_id)
     sessionStorage.setItem('resq-invite-role', form.role)
     sessionStorage.setItem('resq-demo-role', form.role)
     if (payload.district) {
@@ -346,21 +352,25 @@ export default function AdminInviteUser() {
                   </div>
                 </label>
 
-                {/* Organization */}
+                {/* Agency */}
                 <label className="aiu-field">
-                  <span className="aiu-field-label">Organization</span>
+                  <span className="aiu-field-label">Agency</span>
                   <div className="aiu-input-wrap">
                     <Building2 size={15} className="aiu-input-icon" />
                     <select
                       className="aiu-input aiu-input--icon aiu-select"
-                      value={form.organization}
-                      onChange={(e) => set('organization', e.target.value)}
+                      value={form.agency_id}
+                      disabled={form.role !== 'field_responder'}
+                      onChange={(e) => set('agency_id', e.target.value)}
                     >
-                      {ORGANIZATIONS.map((o) => (
-                        <option key={o} value={o}>{o}</option>
+                      {mockAgencies.map((a) => (
+                        <option key={a.agency_id} value={a.agency_id}>{a.name}</option>
                       ))}
                     </select>
                   </div>
+                  {form.role !== 'field_responder' && (
+                    <p className="aiu-field-hint">Locked to Rwanda National Police for this role.</p>
+                  )}
                 </label>
 
                 {/* Role */}
