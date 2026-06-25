@@ -1,22 +1,29 @@
 import { useState } from 'react'
 import { Search, ChevronDown, User, LogOut, Settings, Menu } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { logout } from '../../utils/authSession'
 import NotificationsDropdown from '../dispatcher/NotificationsDropdown'
 
 export default function Navbar({
-  user = { name: 'Jean Bosco', role: 'DISPATCHER' },
+  user = { name: 'User', role: '' },
   onMenuClick,
   portalLabel = 'Dispatcher Portal',
   profileHref = '/dispatcher/settings/profile',
   settingsHref = '/dispatcher/settings',
   avatarVariant = 'default',
 }) {
+  const navigate = useNavigate()
   const isSuperAdmin = avatarVariant === 'superAdmin'
   const initials = isSuperAdmin
     ? 'SA'
     : user.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
   const [showNotif, setShowNotif] = useState(false)
   const [showUser, setShowUser] = useState(false)
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login', { replace: true })
+  }
 
   return (
     <header className="h-15 border-b border-(--border) flex items-center px-5 gap-4 sticky top-0 z-[9999] shrink-0 bg-surface">
@@ -93,18 +100,24 @@ export default function Navbar({
 
           {showUser && (
             <div className="animate-fade-in-up absolute right-0 top-[46px] w-44 bg-(--bg-elevated) border border-(--border) rounded-[10px] z-[200] overflow-hidden shadow-[var(--shadow-dropdown)]">
-              {[
-                { icon: <User size={14} />, label: 'My Profile', href: profileHref },
-                { icon: <Settings size={14} />, label: 'Settings', href: settingsHref },
-                { icon: <LogOut size={14} />, label: 'Logout', href: '/login', danger: true },
-              ].map((item) => (
-                <Link key={item.label} to={item.href}
-                  className="flex items-center gap-2.25 px-3.5 py-2.5 text-[13px] font-medium no-underline hover:bg-(--bg-surface) transition-colors"
-                  style={{ color: item.danger ? 'var(--status-critical)' : 'var(--text-primary)' }}
-                >
-                  {item.icon} {item.label}
-                </Link>
-              ))}
+              <Link key="profile" to={profileHref}
+                className="flex items-center gap-2.25 px-3.5 py-2.5 text-[13px] font-medium no-underline hover:bg-(--bg-surface) transition-colors text-(--text-primary)"
+              >
+                <User size={14} /> My Profile
+              </Link>
+              <Link key="settings" to={settingsHref}
+                className="flex items-center gap-2.25 px-3.5 py-2.5 text-[13px] font-medium no-underline hover:bg-(--bg-surface) transition-colors text-(--text-primary)"
+              >
+                <Settings size={14} /> Settings
+              </Link>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full flex items-center gap-2.25 px-3.5 py-2.5 text-[13px] font-medium bg-transparent border-none cursor-pointer hover:bg-(--bg-surface) transition-colors"
+                style={{ color: 'var(--status-critical)' }}
+              >
+                <LogOut size={14} /> Logout
+              </button>
             </div>
           )}
         </div>

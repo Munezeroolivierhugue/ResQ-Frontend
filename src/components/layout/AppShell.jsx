@@ -2,11 +2,14 @@ import { useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import Navbar from './Navbar'
 import Sidebar from './Sidebar'
+import { getCurrentUser } from '../../utils/authSession'
 
-export default function AppShell({ user }) {
+export default function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const location = useLocation()
   const isLiveDispatchMap = location.pathname === '/dispatcher'
+  const cu = getCurrentUser()
+  const navUser = { name: cu?.full_name || 'Dispatcher', role: 'DISPATCHER' }
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -14,7 +17,7 @@ export default function AppShell({ user }) {
       <Sidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
       <div className="flex flex-col flex-1 overflow-hidden min-w-0">
         <Navbar
-          user={user}
+          user={navUser}
           onMenuClick={() => setMobileOpen(v => !v)}
           portalLabel="Dispatcher Portal"
           profileHref="/dispatcher/settings/profile"
