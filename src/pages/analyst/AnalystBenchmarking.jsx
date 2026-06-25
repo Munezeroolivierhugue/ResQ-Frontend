@@ -51,6 +51,7 @@ export default function AnalystBenchmarking() {
       <AnalystPageHeader
         title="Cross-District Benchmarking"
         subtitle="Performance comparison across all Rwanda districts."
+        badge="Benchmarking"
       />
 
       <div className="flex flex-wrap gap-2 items-center">
