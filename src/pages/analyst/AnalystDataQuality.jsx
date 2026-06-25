@@ -2,6 +2,9 @@ import { useState, Fragment } from 'react'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell } from 'recharts'
 import AnalystPageHeader from '../../components/analyst/AnalystPageHeader'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
+import SettingsToast from '../../components/settings/SettingsToast'
+import { getCurrentUser } from '../../utils/authSession'
+import { mockAuditLogs } from '../../data/mockAuditLogs'
 import {
   ANALYST_DQ_TABLE,
   ANALYST_MISSED_FIELDS,
@@ -38,6 +41,21 @@ export default function AnalystDataQuality() {
     override: 30,
     coverage: 75,
   })
+  const [toast, setToast] = useState(false)
+
+  function saveThresholds() {
+    const currentUser = getCurrentUser()
+    mockAuditLogs.push({
+      log_id: Math.random().toString(36).slice(2, 10),
+      user_id: currentUser?.user_id ?? null,
+      timestamp: new Date().toISOString(),
+      action: 'DQ_THRESHOLDS_UPDATED: ' + JSON.stringify(thresholds),
+      module: 'ANALYST',
+      status: 'SUCCESS',
+    })
+    setToast(true)
+    setTimeout(() => setToast(false), 3000)
+  }
 
   return (
     <div className="portal-page flex flex-col gap-5 min-w-[1024px]">
@@ -68,10 +86,10 @@ export default function AnalystDataQuality() {
                   onClick={() => row.detail && setExpanded(expanded === row.source ? '' : row.source)}
                 >
                   <td className="p-3 font-medium">{row.source}</td>
-                  <td className="p-3"><PctBar value={row.completeness} /></td>
-                  <td className="p-3"><PctBar value={row.accuracy} /></td>
-                  <td className="p-3 font-mono">{row.freshness}</td>
-                  <td className="p-3 text-center font-mono">{row.gaps}</td>
+                  <td className="p-3"><PctBar value={row.completeness_pct} /></td>
+                  <td className="p-3"><PctBar value={row.accuracy_pct} /></td>
+                  <td className="p-3 font-mono">{row.last_updated_at}</td>
+                  <td className="p-3 text-center font-mono">{row.gap_count_30d}</td>
                   <td className="p-3">
                     <StatusBadge label={row.status} variant={sourceStatusVariant(row.status)} />
                   </td>
@@ -110,7 +128,7 @@ export default function AnalystDataQuality() {
             <BarChart data={ANALYST_MISSED_FIELDS} layout="vertical" margin={{ left: 120 }}>
               <XAxis type="number" domain={[0, 35]} hide />
               <YAxis type="category" dataKey="field" width={115} tick={{ fontSize: 10 }} />
-              <Bar dataKey="pct" fill="var(--status-medium)" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="skip_rate_pct" fill="var(--status-medium)" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
           <h4 className="text-[12px] font-semibold mt-4 mb-2">Units with Lowest Report Completion</h4>
@@ -125,10 +143,10 @@ export default function AnalystDataQuality() {
             </thead>
             <tbody>
               {ANALYST_LOW_UNITS.map((u) => (
-                <tr key={u.unit} className="border-t border-(--border-subtle)">
-                  <td className="py-2 font-mono">{u.unit}</td>
+                <tr key={u.vehicle_id} className="border-t border-(--border-subtle)">
+                  <td className="py-2 font-mono">{u.vehicle_id}</td>
                   <td className="py-2">
-                    {u.officer}
+                    {u.officer_name}
                     <span
                       className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded"
                       style={{ background: 'var(--status-medium-bg)', color: 'var(--status-medium)' }}
@@ -136,8 +154,8 @@ export default function AnalystDataQuality() {
                       Training Recommended
                     </span>
                   </td>
-                  <td className="py-2 text-center font-mono">{u.rate}</td>
-                  <td className="py-2 text-(--text-secondary)">{u.missing}</td>
+                  <td className="py-2 text-center font-mono">{u.report_completion_rate}</td>
+                  <td className="py-2 text-(--text-secondary)">{u.missing_fields}</td>
                 </tr>
               ))}
             </tbody>
@@ -215,9 +233,10 @@ export default function AnalystDataQuality() {
           ))}
         </div>
         <div className="flex justify-end mt-4">
-          <button type="button" className="dispatcher-btn-primary">Save Thresholds</button>
+          <button type="button" className="dispatcher-btn-primary" onClick={saveThresholds}>Save Thresholds</button>
         </div>
       </div>
+      <SettingsToast show={toast} message="Thresholds saved." />
     </div>
   )
 }

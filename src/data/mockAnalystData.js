@@ -12,39 +12,39 @@ export const ANALYST_RWANDA_DISTRICTS = [
 
 export const ANALYST_DATA_SOURCES = [
   {
-    name: 'Incident Database',
+    source_name: 'Incident Database',
     status: 'HEALTHY',
-    completeness: 99,
-    lastUpdate: '30s ago',
+    completeness_pct: 99,
+    last_updated_at: '30s ago',
     border: 'var(--status-low)',
   },
   {
-    name: 'GPS Fleet Tracker',
+    source_name: 'GPS Fleet Tracker',
     status: 'HEALTHY',
-    completeness: 97,
-    lastUpdate: '45s ago',
+    completeness_pct: 97,
+    last_updated_at: '45s ago',
     border: 'var(--status-low)',
   },
   {
-    name: 'Rwanda Meteo',
+    source_name: 'Rwanda Meteo',
     status: 'DEGRADED',
-    completeness: 71,
-    lastUpdate: '18m ago',
+    completeness_pct: 71,
+    last_updated_at: '18m ago',
     border: 'var(--status-medium)',
     warning: 'Partial outage — 3 weather stations offline',
   },
   {
-    name: 'KCC Traffic Data',
+    source_name: 'KCC Traffic Data',
     status: 'HEALTHY',
-    completeness: 94,
-    lastUpdate: '2m ago',
+    completeness_pct: 94,
+    last_updated_at: '2m ago',
     border: 'var(--status-low)',
   },
   {
-    name: 'RURA Hospital',
+    source_name: 'RURA Hospital',
     status: 'HEALTHY',
-    completeness: 100,
-    lastUpdate: '5m ago',
+    completeness_pct: 100,
+    last_updated_at: '5m ago',
     border: 'var(--status-low)',
   },
 ]
@@ -52,38 +52,38 @@ export const ANALYST_DATA_SOURCES = [
 export const ANALYST_ANOMALIES = [
   {
     severity: 'HIGH',
-    type: 'INCIDENT SPIKE',
-    ago: '2h ago',
+    alert_type: 'INCIDENT SPIKE',
+    created_at: '2h ago',
     description: 'Robbery incidents in Remera sector up 40% — last 3 days vs 30-day avg',
     detail: 'Gasabo District · ±3.2σ deviation',
-    sigma: '±3.2σ',
+    deviation_sigma: '±3.2σ',
     link: '/analyst/patterns',
   },
   {
     severity: 'MEDIUM',
-    type: 'DISPATCHER BEHAVIOR',
-    ago: '5h ago',
+    alert_type: 'DISPATCHER BEHAVIOR',
+    created_at: '5h ago',
     description: 'Dispatcher Aline M. override rate tripled this week (18% → 54%)',
     detail: 'System-wide · ±2.8σ deviation',
-    sigma: '±2.8σ',
+    deviation_sigma: '±2.8σ',
     link: '/analyst/models',
   },
   {
     severity: 'MEDIUM',
-    type: 'UNIT PERFORMANCE',
-    ago: '8h ago',
+    alert_type: 'UNIT PERFORMANCE',
+    created_at: '8h ago',
     description: 'Unit P-07 avg response time increased 3.1 minutes with no assignment change',
     detail: 'Nyarugenge · ±2.4σ deviation',
-    sigma: '±2.4σ',
+    deviation_sigma: '±2.4σ',
     link: '/analyst/benchmarking',
   },
   {
     severity: 'LOW',
-    type: 'MODEL DRIFT',
-    ago: '14h ago',
+    alert_type: 'MODEL DRIFT',
+    created_at: '14h ago',
     description: 'Dispatch model accuracy trending down — 91% → 86% over 14 days',
     detail: 'AI System · Approaching threshold',
-    sigma: '±1.9σ',
+    deviation_sigma: '±1.9σ',
     link: '/analyst/models',
   },
 ]
@@ -123,6 +123,10 @@ export const ANALYST_TOP_HOTSPOTS = [
   { rank: 8, zone: 'Kimisagara', count: 31, trend: 'down', change: '-14%' },
 ]
 
+/**
+ * @ui ANALYST_HOUR_DATA, ANALYST_DAY_DATA, ANALYST_WEEK_OF_MONTH, ANALYST_MONTH_DATA
+ * Temporal aggregations — not DB columns, computed display values.
+ */
 export const ANALYST_HOUR_DATA = Array.from({ length: 24 }, (_, h) => ({
   h: String(h),
   n: [2, 3, 4, 5, 8, 12, 18, 22, 20, 14, 10, 16, 20, 18, 12, 10, 14, 18, 24, 28, 22, 16, 10, 6][h],
@@ -151,6 +155,10 @@ export const ANALYST_MONTH_DATA = [
   { m: 'Sep', n: 330 }, { m: 'Oct', n: 350 }, { m: 'Nov', n: 420 }, { m: 'Dec', n: 390 },
 ]
 
+/**
+ * @ui ANALYST_CORRELATION_MATRIX, ANALYST_CORRELATION_VARS, ANALYST_SCATTER_DATA
+ * Model feature importance / correlation display — not DB columns.
+ */
 export const ANALYST_CORRELATION_VARS = [
   'Rainfall', 'Day of Week', 'Time of Day', 'Market Day', 'School Holiday', 'Unit Count',
 ]
@@ -179,55 +187,59 @@ export const ANALYST_SCATTER_DATA = Array.from({ length: 24 }, (_, i) => ({
 
 export const ANALYST_AI_MODELS = [
   {
-    id: 'dispatch',
+    model_id: 'dispatch',
     name: 'DISPATCH BRAIN',
     status: 'MONITORING',
     statusVariant: 'handover',
     border: 'var(--status-medium)',
-    accuracy: 86,
+    accuracy_pct: 86,
     accuracyColor: 'var(--status-medium)',
     trend: '↓ from 91%',
-    training: '48,291 incidents',
-    predictions: 847,
+    training_data_size: '48,291 incidents',
+    predictions_today: 847,
     acceptance: '84%',
-    drift: 8.2,
+    drift_pct: 8.2,
     driftLabel: 'Retrain soon',
     retrainDisabled: false,
   },
   {
-    id: 'prediction',
+    model_id: 'prediction',
     name: 'PREDICTION ENGINE',
     status: 'HEALTHY',
     statusVariant: 'resolved',
     border: 'var(--status-low)',
-    accuracy: 91,
+    accuracy_pct: 91,
     accuracyColor: 'var(--status-low)',
     trend: '↑ stable',
-    training: '156,782 records',
-    predictions: 1204,
+    training_data_size: '156,782 records',
+    predictions_today: 1204,
     acceptance: '79%',
-    drift: 3.1,
+    drift_pct: 3.1,
     driftLabel: 'Within range',
     retrainDisabled: true,
   },
   {
-    id: 'coverage',
+    model_id: 'coverage',
     name: 'COVERAGE WATCHER',
     status: 'HEALTHY',
     statusVariant: 'resolved',
     border: 'var(--status-low)',
-    accuracy: 94,
+    accuracy_pct: 94,
     accuracyColor: 'var(--status-low)',
     trend: '→ stable',
-    training: '89,440 records',
-    predictions: 288,
+    training_data_size: '89,440 records',
+    predictions_today: 288,
     acceptance: '88%',
-    drift: 2.4,
+    drift_pct: 2.4,
     driftLabel: 'Within range',
     retrainDisabled: true,
   },
 ]
 
+/**
+ * @ui ma7 on ANALYST_DISPATCH_ACCURACY — 7-day moving average, derived display field.
+ * @ui pct_change / change_vs_prior — computed display fields, not DB columns.
+ */
 export const ANALYST_DISPATCH_ACCURACY = Array.from({ length: 30 }, (_, i) => ({
   day: `D${i + 1}`,
   accuracy: Math.max(84, 91 - Math.floor(i * 0.18) - (i % 7 === 3 ? 2 : 0)),
@@ -235,11 +247,11 @@ export const ANALYST_DISPATCH_ACCURACY = Array.from({ length: 30 }, (_, i) => ({
 }))
 
 export const ANALYST_OVERRIDE_ROWS = [
-  { reason: 'Local area knowledge', count: 41, better: '78%', worse: '22%', rec: 'AI lacks hyperlocal context', highlight: false },
-  { reason: 'Unit verbal issue', count: 28, better: '91%', worse: '9%', rec: 'System data gap', highlight: false },
-  { reason: 'Wrong capability matched', count: 19, better: '84%', worse: '16%', rec: 'Model capability mismatch — FIX', highlight: true },
-  { reason: 'Priority disagreement', count: 34, better: '52%', worse: '48%', rec: 'Human bias — training needed', highlight: false },
-  { reason: 'Other', count: 12, better: '58%', worse: '42%', rec: 'Investigate individually', highlight: false },
+  { override_reason: 'Local area knowledge', count: 41, better: '78%', worse: '22%', rec: 'AI lacks hyperlocal context', highlight: false },
+  { override_reason: 'Unit verbal issue', count: 28, better: '91%', worse: '9%', rec: 'System data gap', highlight: false },
+  { override_reason: 'Wrong capability matched', count: 19, better: '84%', worse: '16%', rec: 'Model capability mismatch — FIX', highlight: true },
+  { override_reason: 'Priority disagreement', count: 34, better: '52%', worse: '48%', rec: 'Human bias — training needed', highlight: false },
+  { override_reason: 'Other', count: 12, better: '58%', worse: '42%', rec: 'Investigate individually', highlight: false },
 ]
 
 export const ANALYST_RETRAIN_LOG = [
@@ -251,26 +263,26 @@ export const ANALYST_RETRAIN_LOG = [
 ]
 
 export const ANALYST_DQ_TABLE = [
-  { source: 'Incident Database', completeness: 99, accuracy: 98, freshness: '30 sec ago', gaps: 0, status: 'HEALTHY', degraded: false },
-  { source: 'GPS Fleet Tracker', completeness: 97, accuracy: 96, freshness: '45 sec', gaps: 2, status: 'HEALTHY', degraded: false },
-  { source: 'Rwanda Meteo Weather', completeness: 71, accuracy: 88, freshness: '18 min ago', gaps: 8, status: 'DEGRADED', degraded: true, detail: '3 weather stations offline: Musanze, Rubavu, Huye' },
-  { source: 'KCC Traffic Data', completeness: 94, accuracy: 93, freshness: '2 min', gaps: 1, status: 'HEALTHY', degraded: false },
-  { source: 'RURA Hospital System', completeness: 100, accuracy: 99, freshness: '5 min', gaps: 0, status: 'HEALTHY', degraded: false },
+  { source: 'Incident Database', completeness_pct: 99, accuracy_pct: 98, last_updated_at: '30 sec ago', gap_count_30d: 0, status: 'HEALTHY', degraded: false },
+  { source: 'GPS Fleet Tracker', completeness_pct: 97, accuracy_pct: 96, last_updated_at: '45 sec', gap_count_30d: 2, status: 'HEALTHY', degraded: false },
+  { source: 'Rwanda Meteo Weather', completeness_pct: 71, accuracy_pct: 88, last_updated_at: '18 min ago', gap_count_30d: 8, status: 'DEGRADED', degraded: true, detail: '3 weather stations offline: Musanze, Rubavu, Huye' },
+  { source: 'KCC Traffic Data', completeness_pct: 94, accuracy_pct: 93, last_updated_at: '2 min', gap_count_30d: 1, status: 'HEALTHY', degraded: false },
+  { source: 'RURA Hospital System', completeness_pct: 100, accuracy_pct: 99, last_updated_at: '5 min', gap_count_30d: 0, status: 'HEALTHY', degraded: false },
 ]
 
 export const ANALYST_MISSED_FIELDS = [
-  { field: 'Suspect description', pct: 31 },
-  { field: 'Witness information', pct: 28 },
-  { field: 'Vehicle details', pct: 24 },
-  { field: 'Agency referral', pct: 19 },
-  { field: 'Photo evidence', pct: 17 },
-  { field: 'Recommended follow-up', pct: 12 },
+  { field: 'Suspect description', skip_rate_pct: 31 },
+  { field: 'Witness information', skip_rate_pct: 28 },
+  { field: 'Vehicle details', skip_rate_pct: 24 },
+  { field: 'Agency referral', skip_rate_pct: 19 },
+  { field: 'Photo evidence', skip_rate_pct: 17 },
+  { field: 'Recommended follow-up', skip_rate_pct: 12 },
 ]
 
 export const ANALYST_LOW_UNITS = [
-  { unit: 'AMB-09', officer: 'Uwimana B.', rate: '68%', missing: 'Witness info, Vehicle details' },
-  { unit: 'P-22', officer: 'Nkurunziza K.', rate: '71%', missing: 'Suspect description' },
-  { unit: 'FTK-02', officer: 'Rugamba A.', rate: '76%', missing: 'Photo evidence, Follow-up' },
+  { vehicle_id: 'AMB-09', officer_name: 'Uwimana B.', report_completion_rate: '68%', missing_fields: 'Witness info, Vehicle details' },
+  { vehicle_id: 'P-22', officer_name: 'Nkurunziza K.', report_completion_rate: '71%', missing_fields: 'Suspect description' },
+  { vehicle_id: 'FTK-02', officer_name: 'Rugamba A.', report_completion_rate: '76%', missing_fields: 'Photo evidence, Follow-up' },
 ]
 
 export const ANALYST_BENCHMARK_ROWS = [
@@ -282,14 +294,14 @@ export const ANALYST_BENCHMARK_ROWS = [
 ]
 
 export const ANALYST_LIBRARY_ROWS = [
-  { name: 'May Response Time Summary', type: 'Response Time', district: 'Kigali City', author: 'You', generated: 'Today 09:14', shared: 'All OMs' },
-  { name: 'District Comparison Q1 2026', type: 'Cross-District', district: 'All Rwanda', author: 'You', generated: 'May 20', shared: 'HQ + DCs' },
-  { name: 'Dispatch Model Audit — May', type: 'AI Performance', district: 'System', author: 'You', generated: 'May 18', shared: 'Ops Managers' },
-  { name: 'Kicukiro Weekly Summary W21', type: 'Incident Analysis', district: 'Kicukiro', author: 'Auto-generated', generated: 'May 26', shared: 'Kicukiro DC' },
-  { name: 'Nyarugenge Theft Pattern Q2', type: 'Incident Analysis', district: 'Nyarugenge', author: 'You', generated: 'May 15', shared: 'Nyarugenge DC' },
-  { name: 'Gasabo Coverage Deep Dive', type: 'Coverage Analysis', district: 'Gasabo', author: 'You', generated: 'May 12', shared: 'Gasabo DC' },
-  { name: 'Executive Summary April', type: 'Executive Summary', district: 'All Rwanda', author: 'You', generated: 'May 1', shared: 'RNP HQ' },
-  { name: 'Unit Performance W20', type: 'Unit Performance', district: 'Kigali City', author: 'Auto-generated', generated: 'May 19', shared: 'All OMs' },
+  { report_name: 'May Response Time Summary', report_type: 'Response Time', district: 'Kigali City', created_by: 'You', created_at: 'Today 09:14', shared_with: 'All OMs' },
+  { report_name: 'District Comparison Q1 2026', report_type: 'Cross-District', district: 'All Rwanda', created_by: 'You', created_at: 'May 20', shared_with: 'HQ + DCs' },
+  { report_name: 'Dispatch Model Audit — May', report_type: 'AI Performance', district: 'System', created_by: 'You', created_at: 'May 18', shared_with: 'Ops Managers' },
+  { report_name: 'Kicukiro Weekly Summary W21', report_type: 'Incident Analysis', district: 'Kicukiro', created_by: 'Auto-generated', created_at: 'May 26', shared_with: 'Kicukiro DC' },
+  { report_name: 'Nyarugenge Theft Pattern Q2', report_type: 'Incident Analysis', district: 'Nyarugenge', created_by: 'You', created_at: 'May 15', shared_with: 'Nyarugenge DC' },
+  { report_name: 'Gasabo Coverage Deep Dive', report_type: 'Coverage Analysis', district: 'Gasabo', created_by: 'You', created_at: 'May 12', shared_with: 'Gasabo DC' },
+  { report_name: 'Executive Summary April', report_type: 'Executive Summary', district: 'All Rwanda', created_by: 'You', created_at: 'May 1', shared_with: 'RNP HQ' },
+  { report_name: 'Unit Performance W20', report_type: 'Unit Performance', district: 'Kigali City', created_by: 'Auto-generated', created_at: 'May 19', shared_with: 'All OMs' },
 ]
 
 export const ANALYST_SCHEDULES = [

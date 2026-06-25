@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import {
   ComposedChart,
@@ -12,6 +13,9 @@ import {
 import AnalystPageHeader from '../../components/analyst/AnalystPageHeader'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import DriftGauge from '../../components/analyst/DriftGauge'
+import SettingsToast from '../../components/settings/SettingsToast'
+import { getCurrentUser } from '../../utils/authSession'
+import { mockAuditLogs } from '../../data/mockAuditLogs'
 import {
   ANALYST_AI_MODELS,
   ANALYST_DISPATCH_ACCURACY,
@@ -26,6 +30,30 @@ function driftColor(pct) {
 }
 
 export default function AnalystModels() {
+  const [models, setModels] = useState(() => ANALYST_AI_MODELS.map((m) => ({ ...m })))
+  const [toast, setToast] = useState('')
+
+  function handleRetrain(model) {
+    const currentUser = getCurrentUser()
+    mockAuditLogs.push({
+      log_id: Math.random().toString(36).slice(2, 10),
+      user_id: currentUser?.user_id ?? null,
+      timestamp: new Date().toISOString(),
+      action: 'AI_MODEL_RETRAIN_QUEUED: ' + model.model_id,
+      module: 'ANALYST',
+      status: 'SUCCESS',
+    })
+    const idx = ANALYST_AI_MODELS.findIndex((m) => m.model_id === model.model_id)
+    if (idx !== -1) ANALYST_AI_MODELS[idx].status = 'RETRAINING'
+    setModels((prev) =>
+      prev.map((m) =>
+        m.model_id === model.model_id ? { ...m, status: 'RETRAINING', statusVariant: 'handover' } : m
+      )
+    )
+    setToast(`Retrain queued for ${model.name}.`)
+    setTimeout(() => setToast(''), 3000)
+  }
+
   return (
     <div className="portal-page flex flex-col gap-5 min-w-[1024px]">
       <AnalystPageHeader
@@ -35,9 +63,9 @@ export default function AnalystModels() {
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {ANALYST_AI_MODELS.map((m) => (
+        {models.map((m) => (
           <div
-            key={m.id}
+            key={m.model_id}
             className="dispatcher-surface p-5 flex flex-col"
             style={{ borderTop: `3px solid ${m.border}` }}
           >
@@ -46,12 +74,12 @@ export default function AnalystModels() {
               <StatusBadge label={m.status} variant={m.statusVariant} />
             </div>
             <div className="font-mono text-[28px] font-bold mb-3" style={{ color: m.accuracyColor }}>
-              {m.accuracy}%
+              {m.accuracy_pct}%
             </div>
             {[
               ['30-day trend', m.trend],
-              ['Training data', m.training],
-              ['Predictions today', String(m.predictions)],
+              ['Training data', m.training_data_size],
+              ['Predictions today', String(m.predictions_today)],
               ['User acceptance', m.acceptance],
             ].map(([label, val]) => (
               <div key={label} className="flex justify-between text-[12px] py-1 border-b border-(--border-subtle)">
@@ -62,10 +90,11 @@ export default function AnalystModels() {
             <button
               type="button"
               className="dispatcher-btn-ghost w-full mt-4 text-[12px] inline-flex items-center justify-center gap-1"
-              disabled={m.retrainDisabled}
+              disabled={m.retrainDisabled || m.status === 'RETRAINING'}
+              onClick={() => !m.retrainDisabled && handleRetrain(m)}
             >
               <RefreshCw size={14} />
-              Retrain Now
+              {m.status === 'RETRAINING' ? 'Retraining...' : 'Retrain Now'}
             </button>
           </div>
         ))}
@@ -108,7 +137,7 @@ export default function AnalystModels() {
               <tbody>
                 {ANALYST_OVERRIDE_ROWS.map((row) => (
                   <tr
-                    key={row.reason}
+                    key={row.override_reason}
                     className="border-b border-(--border-subtle)"
                     style={{
                       background: row.highlight ? 'var(--status-medium-bg)' : undefined,
@@ -116,7 +145,7 @@ export default function AnalystModels() {
                     }}
                   >
                     <td className="p-3 font-medium">
-                      {row.reason}
+                      {row.override_reason}
                       {row.highlight && (
                         <span
                           className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded"
@@ -142,14 +171,11 @@ export default function AnalystModels() {
             <h3 className="text-[13px] font-semibold m-0">Model Drift Detection</h3>
             <p className="text-[12px] text-(--text-muted) m-0 mb-4">Drift = accuracy decline from real-world pattern changes</p>
             <div className="flex justify-around gap-4">
-              {ANALYST_AI_MODELS.map((m) => (
-                <div key={m.id} className="text-center">
-                  <DriftGauge pct={m.drift} color={driftColor(m.drift)} />
+              {models.map((m) => (
+                <div key={m.model_id} className="text-center">
+                  <DriftGauge pct={m.drift_pct} color={driftColor(m.drift_pct)} />
                   <div className="text-[12px] font-semibold mt-2">{m.name}</div>
-                  <div
-                    className="text-[11px] font-semibold"
-                    style={{ color: driftColor(m.drift) }}
-                  >
+                  <div className="text-[11px] font-semibold" style={{ color: driftColor(m.drift_pct) }}>
                     {m.driftLabel}
                   </div>
                 </div>
@@ -189,6 +215,8 @@ export default function AnalystModels() {
           </div>
         </div>
       </div>
+
+      <SettingsToast show={!!toast} message={toast} />
     </div>
   )
 }

@@ -1,9 +1,11 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { FileBarChart, AlertCircle, Cpu, Calendar, Server, RefreshCw } from 'lucide-react'
 import MetricCard from '../../components/dispatcher/MetricCard'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import AnalystPageHeader from '../../components/analyst/AnalystPageHeader'
+import { getCurrentUser } from '../../utils/authSession'
+import { mockAuditLogs } from '../../data/mockAuditLogs'
 import {
   ANALYST_DATA_SOURCES,
   ANALYST_ANOMALIES,
@@ -33,12 +35,26 @@ const DOT_COLORS = {
 }
 
 export default function AnalystDashboard() {
+  const navigate = useNavigate()
   const dateStr = new Date().toLocaleDateString('en-GB', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
     year: 'numeric',
   })
+
+  function handleInvestigate(anomaly) {
+    const currentUser = getCurrentUser()
+    mockAuditLogs.push({
+      log_id: Math.random().toString(36).slice(2, 10),
+      user_id: currentUser?.user_id ?? null,
+      timestamp: new Date().toISOString(),
+      action: 'ANOMALY_REVIEWED: ' + anomaly.alert_type,
+      module: 'ANALYST',
+      status: 'SUCCESS',
+    })
+    navigate(anomaly.link)
+  }
 
   const blanks = Array.from({ length: MON_OFFSET }, (_, i) => `b-${i}`)
   const days = Array.from({ length: MAY_DAYS }, (_, i) => i + 1)
@@ -85,16 +101,16 @@ export default function AnalystDashboard() {
         <div className="flex flex-wrap gap-4">
           {ANALYST_DATA_SOURCES.map((src) => (
             <div
-              key={src.name}
+              key={src.source_name}
               className="flex-1 min-w-[160px] rounded-lg p-3.5"
               style={{ background: 'var(--bg-elevated)', borderLeft: `3px solid ${src.border}` }}
             >
               <div className="flex justify-between gap-2 mb-2">
-                <span className="font-semibold text-[13px]">{src.name}</span>
+                <span className="font-semibold text-[13px]">{src.source_name}</span>
                 <StatusBadge label={src.status} variant={sourceStatusVariant(src.status)} />
               </div>
-              <div className="text-[12px] text-(--text-secondary)">Completeness: {src.completeness}%</div>
-              <div className="font-mono text-[11px] text-(--text-muted) mt-0.5">Last update: {src.lastUpdate}</div>
+              <div className="text-[12px] text-(--text-secondary)">Completeness: {src.completeness_pct}%</div>
+              <div className="font-mono text-[11px] text-(--text-muted) mt-0.5">Last update: {src.last_updated_at}</div>
               {src.warning && (
                 <p className="text-[11px] m-0 mt-2" style={{ color: 'var(--status-medium)' }}>{src.warning}</p>
               )}
@@ -110,16 +126,16 @@ export default function AnalystDashboard() {
             badge={<span className="font-mono text-[10px] text-(--text-muted) ml-auto">AUTO-REFRESHED HOURLY</span>}
           />
           {ANALYST_ANOMALIES.map((a) => (
-            <div key={a.type + a.description} className="dispatcher-surface p-4">
+            <div key={a.alert_type + a.description} className="dispatcher-surface p-4">
               <div className="flex flex-wrap justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span
                     className="w-2 h-2 rounded-full shrink-0 animate-pulse"
                     style={{ background: severityDotColor(a.severity) }}
                   />
-                  <span className="font-mono text-[10px] uppercase text-(--text-muted)">{a.type}</span>
+                  <span className="font-mono text-[10px] uppercase text-(--text-muted)">{a.alert_type}</span>
                 </div>
-                <span className="font-mono text-[11px] text-(--text-muted)">{a.ago}</span>
+                <span className="font-mono text-[11px] text-(--text-muted)">{a.created_at}</span>
               </div>
               <p className="font-medium text-[13px] text-(--text-primary) my-1.5 m-0">{a.description}</p>
               <p className="text-[12px] text-(--text-secondary) m-0">{a.detail}</p>
@@ -128,11 +144,15 @@ export default function AnalystDashboard() {
                   className="text-[10px] font-mono font-bold px-2 py-0.5 rounded"
                   style={{ background: 'var(--accent-ghost)', color: 'var(--accent)' }}
                 >
-                  {a.sigma}
+                  {a.deviation_sigma}
                 </span>
-                <Link to={a.link} className="dispatcher-btn-outline text-[11px] h-[30px] px-3 no-underline inline-flex items-center">
+                <button
+                  type="button"
+                  className="dispatcher-btn-outline text-[11px] h-[30px] px-3 inline-flex items-center"
+                  onClick={() => handleInvestigate(a)}
+                >
                   Investigate →
-                </Link>
+                </button>
               </div>
             </div>
           ))}
