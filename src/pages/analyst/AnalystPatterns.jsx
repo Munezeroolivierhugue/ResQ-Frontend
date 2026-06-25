@@ -14,7 +14,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
-  Legend,
+
 } from 'recharts'
 import { Play, Download, Brain } from 'lucide-react'
 import { useThemeStore } from '../../store/themeStore'
@@ -84,60 +84,95 @@ export default function AnalystPatterns() {
       <AnalystPageHeader
         title="Incident Pattern Analysis"
         subtitle="Spatial clustering, temporal patterns, and correlation analysis."
+        badge="Pattern Analysis"
       />
 
-      <div className="flex flex-wrap gap-2 items-center">
-        <select className="dispatcher-input h-9 w-36 text-[12px]" defaultValue="All Types">
-          <option>All Types</option>
-          <option>Theft</option>
-          <option>Traffic Accident</option>
-        </select>
-        <select className="dispatcher-input h-9 w-32 text-[12px]" defaultValue="All">
-          <option>All Severities</option>
-          <option>Critical</option>
-          <option>High</option>
-        </select>
-        <select className="dispatcher-input h-9 w-40 text-[12px]" defaultValue="All Districts">
-          <option>All Districts</option>
-          <option>Kigali</option>
-          <option>Gasabo</option>
-        </select>
-        <div className="flex flex-wrap gap-2 ml-auto">
-          {PERIODS.map((p) => (
-            <button
-              key={p}
-              type="button"
-              className="text-[11px] font-semibold px-3 py-1.5 rounded-full border cursor-pointer"
-              style={{
-                background: period === p ? 'var(--accent-ghost)' : 'var(--bg-elevated)',
-                borderColor: period === p ? 'var(--accent)' : 'var(--border)',
-                color: period === p ? 'var(--accent)' : 'var(--text-secondary)',
-              }}
-              onClick={() => setPeriod(p)}
-            >
-              {p}
-            </button>
-          ))}
-        </div>
-      </div>
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        {/* Left Sidebar (Filters) */}
+        <div className="w-full lg:w-[320px] shrink-0 bg-(--bg-surface) border border-(--border) rounded-2xl p-5 shadow-[var(--shadow-card)] flex flex-col gap-5">
+          <div>
+            <h3 className="text-[14px] font-bold text-(--text-primary) mb-1 uppercase tracking-wider" style={{ fontFamily: 'var(--font-display)' }}>Pattern Filters</h3>
+            <p className="text-[11px] text-(--text-muted) mb-5">Refine the analysis scope and datasets</p>
+            
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="block text-[11px] font-semibold text-(--text-secondary) mb-1.5 tracking-wide">Incident Type</label>
+                <select className="dispatcher-input w-full h-10 text-[12px] bg-(--bg-input)" defaultValue="All Types">
+                  <option>All Types</option>
+                  <option>Theft</option>
+                  <option>Traffic Accident</option>
+                </select>
+              </div>
 
-      <div className="flex flex-wrap gap-1 border-b border-(--border) pb-2">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            type="button"
-            className="text-[12px] font-semibold px-4 py-2 rounded-t cursor-pointer border-none"
-            style={{
-              background: tab === t ? 'var(--accent-ghost)' : 'transparent',
-              color: tab === t ? 'var(--accent)' : 'var(--text-secondary)',
-              borderBottom: tab === t ? '2px solid var(--accent)' : '2px solid transparent',
-            }}
-            onClick={() => setTab(t)}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-[11px] font-semibold text-(--text-secondary) mb-1.5 tracking-wide">Severity</label>
+                  <select className="dispatcher-input w-full h-10 text-[12px] bg-(--bg-input)" defaultValue="All">
+                    <option>All</option>
+                    <option>Critical</option>
+                    <option>High</option>
+                  </select>
+                </div>
+                <div className="flex-1">
+                  <label className="block text-[11px] font-semibold text-(--text-secondary) mb-1.5 tracking-wide">District</label>
+                  <select className="dispatcher-input w-full h-10 text-[12px] bg-(--bg-input)" defaultValue="All Districts">
+                    <option>All</option>
+                    <option>Kigali</option>
+                    <option>Gasabo</option>
+                  </select>
+                </div>
+              </div>
+
+              <hr className="border-(--border-subtle) my-2" />
+
+              <div>
+                <label className="block text-[11px] font-semibold text-(--text-secondary) mb-2 tracking-wide">Time Period</label>
+                <div className="flex bg-(--bg-input) p-1 rounded-xl border border-(--border-subtle)">
+                  {PERIODS.map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      className={`flex-1 text-[11px] font-semibold py-2 rounded-lg transition-all border-none cursor-pointer ${
+                        period === p 
+                          ? 'bg-(--bg-surface) text-(--text-primary) shadow-[0_1px_2px_rgba(0,0,0,0.05)] border border-(--border)' 
+                          : 'bg-transparent text-(--text-muted) hover:text-(--text-primary)'
+                      }`}
+                      onClick={() => setPeriod(p)}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <hr className="border-(--border-subtle) my-2" />
+
+              <button type="button" className="w-full bg-(--accent) text-(--text-on-accent) h-10 rounded-xl font-semibold text-[13px] border-none cursor-pointer shadow-sm hover:opacity-90 transition-opacity">
+                Apply Filters
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content Area */}
+        <div className="flex-1 flex flex-col gap-4 min-w-0">
+          <div className="flex flex-wrap gap-1 border-b border-(--border) pb-2">
+            {TABS.map((t) => (
+              <button
+                key={t}
+                type="button"
+                className="text-[12px] font-semibold px-4 py-2 rounded-t cursor-pointer border-none"
+                style={{
+                  background: tab === t ? 'var(--accent-ghost)' : 'transparent',
+                  color: tab === t ? 'var(--accent)' : 'var(--text-secondary)',
+                  borderBottom: tab === t ? '2px solid var(--accent)' : '2px solid transparent',
+                }}
+                onClick={() => setTab(t)}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
 
       {tab === 'Spatial Clustering' && (
         <div className="flex flex-col lg:flex-row gap-4">
@@ -347,6 +382,8 @@ export default function AnalystPatterns() {
           </div>
         </>
       )}
+        </div>
+      </div>
     </div>
   )
 }
