@@ -22,6 +22,8 @@ import {
   formatAuditStamp,
   formatAuditTime,
 } from '../../data/mockResourceReallocationData'
+import { mockReallocations } from '../../data/mockReallocations'
+import { getCurrentUser } from '../../utils/authSession'
 const FILTERS = ['All', 'Pending', 'Approved', 'Rejected']
 const EXEC_STEPS = [
   { key: 'sent', label: 'Order sent to mobile device' },
@@ -35,9 +37,27 @@ function nextAuditId(log) {
   return `AUD-${String(n).padStart(4, '0')}`
 }
 
+function hydrateRec(r) {
+  const persisted = mockReallocations.find((m) => m.reallocation_id === r.id)
+  if (!persisted) return { ...r }
+  const isRejected = persisted.status === 'REJECTED'
+  const stamp = new Date(persisted.created_at).toLocaleString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  })
+  return {
+    ...r,
+    status: isRejected ? 'rejected' : 'approved',
+    ...(isRejected
+      ? { rejectedAt: stamp, rejectReason: persisted.reason || '', rejectNotes: '' }
+      : { approvedAt: stamp }
+    ),
+  }
+}
+
 export default function ResourceReallocationFlow() {
   const [recommendations, setRecommendations] = useState(() =>
-    INITIAL_REALLOCATION_RECS.map((r) => ({ ...r }))
+    INITIAL_REALLOCATION_RECS.map(hydrateRec)
   )
   const [filter, setFilter] = useState('Pending')
   const [expandedId, setExpandedId] = useState(null)
@@ -130,6 +150,19 @@ export default function ResourceReallocationFlow() {
   }, [execStepIndex, activeExecution])
 
   const handleExecute = (rec) => {
+    const cu = getCurrentUser()
+    const vehicle = mockUnits.find((u) => u.id === rec.suggestedUnitId)
+    mockReallocations.push({
+      reallocation_id: rec.id,
+      vehicle_id: vehicle?.vehicle_id || rec.suggestedUnitId,
+      from_zone: rec.origin,
+      to_zone: rec.destination,
+      approved_by: cu?.user_id || 'demo-user-uuid',
+      ai_recommended: true,
+      status: 'APPROVED',
+      reason: null,
+      created_at: new Date().toISOString(),
+    })
     startExecution(rec, {
       unitId: rec.suggestedUnitId,
       destination: rec.destination,
@@ -152,6 +185,21 @@ export default function ResourceReallocationFlow() {
     const unitId = draft.unitId || rec.suggestedUnitId
     const destination = draft.destination || rec.destination
     const unit = mockUnits.find((u) => u.id === unitId)
+    const isModified = unitId !== rec.suggestedUnitId || destination !== rec.destination
+    const cu = getCurrentUser()
+    mockReallocations.push({
+      reallocation_id: rec.id,
+      vehicle_id: unit?.vehicle_id || unitId,
+      from_zone: rec.origin,
+      to_zone: destination,
+      approved_by: cu?.user_id || 'demo-user-uuid',
+      ai_recommended: true,
+      status: isModified ? 'MODIFIED' : 'APPROVED',
+      reason: isModified
+        ? (unitId !== rec.suggestedUnitId ? `Substituted ${rec.suggestedUnitId} with ${unitId} → ${destination}` : `Modified destination → ${destination}`)
+        : null,
+      created_at: new Date().toISOString(),
+    })
     startExecution(rec, {
       unitId,
       destination,
@@ -179,6 +227,19 @@ export default function ResourceReallocationFlow() {
       showToast('Select a rejection reason before submitting', 'error')
       return
     }
+    const cu = getCurrentUser()
+    const vehicle = mockUnits.find((u) => u.id === rec.suggestedUnitId)
+    mockReallocations.push({
+      reallocation_id: rec.id,
+      vehicle_id: vehicle?.vehicle_id || rec.suggestedUnitId,
+      from_zone: rec.origin,
+      to_zone: rec.destination,
+      approved_by: cu?.user_id || 'demo-user-uuid',
+      ai_recommended: true,
+      status: 'REJECTED',
+      reason: notes ? `${reason}: ${notes}` : reason,
+      created_at: new Date().toISOString(),
+    })
     setRecommendations((list) =>
       list.map((r) =>
         r.id === rec.id

@@ -2,11 +2,12 @@ import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import Navbar from '../layout/Navbar'
 import OpsManagerSidebar from '../layout/OpsManagerSidebar'
-
-const opsManagerUser = { name: 'Patrick Nshimiyimana', role: 'OPS MANAGER' }
+import { getCurrentUser } from '../../utils/authSession'
 
 export default function OpsManagerShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const cu = getCurrentUser()
+  const navUser = { name: cu?.full_name || 'Ops Manager', role: 'OPS MANAGER' }
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -14,7 +15,7 @@ export default function OpsManagerShell() {
       <OpsManagerSidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
       <div className="flex flex-col flex-1 overflow-hidden min-w-0">
         <Navbar
-          user={opsManagerUser}
+          user={navUser}
           onMenuClick={() => setMobileOpen((v) => !v)}
           portalLabel="Operations Command"
           profileHref="/ops-manager/settings/profile"

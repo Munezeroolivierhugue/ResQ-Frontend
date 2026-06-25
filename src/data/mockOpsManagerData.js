@@ -69,17 +69,12 @@ export const OPS_AI_RECOMMENDATIONS = [
 ]
 
 export const OPS_DISPATCHERS = [
-  { id: 'DSP-0042', name: 'Jean Bosco Nkurunziza', initials: 'JB', workload: 'normal', incidents: 4, handledToday: 31, aiRate: 94, status: 'ON DUTY', district: 'Nyarugenge' },
-  { id: 'DSP-0018', name: 'Aline Mukamana', initials: 'AM', workload: 'high', incidents: 9, handledToday: 44, aiRate: 71, status: 'ON DUTY', district: 'Nyarugenge' },
-  { id: 'DSP-0027', name: 'Claude Kabera', initials: 'CK', workload: 'normal', incidents: 3, handledToday: 28, aiRate: 88, status: 'ON DUTY', district: 'Nyarugenge' },
-  { id: 'DSP-0033', name: 'Divine Uwase', initials: 'DU', workload: 'overload', incidents: 12, handledToday: 52, aiRate: 58, status: 'ON BREAK', district: 'Nyarugenge' },
+  { id: 'DSP-0042', user_id: 'u1111111-0000-4000-8000-000000000001', name: 'Jean Bosco Nkurunziza', initials: 'JB', workload: 'normal', incidents: 4, incidents_handled: 31, ai_acceptance_rate: 94, status: 'ON DUTY', district: 'Nyarugenge' },
+  { id: 'DSP-0018', user_id: 'udsp0018-0000-4000-8000-000000000018', name: 'Aline Mukamana', initials: 'AM', workload: 'high', incidents: 9, incidents_handled: 44, ai_acceptance_rate: 71, status: 'ON DUTY', district: 'Nyarugenge' },
+  { id: 'DSP-0027', user_id: 'udsp0027-0000-4000-8000-000000000027', name: 'Claude Kabera', initials: 'CK', workload: 'normal', incidents: 3, incidents_handled: 28, ai_acceptance_rate: 88, status: 'ON DUTY', district: 'Nyarugenge' },
+  { id: 'DSP-0033', user_id: 'udsp0033-0000-4000-8000-000000000033', name: 'Divine Uwase', initials: 'DU', workload: 'overload', incidents: 12, incidents_handled: 52, ai_acceptance_rate: 58, status: 'ON BREAK', district: 'Nyarugenge' },
 ]
 
-export const OPS_MISSED_CALLS = [
-  { id: 'MC-01', phoneMasked: '+250 78x xxx x21', calledAt: '14:18', waited: '1m 42s' },
-  { id: 'MC-02', phoneMasked: '+250 72x xxx x08', calledAt: '14:09', waited: '0m 58s' },
-  { id: 'MC-03', phoneMasked: '+250 73x xxx x55', calledAt: '13:52', waited: '2m 15s' },
-]
 
 export const OPS_FLEET = [
   { type: 'Police Vans', available: 7, total: 10 },
@@ -97,10 +92,10 @@ export const OPS_MUTUAL_AID_HISTORY = [
 ]
 
 export const OPS_AGENCIES = [
-  { id: 'rnp', name: 'Rwanda National Police', color: 'var(--accent)', units: 14, status: 'ACTIVE', lastComm: '14:24:06' },
-  { id: 'fire', name: 'Kigali Fire & Rescue', color: 'var(--status-critical)', units: 4, status: 'ACTIVE', lastComm: '14:22:41' },
-  { id: 'med', name: 'SAMU / Medical', color: 'var(--status-info)', units: 3, status: 'EN ROUTE', lastComm: '14:20:15' },
-  { id: 'rib', name: 'RIB Forensics', color: 'var(--status-medium)', units: 0, status: 'STAGING', lastComm: '14:05:00' },
+  { id: 'rnp', agency_id: 'ag333333-0000-4000-8000-000000000003', name: 'Rwanda National Police', color: 'var(--accent)', units: 14, status: 'ACTIVE', last_communication_at: '14:24:06' },
+  { id: 'fire', agency_id: 'ag222222-0000-4000-8000-000000000002', name: 'Kigali Fire & Rescue', color: 'var(--status-critical)', units: 4, status: 'ACTIVE', last_communication_at: '14:22:41' },
+  { id: 'med', agency_id: 'ag111111-0000-4000-8000-000000000001', name: 'SAMU / Medical', color: 'var(--status-info)', units: 3, status: 'EN ROUTE', last_communication_at: '14:20:15' },
+  { id: 'rib', agency_id: 'agrib0000-0000-4000-8000-000000000004', name: 'RIB Forensics', color: 'var(--status-medium)', units: 0, status: 'STAGING', last_communication_at: '14:05:00' },
 ]
 
 export const OPS_AGENCY_OPTIONS = [
@@ -133,10 +128,10 @@ export const OPS_ESCALATION_DETAIL = {
       { id: 3, time: '14:06', title: 'Initial on-scene assessment', description: 'Multi-storey commercial structure — active fire floor 2.' },
     ],
     units: [
-      { id: 'FTK-02', type: 'Fire Truck', status: 'ON SCENE', eta: null, lat: -1.9405, lng: 30.059 },
-      { id: 'FTK-05', type: 'Fire Truck', status: 'EN ROUTE', eta: '4 min', lat: -1.952, lng: 30.061 },
-      { id: 'AMB-11', type: 'Ambulance', status: 'EN ROUTE', eta: '6 min', lat: -1.935, lng: 30.07 },
-      { id: 'POL-12', type: 'Police', status: 'ON SCENE', eta: null, lat: -1.941, lng: 30.058 },
+      { id: 'FTK-02', type: 'Fire Truck', status: 'ON SCENE', eta_minutes: null, lat: -1.9405, lng: 30.059 },
+      { id: 'FTK-05', type: 'Fire Truck', status: 'EN ROUTE', eta_minutes: 4, lat: -1.952, lng: 30.061 },
+      { id: 'AMB-11', type: 'Ambulance', status: 'EN ROUTE', eta_minutes: 6, lat: -1.935, lng: 30.07 },
+      { id: 'POL-12', type: 'Police', status: 'ON SCENE', eta_minutes: null, lat: -1.941, lng: 30.058 },
     ],
   },
   'INC-2407': {
@@ -159,8 +154,8 @@ export const OPS_ESCALATION_DETAIL = {
       { id: 2, time: '14:10', title: 'Scene secured', description: 'Shop owner safe — no injuries confirmed.' },
     ],
     units: [
-      { id: 'POL-08', type: 'Police', status: 'ON SCENE', eta: null, lat: -1.9659, lng: 30.0444 },
-      { id: 'P-07', type: 'Police Van', status: 'EN ROUTE', eta: '3 min', lat: -1.962, lng: 30.048 },
+      { id: 'POL-08', type: 'Police', status: 'ON SCENE', eta_minutes: null, lat: -1.9659, lng: 30.0444 },
+      { id: 'P-07', type: 'Police Van', status: 'EN ROUTE', eta_minutes: 3, lat: -1.962, lng: 30.048 },
     ],
   },
 }
@@ -201,13 +196,6 @@ export const OPS_RESOURCE_EVENTS = [
   { time: '08:05', title: 'Shift handover received', description: 'Incoming briefing from OM Kagame R.' },
 ]
 
-export const OPS_SUPERVISOR_MESSAGES = [
-  { time: '14:22', from: 'Jean Bosco', text: 'INC-2407 resources sufficient — monitoring Nyarugenge sector.' },
-  { time: '14:10', from: 'Aline M.', text: 'Queue at 9 — request redistribution support in Muhima.' },
-  { time: '13:55', from: 'Claude K.', text: 'AI recommendation REC-0041 looks valid for Nyamirambo.' },
-  { time: '13:40', from: 'Divine U.', text: 'Returning from break in 10 min.' },
-  { time: '13:15', from: 'Jean Bosco', text: 'Handover notes reviewed — ready for Nyarugenge peak.' },
-]
 
 export const OPS_JEAN_BOSCO_INCIDENTS = [
   { id: 'INC-2410', type: 'Medical Emergency' },
