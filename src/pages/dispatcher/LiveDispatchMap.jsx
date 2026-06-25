@@ -1,17 +1,35 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { MapContainer, TileLayer, CircleMarker, Tooltip } from 'react-leaflet'
 import { useThemeStore } from '../../store/themeStore'
-import { Radio, Ambulance, Truck, ShieldCheck, Bus, Zap } from 'lucide-react'
-import { getCriticalUnassignedIncident } from '../../data/mockDispatchImmediateData'
+import {
+  Radio, Ambulance, Truck, ShieldCheck, Bus, Zap, X,
+  ShieldAlert, AlertTriangle, Flame, Heart, Car, Users, User, Bell,
+} from 'lucide-react'
+import {
+  getCriticalUnassignedIncident,
+  IMMEDIATE_INCIDENT_TYPES,
+} from '../../data/mockDispatchImmediateData'
 import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
 import MapInvalidateSize from '../../components/map/MapInvalidateSize'
 import { RWANDA_CENTER, RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../components/map/rwandaConstants'
-import { mockIncidents, mockUnits } from '../../data/mockData'
+import { mockIncidents } from '../../data/mockIncidents'
+import { mockVehicles as mockUnits } from '../../data/mockVehicles'
 import 'leaflet/dist/leaflet.css'
 
 const SEV_COLOR  = { critical: '#E8354A', high: '#F07820', medium: '#D4A017', low: '#3DAA6A' }
 const UNIT_COLOR = { deployed: '#2196C8', available: '#3DAA6A', idle: '#D4A017', offline: '#5A6478' }
+
+const TYPE_ICON_MAP = {
+  shield:  ShieldAlert,
+  warning: AlertTriangle,
+  fire:    Flame,
+  medical: Heart,
+  car:     Car,
+  people:  Users,
+  person:  User,
+  alert:   Bell,
+}
 
 function UnitTypeIcon({ type }) {
   const p = { size: 15, strokeWidth: 1.8 }
@@ -39,7 +57,7 @@ function UnitCard({ unit, onAssign }) {
   return (
     <div className="flex items-center gap-2.25 px-3 py-2.25 border-b border-(--border-subtle) cursor-pointer hover:bg-(--bg-elevated) transition-colors">
       <div className="w-7.5 h-7.5 rounded-md bg-(--bg-elevated) flex items-center justify-center shrink-0">
-        <UnitTypeIcon type={unit.type} />
+        <UnitTypeIcon type={unit.vehicle_type} />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
@@ -63,10 +81,95 @@ function UnitCard({ unit, onAssign }) {
   )
 }
 
+function ImmediateDispatchModal({ onClose, onSelect }) {
+  return (
+    <div
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div
+        className="w-full max-w-[640px] rounded-2xl border border-(--border) overflow-hidden"
+        style={{ background: 'var(--bg-surface)', boxShadow: 'var(--shadow-modal)' }}
+      >
+        {/* Modal header */}
+        <div
+          className="flex items-center justify-between px-5 py-4 border-b border-(--border)"
+          style={{ background: 'color-mix(in srgb, var(--status-critical) 8%, var(--bg-surface))' }}
+        >
+          <div className="flex items-center gap-2.5">
+            <span
+              className="inline-flex items-center justify-center w-7 h-7 rounded-lg"
+              style={{ background: 'var(--status-critical)', color: '#fff' }}
+            >
+              <Zap size={14} />
+            </span>
+            <div>
+              <div
+                className="text-[11px] font-bold uppercase tracking-[0.1em] text-(--status-critical)"
+                style={{ fontFamily: 'var(--font-display)' }}
+              >
+                Immediate Dispatch
+              </div>
+              <div className="text-[12px] text-(--text-secondary)">Select the incident type to begin fast dispatch</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg flex items-center justify-center border border-(--border) bg-transparent cursor-pointer text-(--text-muted) hover:text-(--text-primary) transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Type grid */}
+        <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {IMMEDIATE_INCIDENT_TYPES.map((type) => {
+            const Icon = TYPE_ICON_MAP[type.icon] || AlertTriangle
+            return (
+              <button
+                key={type.id}
+                type="button"
+                onClick={() => onSelect(type)}
+                className="flex flex-col items-center gap-2 p-3.5 rounded-xl border border-(--border) cursor-pointer text-center hover:border-(--status-critical) transition-all group"
+                style={{ background: 'var(--bg-input)' }}
+              >
+                <span
+                  className="w-9 h-9 rounded-xl flex items-center justify-center transition-colors group-hover:bg-(--status-critical)"
+                  style={{
+                    background: 'color-mix(in srgb, var(--status-critical) 12%, transparent)',
+                    color: 'var(--status-critical)',
+                  }}
+                >
+                  <Icon size={18} />
+                </span>
+                <span
+                  className="text-[11px] font-bold text-(--text-primary) leading-tight"
+                  style={{ fontFamily: 'var(--font-display)' }}
+                >
+                  {type.label}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="px-5 pb-4 text-center">
+          <p className="text-[11px] text-(--text-muted) m-0">
+            Selecting a type will open the fast-dispatch screen. AI analysis is bypassed for immediate dispatch.
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function LiveDispatchMap() {
   const { theme } = useThemeStore()
+  const navigate = useNavigate()
   const [unitFilter, setUnitFilter] = useState('All')
   const [liveTime, setLiveTime] = useState(new Date())
+  const [showImmediateModal, setShowImmediateModal] = useState(false)
 
   useEffect(() => {
     const t = setInterval(() => setLiveTime(new Date()), 30000)
@@ -78,6 +181,11 @@ export default function LiveDispatchMap() {
   const filteredUnits = (unitFilter === 'All' ? mockUnits : mockUnits.filter(u => u.status === unitFilter.toLowerCase())).slice(0, 5)
   const criticalIncident = getCriticalUnassignedIncident()
 
+  const handleImmediateTypeSelect = (type) => {
+    setShowImmediateModal(false)
+    navigate('/dispatcher/dispatch-immediate/NEW', { state: { immediateType: type } })
+  }
+
   return (
     <div className="dispatch-map-page relative">
 
@@ -87,7 +195,21 @@ export default function LiveDispatchMap() {
         <KpiPill label="Units Available" value={available} color="#3DAA6A" />
         <KpiPill label="Avg Response"    value="7.2m"      color="var(--accent)" />
         <KpiPill label="Coverage"        value="84%"       color="var(--accent)" />
-        <div className="ml-auto px-3.5 flex items-center gap-2">
+        <div className="ml-auto px-3.5 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setShowImmediateModal(true)}
+            className="inline-flex items-center gap-1.5 px-3 h-7 rounded-lg border-none cursor-pointer text-[11px] font-bold uppercase tracking-wider transition-opacity hover:opacity-90"
+            style={{
+              background: 'var(--status-critical)',
+              color: '#fff',
+              fontFamily: 'var(--font-display)',
+              boxShadow: '0 2px 8px color-mix(in srgb, var(--status-critical) 35%, transparent)',
+            }}
+          >
+            <Zap size={12} />
+            Immediate Dispatch
+          </button>
           <div className="flex items-center gap-1.5 px-2.5 py-0.75 bg-(--bg-elevated) rounded border border-(--border)">
             <Radio size={11} color="var(--accent)" />
             <span className="text-[10px] font-bold text-(--accent) tracking-[0.1em]" style={{ fontFamily: 'var(--font-display)' }}>LIVE</span>
@@ -124,20 +246,20 @@ export default function LiveDispatchMap() {
               className={theme === 'dark' ? 'map-dark-tiles' : ''}
             />
             <RwandaBoundsEnforcer />
-            {mockIncidents.filter(i => i.status !== 'resolved').map(inc => (
-              <CircleMarker key={inc.id} center={[inc.lat, inc.lng]} radius={9}
+            {mockIncidents.filter(i => i.status !== 'resolved' && i.status !== 'PENDING_REPORT').map(inc => (
+              <CircleMarker key={inc.incident_id} center={[inc.lat, inc.lng]} radius={9}
                 pathOptions={{ color: '#fff', fillColor: SEV_COLOR[inc.severity], fillOpacity: 1, weight: 2 }}>
                 <Tooltip>
-                  <strong>{inc.id}</strong> — {inc.type}<br />
+                  <strong>{inc.incident_ref}</strong> — {inc.incident_type}<br />
                   {inc.district}, {inc.sector} · {inc.elapsed}
                 </Tooltip>
               </CircleMarker>
             ))}
             {mockUnits.filter(u => u.status !== 'offline').map(unit => (
-              <CircleMarker key={unit.id} center={[unit.lat, unit.lng]} radius={6}
+              <CircleMarker key={unit.vehicle_id} center={[unit.current_lat, unit.current_lng]} radius={6}
                 pathOptions={{ color: '#fff', fillColor: UNIT_COLOR[unit.status], fillOpacity: 1, weight: 1.5 }}>
                 <Tooltip>
-                  <strong>{unit.id}</strong> — {unit.type}<br />
+                  <strong>{unit.id}</strong> — {unit.vehicle_type}<br />
                   {unit.status} · {unit.location}
                 </Tooltip>
               </CircleMarker>
@@ -185,7 +307,7 @@ export default function LiveDispatchMap() {
               ))}
             </div>
             <div className="flex-1 overflow-y-auto">
-              {filteredUnits.map(unit => <UnitCard key={unit.id} unit={unit} onAssign={() => {}} />)}
+              {filteredUnits.map(unit => <UnitCard key={unit.vehicle_id} unit={unit} onAssign={() => {}} />)}
             </div>
           </div>
         </div>
@@ -193,7 +315,7 @@ export default function LiveDispatchMap() {
 
       {criticalIncident && (
         <Link
-          to={`/dispatcher/dispatch-immediate/${criticalIncident.id}`}
+          to={`/dispatcher/dispatch-immediate/${criticalIncident.incident_ref}`}
           className="dispatch-immediate-fab fixed z-50 inline-flex items-center gap-2 no-underline font-bold text-[12px] uppercase tracking-wide transition-opacity hover:opacity-90"
           style={{
             bottom: '2rem',
@@ -209,6 +331,13 @@ export default function LiveDispatchMap() {
           <Zap size={16} />
           Dispatch Immediate
         </Link>
+      )}
+
+      {showImmediateModal && (
+        <ImmediateDispatchModal
+          onClose={() => setShowImmediateModal(false)}
+          onSelect={handleImmediateTypeSelect}
+        />
       )}
     </div>
   )
