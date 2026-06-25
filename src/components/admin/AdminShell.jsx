@@ -2,11 +2,12 @@ import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import Navbar from '../layout/Navbar'
 import AdminSidebar from '../layout/AdminSidebar'
-
-const superAdminUser = { name: 'System Admin', role: 'SUPER ADMIN' }
+import { getCurrentUser } from '../../utils/authSession'
 
 export default function AdminShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const cu = getCurrentUser()
+  const navUser = { name: cu?.full_name || 'System Admin', role: 'SUPER ADMIN' }
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -14,7 +15,7 @@ export default function AdminShell() {
       <AdminSidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
       <div className="flex flex-col flex-1 overflow-hidden min-w-0">
         <Navbar
-          user={superAdminUser}
+          user={navUser}
           onMenuClick={() => setMobileOpen((v) => !v)}
           portalLabel="System Administration"
           profileHref="/admin/settings/profile"
