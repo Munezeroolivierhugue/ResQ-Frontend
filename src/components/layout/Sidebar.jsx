@@ -51,8 +51,8 @@ function NavItem({ item, isActive, onClose }) {
           <span
             className="ml-auto shrink-0"
             style={{
-              background: 'var(--status-critical)',
-              color: '#fff',
+              background: item.href === '/dispatcher/pending-reports' ? 'var(--accent)' : 'var(--status-critical)',
+              color: item.href === '/dispatcher/pending-reports' ? 'var(--accent-text)' : '#fff',
               fontSize: '9px',
               fontWeight: 700,
               padding: '1px 6px',
