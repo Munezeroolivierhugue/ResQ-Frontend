@@ -13,6 +13,18 @@ import {
 } from '../../data/mockOpsManagerData'
 import OpsManagerDistrictLabel from '../../components/ops-manager/OpsManagerDistrictLabel'
 import { getOpsManagerDistrict } from '../../utils/opsManagerDistrict'
+import { mockReports } from '../../data/mockReports'
+import { generateUuid } from '../../utils/formHelpers'
+import { getCurrentUser } from '../../utils/authSession'
+import { useNotificationsStore } from '../../store/notificationsStore'
+
+function getCurrentShiftPeriod() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const startOfYear = new Date(year, 0, 1)
+  const week = Math.ceil(((now - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7)
+  return `${year}-W${String(week).padStart(2, '0')}`
+}
 
 export default function OpsManagerShift() {
   const [tab, setTab] = useState('performance')
@@ -20,6 +32,7 @@ export default function OpsManagerShift() {
   const [submitted, setSubmitted] = useState(false)
   const [expandedId, setExpandedId] = useState(null)
   const { markHandoverRead } = useOpsManagerStore()
+  const addNotification = useNotificationsStore((s) => s.addNotification)
 
   return (
     <div className="portal-page">
@@ -136,7 +149,41 @@ export default function OpsManagerShift() {
           {!submitted ? (
             <div className="flex flex-wrap justify-between gap-3 pt-4 border-t border-(--border)">
               <button type="button" className="dispatcher-btn-ghost">Preview Report</button>
-              <button type="button" className="dispatcher-btn-primary flex items-center gap-2" onClick={() => setSubmitted(true)}>
+              <button
+                type="button"
+                className="dispatcher-btn-primary flex items-center gap-2"
+                onClick={() => {
+                  const cu = getCurrentUser()
+                  const district = getOpsManagerDistrict()
+                  const shiftPeriod = getCurrentShiftPeriod()
+                  mockReports.push({
+                    report_id: generateUuid(),
+                    submitted_by: cu?.user_id || 'demo-user-uuid',
+                    role: 'ops_manager',
+                    district_id: cu?.district_id || district,
+                    shift_period: shiftPeriod,
+                    total_incidents: 247,
+                    avg_response_time_min: 7.2,
+                    coverage_score_pct: 93,
+                    dispatch_accuracy_pct: 88,
+                    escalations_managed: 4,
+                    ai_acceptance_rate_pct: 86,
+                    notes: notes || null,
+                    submitted_at: new Date().toISOString(),
+                  })
+                  addNotification({
+                    id: `sr-${Date.now()}`,
+                    type: 'SHIFT_REPORT_SUBMITTED',
+                    title: 'Shift Report Submitted',
+                    desc: `Ops Manager shift report for ${shiftPeriod} sent to District Commander`,
+                    time: 'Just now',
+                    read: false,
+                    href: '#shift-report',
+                    target_role: 'district_commander',
+                  })
+                  setSubmitted(true)
+                }}
+              >
                 <Send size={16} /> Submit to District Commander
               </button>
             </div>

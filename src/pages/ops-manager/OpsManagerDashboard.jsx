@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ClipboardList, Clock, MapPin, Target, AlertTriangle, X, CheckCircle,
-  Brain, MessageSquare, Radio,
+  Brain, MessageSquare, Radio, ShieldAlert,
 } from 'lucide-react'
 import MetricCard from '../../components/dispatcher/MetricCard'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
@@ -21,7 +21,139 @@ import {
 } from '../../data/mockOpsManagerData'
 import OpsManagerDistrictLabel from '../../components/ops-manager/OpsManagerDistrictLabel'
 import OpsManagerMissedCallsPanel from '../../components/ops-manager/OpsManagerMissedCallsPanel'
+import DispatchUnitsModal from '../../components/ops-manager/DispatchUnitsModal'
 import { getOpsManagerDistrict } from '../../utils/opsManagerDistrict'
+import { mockBackupRequests } from '../../data/mockBackupRequests'
+import { mockVehicles } from '../../data/mockVehicles'
+import { mockIncidents } from '../../data/mockIncidents'
+import { mockAuditLogs } from '../../data/mockAuditLogs'
+import { generateUuid } from '../../utils/formHelpers'
+import { getCurrentUser } from '../../utils/authSession'
+
+function timeAgo(isoString) {
+  const diffMs = Date.now() - new Date(isoString).getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return 'Just now'
+  if (diffMin < 60) return `${diffMin}m ago`
+  return `${Math.floor(diffMin / 60)}h ago`
+}
+
+function BackupRequestsPanel() {
+  const [requests, setRequests] = useState(() => [...mockBackupRequests])
+  const [dispatchTarget, setDispatchTarget] = useState(null)
+  const [dispatchToast, setDispatchToast] = useState(null)
+
+  const showToast = (msg) => {
+    setDispatchToast(msg)
+    setTimeout(() => setDispatchToast(null), 3000)
+  }
+
+  const handleAcknowledge = (backup) => {
+    const cu = getCurrentUser()
+    mockAuditLogs.push({
+      log_id: generateUuid(),
+      user_id: cu?.user_id || 'demo-user-uuid',
+      timestamp: new Date().toISOString(),
+      action: `BACKUP_REQUEST_ACKNOWLEDGED: ${backup.backup_id}`,
+      module: 'OPS_MANAGER',
+      ip_address: null,
+      status: 'SUCCESS',
+    })
+    setRequests((prev) => prev.filter((r) => r.backup_id !== backup.backup_id))
+    showToast('Backup request acknowledged')
+  }
+
+  const openDispatch = (backup) => {
+    const reqVehicle = mockVehicles.find((v) => v.vehicle_id === backup.requesting_unit_id || v.id === backup.requesting_unit_id)
+    const incData = mockIncidents.find((i) => i.incident_id === backup.incident_id)
+    setDispatchTarget({ backup, vehicle: reqVehicle, incData })
+  }
+
+  return (
+    <div className="dispatcher-surface overflow-hidden relative">
+      {dispatchToast && (
+        <div
+          className="absolute top-2 right-2 z-10 text-[12px] px-3 py-1.5 rounded-lg font-semibold"
+          style={{ background: 'var(--status-low-bg)', color: 'var(--status-low)', border: '1px solid var(--status-low)' }}
+        >
+          {dispatchToast}
+        </div>
+      )}
+      <DispatchUnitsModal
+        isOpen={!!dispatchTarget}
+        incidentId={dispatchTarget?.backup?.incident_id}
+        incidentRef={dispatchTarget?.incData?.incident_ref || dispatchTarget?.backup?.incident_id}
+        districtId={dispatchTarget?.vehicle?.district_id}
+        onClose={() => setDispatchTarget(null)}
+        onConfirm={(units) => {
+          setDispatchTarget(null)
+          showToast(`${units.length} unit${units.length > 1 ? 's' : ''} dispatched`)
+        }}
+      />
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-(--border-subtle)">
+        <div className="flex items-center gap-2 min-w-0">
+          <ShieldAlert size={16} style={{ color: 'var(--status-medium)' }} aria-hidden />
+          <span className="text-[14px] font-semibold text-(--text-primary)">Backup Requests</span>
+          {requests.length > 0 && (
+            <span
+              className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[11px] font-bold"
+              style={{ background: 'var(--status-medium-bg)', color: 'var(--status-medium)' }}
+            >
+              {requests.length}
+            </span>
+          )}
+        </div>
+        <span className="text-[11px] font-mono text-(--text-muted)">From field units</span>
+      </div>
+      {requests.length === 0 ? (
+        <div className="flex flex-col items-center justify-center text-center" style={{ padding: '1.25rem' }}>
+          <p className="text-[12px] text-(--text-muted) m-0">No pending backup requests</p>
+        </div>
+      ) : (
+        <div>
+          {requests.map((req) => {
+            const reqVehicle = mockVehicles.find((v) => v.vehicle_id === req.requesting_unit_id || v.id === req.requesting_unit_id)
+            const incData = mockIncidents.find((i) => i.incident_id === req.incident_id)
+            return (
+              <div
+                key={req.backup_id}
+                className="flex flex-col gap-2 border-b border-(--border-subtle) last:border-0"
+                style={{ padding: '0.65rem 0.85rem' }}
+              >
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-mono text-[11px] font-bold text-(--accent)">
+                    {incData?.incident_ref || req.incident_id}
+                  </span>
+                  <span className="text-[11px] text-(--text-muted)">
+                    · {reqVehicle?.plate_number || req.requesting_unit_id}
+                  </span>
+                  <span className="text-[10px] font-mono text-(--text-muted) ml-auto">{timeAgo(req.created_at)}</span>
+                </div>
+                <div className="text-[12px] text-(--text-secondary)">{req.reason}</div>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    className="dispatcher-btn-ghost text-[11px]"
+                    onClick={() => handleAcknowledge(req)}
+                  >
+                    Acknowledge
+                  </button>
+                  <button
+                    type="button"
+                    className="dispatcher-btn-outline text-[11px]"
+                    onClick={() => openDispatch(req)}
+                  >
+                    Dispatch Units
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function FleetBar({ type, available, total }) {
   const pct = Math.round((available / total) * 100)
@@ -245,7 +377,7 @@ export default function OpsManagerDashboard() {
                 <StatusBadge label={getWorkloadLabel(d.workload)} variant={getWorkloadVariant(d.workload)} />
                 <div className="text-right shrink-0">
                   <div className="text-[11px] font-mono font-bold">{d.incidents}</div>
-                  <div className="text-[10px] text-(--text-muted)">{d.aiRate}% AI</div>
+                  <div className="text-[10px] text-(--text-muted)">{d.ai_acceptance_rate}% AI</div>
                 </div>
                 <button type="button" className="dispatcher-btn-icon shrink-0" aria-label="Message">
                   <MessageSquare size={14} />
@@ -257,6 +389,7 @@ export default function OpsManagerDashboard() {
             </Link>
           </div>
           <OpsManagerMissedCallsPanel />
+          <BackupRequestsPanel />
         </div>
       </div>
 

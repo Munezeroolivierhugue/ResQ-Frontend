@@ -8,12 +8,17 @@ import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
 import { RWANDA_CENTER, RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../components/map/rwandaConstants'
 import { mockIncidents } from '../../data/mockIncidents'
 import { mockUnits } from '../../data/mockVehicles'
+import { mockBroadcasts } from '../../data/mockBroadcasts'
+import { generateUuid } from '../../utils/formHelpers'
+import { getCurrentUser } from '../../utils/authSession'
+import { useNotificationsStore } from '../../store/notificationsStore'
 import 'leaflet/dist/leaflet.css'
 
 const LAYERS = ['All Units', 'Incidents', 'Coverage Rings', 'Traffic', 'Agency Units']
 
 export default function OpsManagerMap() {
   const { theme } = useThemeStore()
+  const addNotification = useNotificationsStore((s) => s.addNotification)
   const [layers, setLayers] = useState({
     'All Units': true,
     Incidents: true,
@@ -21,9 +26,38 @@ export default function OpsManagerMap() {
     Traffic: false,
     'Agency Units': true,
   })
+  const [broadcastOpen, setBroadcastOpen] = useState(false)
+  const [broadcastMsg, setBroadcastMsg] = useState('')
+  const [broadcastPriority, setBroadcastPriority] = useState('NORMAL')
 
   const toggleLayer = (name) => {
     setLayers((prev) => ({ ...prev, [name]: !prev[name] }))
+  }
+
+  const handleBroadcast = () => {
+    if (!broadcastMsg.trim()) return
+    const cu = getCurrentUser()
+    mockBroadcasts.push({
+      broadcast_id: generateUuid(),
+      sent_by: cu?.user_id || 'demo-user-uuid',
+      message: broadcastMsg,
+      priority: broadcastPriority,
+      target_area: 'GEOGRAPHIC_ZONE',
+      sent_at: new Date().toISOString(),
+    })
+    addNotification({
+      id: `bc-${Date.now()}`,
+      type: 'BROADCAST',
+      title: 'Area Broadcast Sent',
+      desc: broadcastMsg,
+      time: 'Just now',
+      read: false,
+      href: '#broadcast',
+      target_role: 'dispatcher',
+    })
+    setBroadcastMsg('')
+    setBroadcastPriority('NORMAL')
+    setBroadcastOpen(false)
   }
 
   const standbyUnits = mockUnits.filter((u) => u.status === 'available' || u.status === 'idle')
@@ -76,12 +110,57 @@ export default function OpsManagerMap() {
           <span className="text-[11px] font-mono px-2.5 py-1 rounded bg-(--bg-input) border border-(--border) text-(--text-secondary)">
             12 incidents
           </span>
-          <button type="button" className="dispatcher-btn-outline text-[12px] flex items-center gap-1.5">
+          <button
+            type="button"
+            className="dispatcher-btn-outline text-[12px] flex items-center gap-1.5"
+            onClick={() => setBroadcastOpen((v) => !v)}
+          >
             <Megaphone size={14} />
             Broadcast to Area
           </button>
         </div>
       </div>
+
+      {broadcastOpen && (
+        <div className="shrink-0 px-4 py-3 border-b border-(--border) bg-(--bg-surface) flex flex-wrap gap-3 items-end">
+          <label className="dispatcher-field min-w-[120px]">
+            <span className="field-label">Priority</span>
+            <select
+              className="dispatcher-input dispatcher-select"
+              value={broadcastPriority}
+              onChange={(e) => setBroadcastPriority(e.target.value)}
+            >
+              <option value="NORMAL">Normal</option>
+              <option value="URGENT">Urgent</option>
+              <option value="EMERGENCY">Emergency</option>
+            </select>
+          </label>
+          <label className="dispatcher-field flex-1 min-w-[200px]">
+            <span className="field-label">Message</span>
+            <input
+              className="dispatcher-input dispatcher-text-input"
+              placeholder="Broadcast message…"
+              value={broadcastMsg}
+              onChange={(e) => setBroadcastMsg(e.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            className="dispatcher-btn-primary text-[12px] shrink-0"
+            onClick={handleBroadcast}
+            disabled={!broadcastMsg.trim()}
+          >
+            Send
+          </button>
+          <button
+            type="button"
+            className="dispatcher-btn-ghost text-[12px] shrink-0"
+            onClick={() => setBroadcastOpen(false)}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       <div className="flex-1 min-h-[480px] relative">
         <MapContainer

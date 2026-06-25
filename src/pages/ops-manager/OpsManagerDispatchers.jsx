@@ -1,16 +1,19 @@
 import { useState } from 'react'
-import { MessageSquare, ArrowLeftRight } from 'lucide-react'
+import { ArrowLeftRight } from 'lucide-react'
 import MetricCard from '../../components/dispatcher/MetricCard'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import {
   OPS_DISPATCHERS,
-  OPS_SUPERVISOR_MESSAGES,
   OPS_JEAN_BOSCO_INCIDENTS,
   getWorkloadVariant,
   getWorkloadLabel,
 } from '../../data/mockOpsManagerData'
 import OpsManagerDistrictLabel from '../../components/ops-manager/OpsManagerDistrictLabel'
 import { getOpsManagerDistrict } from '../../utils/opsManagerDistrict'
+import { mockIncidents } from '../../data/mockIncidents'
+import { mockAuditLogs } from '../../data/mockAuditLogs'
+import { generateUuid } from '../../utils/formHelpers'
+import { getCurrentUser } from '../../utils/authSession'
 
 function AiRateBar({ rate }) {
   const color = rate >= 85 ? 'var(--status-low)' : rate >= 60 ? 'var(--status-medium)' : 'var(--status-critical)'
@@ -28,20 +31,59 @@ export default function OpsManagerDispatchers() {
   const [redistributeId, setRedistributeId] = useState(null)
   const [selectedIncidents, setSelectedIncidents] = useState([])
   const [transferTo, setTransferTo] = useState('')
-  const [msg, setMsg] = useState('')
+  const [toast, setToast] = useState(null)
 
   const omDistrict = getOpsManagerDistrict()
   const dispatchers = OPS_DISPATCHERS.filter((d) => d.district === omDistrict)
   const overloaded = dispatchers.filter((d) => d.workload === 'overload').length
-  const avgAi = Math.round(dispatchers.reduce((s, d) => s + d.aiRate, 0) / dispatchers.length)
+  const avgAi = Math.round(dispatchers.reduce((s, d) => s + d.ai_acceptance_rate, 0) / dispatchers.length)
   const totalIncidents = dispatchers.reduce((s, d) => s + d.incidents, 0)
+
+  const showToast = (msg) => {
+    setToast(msg)
+    setTimeout(() => setToast(null), 3500)
+  }
 
   const toggleIncident = (id) => {
     setSelectedIncidents((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
   }
 
+  const handleConfirmTransfer = () => {
+    if (!transferTo || !selectedIncidents.length) return
+    const cu = getCurrentUser()
+    const newDispatcher = dispatchers.find((d) => d.id === transferTo)
+    if (!newDispatcher) return
+    const ts = new Date().toISOString()
+    selectedIncidents.forEach((incRef) => {
+      const incident = mockIncidents.find((i) => i.incident_ref === incRef || i.id === incRef)
+      if (incident) incident.logged_by = newDispatcher.user_id
+      mockAuditLogs.push({
+        log_id: generateUuid(),
+        user_id: cu?.user_id || 'demo-user-uuid',
+        timestamp: ts,
+        action: `INCIDENT_REASSIGNED: ${incRef} to ${newDispatcher.user_id}`,
+        module: 'OPS_MANAGER',
+        ip_address: null,
+        status: 'SUCCESS',
+      })
+    })
+    showToast(`Transferred ${selectedIncidents.length} incident${selectedIncidents.length > 1 ? 's' : ''} to ${newDispatcher.name}`)
+    setRedistributeId(null)
+    setSelectedIncidents([])
+    setTransferTo('')
+  }
+
   return (
-    <div className="portal-page">
+    <div className="portal-page relative">
+      {toast && (
+        <div
+          className="fixed top-20 right-6 z-50 max-w-sm px-4 py-3 rounded-lg border text-[13px] font-medium shadow-lg"
+          style={{ background: 'var(--bg-surface)', borderColor: 'var(--status-low)', color: 'var(--status-low)' }}
+        >
+          {toast}
+        </div>
+      )}
+
       <h1 className="dispatcher-page-title m-0">Dispatcher Supervision</h1>
       <OpsManagerDistrictLabel />
       <p className="dispatcher-page-subtitle mt-2">Monitor workload, AI acceptance, and redistribute active queues.</p>
@@ -80,13 +122,12 @@ export default function OpsManagerDispatchers() {
                 </td>
                 <td className="p-3"><StatusBadge label={getWorkloadLabel(d.workload)} variant={getWorkloadVariant(d.workload)} /></td>
                 <td className="p-3 font-bold" style={{ color: d.incidents > 6 ? 'var(--status-critical)' : undefined }}>{d.incidents}</td>
-                <td className="p-3">{d.handledToday}</td>
-                <td className="p-3"><AiRateBar rate={d.aiRate} /></td>
+                <td className="p-3">{d.incidents_handled}</td>
+                <td className="p-3"><AiRateBar rate={d.ai_acceptance_rate} /></td>
                 <td className="p-3"><StatusBadge label={d.status} variant={d.status === 'ON DUTY' ? 'resolved' : 'info'} /></td>
                 <td className="p-3">
                   <div className="flex gap-1 opacity-70 group-hover:opacity-100">
-                    <button type="button" className="dispatcher-btn-icon" aria-label="Message"><MessageSquare size={14} /></button>
-                    <button type="button" className="dispatcher-btn-icon" aria-label="Redistribute" onClick={() => setRedistributeId(d.id)}><ArrowLeftRight size={14} /></button>
+                    <button type="button" className="dispatcher-btn-icon" aria-label="Redistribute" onClick={() => { setRedistributeId(d.id); setSelectedIncidents([]); setTransferTo('') }}><ArrowLeftRight size={14} /></button>
                   </div>
                 </td>
               </tr>
@@ -114,31 +155,18 @@ export default function OpsManagerDispatchers() {
             </select>
           </label>
           <div className="flex gap-2 mt-3">
-            <button type="button" className="dispatcher-btn-primary text-[12px]">Confirm Transfer</button>
+            <button
+              type="button"
+              className="dispatcher-btn-primary text-[12px]"
+              disabled={!transferTo || !selectedIncidents.length}
+              onClick={handleConfirmTransfer}
+            >
+              Confirm Transfer
+            </button>
             <button type="button" className="dispatcher-btn-ghost text-[12px]" onClick={() => setRedistributeId(null)}>Cancel</button>
           </div>
         </div>
       )}
-
-      <div className="dispatcher-surface p-4 mt-6">
-        <h3 className="font-bold m-0 mb-3">Supervisor Channel</h3>
-        <div className="max-h-[160px] overflow-y-auto mb-3 flex flex-col gap-2">
-          {OPS_SUPERVISOR_MESSAGES.map((m, i) => (
-            <div key={i} className="text-[12px] border-b border-(--border-subtle) pb-2">
-              <span className="font-mono text-(--text-muted)">{m.time}</span>
-              <span className="font-semibold text-(--accent) ml-2">{m.from}</span>
-              <p className="m-0 mt-0.5 text-(--text-secondary)">{m.text}</p>
-            </div>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <select className="dispatcher-input dispatcher-select flex-1 min-w-[140px]">
-            {dispatchers.map((d) => <option key={d.id}>{d.name}</option>)}
-          </select>
-          <input className="dispatcher-input dispatcher-text-input flex-[2] min-w-[200px]" placeholder="Supervisor message…" value={msg} onChange={(e) => setMsg(e.target.value)} />
-          <button type="button" className="dispatcher-btn-primary text-[12px]">Send</button>
-        </div>
-      </div>
     </div>
   )
 }

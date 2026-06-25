@@ -8,6 +8,10 @@ import StatusBadge from '../../components/dispatcher/StatusBadge'
 import { OPS_ESCALATIONS, OPS_AGENCIES, OPS_AGENCY_OPTIONS } from '../../data/mockOpsManagerData'
 import OpsManagerDistrictLabel from '../../components/ops-manager/OpsManagerDistrictLabel'
 import { mockUnits } from '../../data/mockVehicles'
+import { mockBroadcasts } from '../../data/mockBroadcasts'
+import { generateUuid } from '../../utils/formHelpers'
+import { getCurrentUser } from '../../utils/authSession'
+import { useNotificationsStore } from '../../store/notificationsStore'
 import 'leaflet/dist/leaflet.css'
 
 const AGENCY_UNIT_COLORS = {
@@ -17,18 +21,55 @@ const AGENCY_UNIT_COLORS = {
   rib: 'var(--status-medium)',
 }
 
+const BROADCAST_OPTIONS = [
+  { id: 'police', label: 'All Police Units', border: 'var(--accent)', target: 'ALL_UNITS', notifRole: 'all' },
+  { id: 'geo', label: 'Geographic Zone', border: 'var(--accent)', target: 'GEOGRAPHIC_ZONE', notifRole: 'dispatcher' },
+  { id: 'sms', label: 'Public SMS Alert', border: 'var(--status-critical)', target: 'PUBLIC_SMS', notifRole: null },
+]
+
 export default function OpsManagerMultiAgency() {
   const { theme } = useThemeStore()
+  const addNotification = useNotificationsStore((s) => s.addNotification)
   const [incidentId, setIncidentId] = useState(OPS_ESCALATIONS[0]?.id || '')
   const [agencies] = useState(OPS_AGENCIES)
   const [showAdd, setShowAdd] = useState(false)
   const [broadcastType, setBroadcastType] = useState(null)
   const [broadcastMsg, setBroadcastMsg] = useState('')
+  const [broadcastPriority, setBroadcastPriority] = useState('NORMAL')
 
   const mapUnits = mockUnits.slice(0, 12).map((u, i) => ({
     ...u,
     agency: ['rnp', 'fire', 'med', 'rib'][i % 4],
   }))
+
+  const handleSendBroadcast = () => {
+    if (!broadcastMsg.trim() || !broadcastType) return
+    const cu = getCurrentUser()
+    const opt = BROADCAST_OPTIONS.find((b) => b.id === broadcastType)
+    mockBroadcasts.push({
+      broadcast_id: generateUuid(),
+      sent_by: cu?.user_id || 'demo-user-uuid',
+      message: broadcastMsg,
+      priority: broadcastPriority,
+      target_area: opt?.target || 'ALL_UNITS',
+      sent_at: new Date().toISOString(),
+    })
+    if (opt?.notifRole !== undefined) {
+      addNotification({
+        id: `bc-${Date.now()}`,
+        type: 'BROADCAST',
+        title: `Broadcast — ${opt.label}`,
+        desc: broadcastMsg,
+        time: 'Just now',
+        read: false,
+        href: '#broadcast',
+        target_role: opt.notifRole,
+      })
+    }
+    setBroadcastMsg('')
+    setBroadcastPriority('NORMAL')
+    setBroadcastType(null)
+  }
 
   return (
     <div className="portal-page flex flex-col gap-4">
@@ -97,7 +138,7 @@ export default function OpsManagerMultiAgency() {
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <div className="font-semibold text-[13px]">{a.name}</div>
-                    <div className="text-[12px] text-(--text-secondary)">{a.units} units deployed · {a.lastComm}</div>
+                    <div className="text-[12px] text-(--text-secondary)">{a.units} units deployed · {a.last_communication_at}</div>
                   </div>
                   <StatusBadge label={a.status} variant={a.status === 'ACTIVE' ? 'resolved' : 'active'} />
                 </div>
@@ -127,17 +168,13 @@ export default function OpsManagerMultiAgency() {
 
           <SectionBlock title="Broadcast Controls">
             <div className="flex flex-col gap-2">
-              {[
-                { id: 'police', label: 'All Police Units', border: 'var(--accent)' },
-                { id: 'geo', label: 'Geographic Zone', border: 'var(--accent)' },
-                { id: 'sms', label: 'Public SMS Alert', border: 'var(--status-critical)' },
-              ].map((b) => (
+              {BROADCAST_OPTIONS.map((b) => (
                 <button
                   key={b.id}
                   type="button"
                   className="w-full py-2.5 rounded-lg font-semibold text-[12px] bg-transparent cursor-pointer border"
                   style={{ borderColor: b.border, color: b.border }}
-                  onClick={() => setBroadcastType(b.id)}
+                  onClick={() => setBroadcastType(broadcastType === b.id ? null : b.id)}
                 >
                   {b.label}
                 </button>
@@ -147,17 +184,33 @@ export default function OpsManagerMultiAgency() {
               <div className="mt-3 p-3 border border-(--border) rounded-lg">
                 <label className="dispatcher-field mb-2">
                   <span className="field-label">Priority</span>
-                  <select className="dispatcher-input dispatcher-select">
-                    <option>Normal</option>
-                    <option>Urgent</option>
-                    <option>Emergency</option>
+                  <select
+                    className="dispatcher-input dispatcher-select"
+                    value={broadcastPriority}
+                    onChange={(e) => setBroadcastPriority(e.target.value)}
+                  >
+                    <option value="NORMAL">Normal</option>
+                    <option value="URGENT">Urgent</option>
+                    <option value="EMERGENCY">Emergency</option>
                   </select>
                 </label>
                 <label className="dispatcher-field mb-2">
                   <span className="field-label">Message</span>
-                  <textarea className="dispatcher-input dispatcher-textarea" rows={3} value={broadcastMsg} onChange={(e) => setBroadcastMsg(e.target.value)} />
+                  <textarea
+                    className="dispatcher-input dispatcher-textarea"
+                    rows={3}
+                    value={broadcastMsg}
+                    onChange={(e) => setBroadcastMsg(e.target.value)}
+                  />
                 </label>
-                <button type="button" className="dispatcher-btn-primary w-full text-[12px]">Send Broadcast</button>
+                <button
+                  type="button"
+                  className="dispatcher-btn-primary w-full text-[12px]"
+                  onClick={handleSendBroadcast}
+                  disabled={!broadcastMsg.trim()}
+                >
+                  Send Broadcast
+                </button>
                 <p className="text-[10px] text-(--text-muted) m-0 mt-2">System will track acknowledgments</p>
               </div>
             )}
