@@ -11,6 +11,8 @@ import ShiftHandover from './pages/dispatcher/ShiftHandover'
 import MyProfile from './pages/dispatcher/MyProfile'
 import DispatcherSettings from './pages/dispatcher/Settings'
 import DispatchImmediate from './pages/dispatcher/DispatchImmediate'
+import PendingReports from './pages/dispatcher/PendingReports'
+import MissedCalls from './pages/dispatcher/MissedCalls'
 import Notifications from './pages/dispatcher/Notifications'
 import DispatcherRoute from './components/layout/DispatcherRoute'
 import AdminSettings from './pages/admin/AdminSettings'
@@ -222,6 +224,8 @@ export default function App() {
           <Route path="queue" element={<Navigate to="/dispatcher/active-incident" replace />} />
           <Route path="history" element={<IncidentHistory />} />
           <Route path="incident-report" element={<IncidentClosure />} />
+          <Route path="pending-reports" element={<PendingReports />} />
+          <Route path="missed-calls" element={<MissedCalls />} />
           <Route path="shift-handover" element={<ShiftHandover />} />
           <Route path="shifts" element={<Navigate to="/dispatcher/shift-handover" replace />} />
           <Route path="profile" element={<MyProfile />} />
