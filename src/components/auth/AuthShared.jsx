@@ -25,6 +25,11 @@ export function DemoPortalDropdown({ inline = false }) {
     if (portal.value === 'district_commander') {
       setDistrictCommanderSession('Nyarugenge')
     }
+    if (portal.value === 'field_responder') {
+      setOpen(false)
+      navigate('/fr')
+      return
+    }
     sessionStorage.setItem('resq-trusted-device', 'true')
     setOpen(false)
     navigate(portal.href)

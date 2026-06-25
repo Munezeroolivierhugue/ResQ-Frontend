@@ -5387,3 +5387,676 @@ a[href*="recover"]:hover {
 }
 
 
+
+/* ================================================================
+   FIELD RESPONDER MOBILE AUTH — FRSplash · FRLogin · FRRegister
+   Routes: /fr  /fr/login  /fr/register
+   ================================================================ */
+
+.fr-auth-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  max-width: 430px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-base);
+}
+.fr-auth-shell--scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Splash photo background */
+.fr-auth-bg {
+  position: fixed;
+  inset: 0;
+  max-width: 430px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 0;
+  background: var(--fr-auth-photo);
+  background-size: cover;
+  background-position: center;
+}
+.fr-auth-overlay {
+  position: fixed;
+  inset: 0;
+  max-width: 430px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  background: linear-gradient(
+    160deg,
+    rgba(3,22,50,0.88) 0%,
+    rgba(4,13,31,0.82) 50%,
+    rgba(2,8,20,0.95) 100%
+  );
+}
+
+/* Login/Register top gradient */
+.fr-auth-top-grad {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 430px;
+  height: 240px;
+  background: linear-gradient(180deg, var(--bg-sidebar) 0%, transparent 100%);
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ── Splash body ── */
+.fr-splash-body {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3.5rem 1.75rem 2.5rem;
+  text-align: center;
+}
+.fr-splash-badges {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}
+.fr-splash-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.18);
+  color: rgba(255,255,255,0.7);
+  font-family: var(--font-display);
+}
+.fr-splash-logo-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+}
+.fr-splash-icon-ring {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, rgba(0,0,0,0.4));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 12px color-mix(in srgb,var(--accent) 6%,transparent), 0 8px 32px rgba(0,0,0,0.5);
+}
+.fr-splash-brand { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; }
+.fr-splash-brand-name {
+  font-size: 2.5rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #ffffff;
+  font-family: var(--font-display);
+  line-height: 1;
+  text-shadow: 0 2px 16px rgba(0,0,0,0.6);
+}
+.fr-splash-brand-sub {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.6);
+  font-family: var(--font-mono);
+}
+.fr-splash-text { max-width: 320px; }
+.fr-splash-headline {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.3;
+  margin: 0 0 0.85rem;
+  font-family: var(--font-display);
+  text-shadow: 0 2px 12px rgba(0,0,0,0.5);
+}
+.fr-splash-desc {
+  font-size: 13.5px;
+  color: rgba(255,255,255,0.72);
+  line-height: 1.6;
+  margin: 0;
+}
+.fr-splash-actions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+.fr-splash-hint { font-size: 13px; color: rgba(255,255,255,0.55); margin: 0; }
+.fr-splash-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+  font-family: var(--font-body);
+}
+.fr-splash-footer {
+  font-size: 10px;
+  color: rgba(255,255,255,0.3);
+  font-family: var(--font-mono);
+  text-align: center;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+/* ── Login/Register card wrap ── */
+.fr-auth-card-wrap {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2.5rem 1.25rem 2rem;
+  gap: 1.25rem;
+  width: 100%;
+}
+
+/* ── Tabs ── */
+.fr-auth-tabs {
+  display: flex;
+  background: var(--bg-elevated);
+  border-radius: 12px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  width: 100%;
+  max-width: 320px;
+}
+.fr-auth-tab {
+  flex: 1;
+  text-align: center;
+  padding: 0.6rem 0;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-family: var(--font-display);
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+}
+.fr-auth-tab--active {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  cursor: default;
+}
+
+/* ── Logo ── */
+.fr-auth-logo { display: flex; flex-direction: column; align-items: center; gap: 0.65rem; }
+.fr-auth-logo-ring {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb,var(--accent) 35%,transparent);
+  background: color-mix(in srgb,var(--accent) 10%,var(--bg-elevated));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px color-mix(in srgb,var(--accent) 20%,transparent);
+}
+.fr-auth-logo-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-family: var(--font-display);
+}
+
+/* ── Card ── */
+.fr-auth-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 1.5rem 1.25rem;
+  box-shadow: var(--shadow-modal);
+}
+.fr-auth-card-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 0.25rem;
+  font-family: var(--font-display);
+  text-align: center;
+}
+.fr-auth-card-sub {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  text-align: center;
+  margin: 0 0 1.25rem;
+}
+
+/* ── Form ── */
+.fr-auth-form { display: flex; flex-direction: column; gap: 0.9rem; }
+.fr-auth-field { display: flex; flex-direction: column; gap: 0.35rem; }
+.fr-auth-field-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  font-family: var(--font-display);
+}
+.fr-auth-input-wrap { position: relative; display: flex; align-items: center; }
+.fr-auth-input-icon {
+  position: absolute;
+  left: 0.85rem;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.fr-auth-input {
+  width: 100%;
+  height: 50px;
+  padding: 0 0.85rem 0 2.6rem;
+  border-radius: 12px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: var(--font-body);
+  outline: none;
+  appearance: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.fr-auth-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ghost);
+}
+.fr-auth-input--pr { padding-right: 2.75rem; }
+.fr-auth-eye {
+  position: absolute;
+  right: 0.85rem;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+.fr-auth-eye:hover { color: var(--text-primary); }
+
+.fr-auth-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.fr-auth-check-label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.fr-auth-checkbox { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+.fr-auth-recover { font-size: 12px; font-weight: 600; color: var(--accent); text-decoration: none; }
+.fr-auth-error { font-size: 11px; color: var(--status-critical); margin-top: 0.2rem; }
+
+/* ── Buttons ── */
+.fr-auth-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: none;
+  border-radius: 14px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+}
+.fr-auth-btn--primary {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: 13px;
+  min-height: 52px;
+  padding: 0 1.5rem;
+  box-shadow: 0 4px 20px color-mix(in srgb,var(--accent) 40%,transparent);
+}
+.fr-auth-btn--primary:hover {
+  background: var(--accent-dim);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 28px color-mix(in srgb,var(--accent) 50%,transparent);
+}
+.fr-auth-btn--primary:active { transform: translateY(0); }
+.fr-auth-btn--full { width: 100%; margin-top: 0.35rem; }
+.fr-splash-actions .fr-auth-btn--primary {
+  width: 100%;
+  min-height: 56px;
+  font-size: 14px;
+  border-radius: 16px;
+}
+
+.fr-auth-footer {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  text-align: center;
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+
+[data-theme="dark"] .fr-auth-card {
+  background: var(--bg-surface);
+  border-color: var(--border);
+}
+
+/* ── FR mobile OTP inputs ── */
+.fr-otp-icon-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+}
+.fr-otp-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-align: center;
+  margin: 0 0 0.35rem;
+  font-family: var(--font-display);
+}
+.fr-otp-inputs {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+.fr-otp-digit {
+  width: 42px;
+  height: 52px;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-input);
+  text-align: center;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.fr-otp-digit:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-ghost);
+}
+.fr-otp-resend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 1rem;
+  width: 100%;
+  justify-content: center;
+  background: none;
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font-display);
+}
+.fr-otp-resend:hover { color: var(--accent); }
+
+/* ── FR MFA setup ── */
+.fr-mfa-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 999px;
+  font-family: var(--font-display);
+}
+.fr-mfa-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+.fr-mfa-card {
+  padding: 1rem;
+  border-radius: 12px;
+  border: 1px solid var(--accent);
+  background: var(--accent-ghost);
+}
+.fr-mfa-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+.fr-mfa-card-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--bg-surface);
+}
+.fr-mfa-card-configured {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  font-family: var(--font-display);
+}
+.fr-mfa-card-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  margin-bottom: 0.25rem;
+}
+.fr-mfa-card-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.45;
+}
+.fr-mfa-protocol {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  padding: 0.75rem;
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+}
+.fr-mfa-protocol-text {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ── FR MFA success overlay ── */
+.fr-mfa-success-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(0,0,0,0.65);
+  backdrop-filter: blur(4px);
+}
+.fr-mfa-success-card {
+  width: 100%;
+  max-width: 340px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-modal);
+}
+.fr-mfa-success-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 1.5rem 2rem;
+  background: var(--accent);
+  gap: 0.75rem;
+}
+.fr-mfa-success-check {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 3px solid rgba(255,255,255,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fr-mfa-success-label {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  color: var(--text-on-accent);
+  font-family: var(--font-display);
+}
+.fr-mfa-success-body {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+.fr-mfa-success-text {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  text-align: center;
+  margin: 0;
+  line-height: 1.55;
+}
+
+/* ── FR auth frame fixes — scroll inside the phone shell ── */
+.fr-auth-frame {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+.fr-auth-frame .fr-auth-bg,
+.fr-auth-frame .fr-auth-overlay,
+.fr-auth-frame .fr-auth-top-grad {
+  position: absolute;
+  left: 0;
+  right: 0;
+  max-width: none;
+  transform: none;
+}
+.fr-auth-frame .fr-splash-body {
+  min-height: 100%;
+}
+.fr-auth-frame .fr-auth-card-wrap {
+  min-height: 100%;
+  justify-content: center;
+}
+
+/* ── FR auth overlay variant for form screens (login/register/otp/mfa) ── */
+/* Heavier at the bottom so the card stays readable, lighter at top so photo shows through */
+.fr-auth-overlay--form {
+  position: absolute;
+  inset: 0;
+  max-width: none;
+  transform: none;
+  z-index: 1;
+  background: linear-gradient(
+    180deg,
+    rgba(3, 22, 50, 0.55) 0%,
+    rgba(4, 13, 31, 0.75) 40%,
+    rgba(2, 8, 20, 0.92) 100%
+  );
+}
+
+/* ── FR auth card glass effect on photo background ── */
+.fr-auth-frame .fr-auth-card {
+  background: rgba(var(--bg-surface-rgb, 13, 26, 46), 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+[data-theme="light"] .fr-auth-frame .fr-auth-card {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+.fr-auth-frame .fr-auth-tabs {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+.fr-auth-frame .fr-auth-tab {
+  color: rgba(255, 255, 255, 0.6);
+}
+.fr-auth-frame .fr-auth-tab--active {
+  color: var(--text-on-accent);
+}
+.fr-auth-frame .fr-auth-logo-label {
+  color: rgba(255, 255, 255, 0.9);
+}
+.fr-auth-frame .fr-auth-footer {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+/* ── FR auth logo — no background, white icon + RESQ name + sub ── */
+.fr-auth-logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+}
+.fr-auth-logo-name {
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #ffffff;
+  font-family: var(--font-display);
+  line-height: 1;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.5);
+}
+.fr-auth-logo-sub {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.6);
+  font-family: var(--font-mono);
+}

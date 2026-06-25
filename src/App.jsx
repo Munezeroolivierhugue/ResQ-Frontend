@@ -24,6 +24,12 @@ import AdminAudit from './pages/admin/AdminAudit'
 import AdminSecurity from './pages/admin/AdminSecurity'
 import AdminProfile from './pages/admin/AdminProfile'
 import Login from './pages/auth/Login'
+import FRSplash from './pages/auth/FRSplash'
+import FRLogin from './pages/auth/FRLogin'
+import FRRegister from './pages/auth/FRRegister'
+import FRLoginMfa from './pages/auth/FRLoginMfa'
+import FRVerifyOtp from './pages/auth/FRVerifyOtp'
+import FRMfaSetup from './pages/auth/FRMfaSetup'
 import LoginMfa from './pages/auth/LoginMfa'
 import Register from './pages/auth/Register'
 import VerifyOtp from './pages/auth/VerifyOtp'
@@ -98,6 +104,14 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Field Responder mobile auth */}
+        <Route path="/fr" element={<FRSplash />} />
+        <Route path="/fr/login" element={<FRLogin />} />
+        <Route path="/fr/register" element={<FRRegister />} />
+        <Route path="/fr/login/mfa" element={<FRLoginMfa />} />
+        <Route path="/fr/verify-otp" element={<FRVerifyOtp />} />
+        <Route path="/fr/mfa-setup" element={<FRMfaSetup />} />
+
         {/* Auth (frontend simulation) */}
         <Route path="/login" element={<Login />} />
         <Route path="/login/mfa" element={<LoginMfa />} />
