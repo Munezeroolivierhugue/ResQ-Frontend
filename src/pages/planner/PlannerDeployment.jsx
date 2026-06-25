@@ -5,12 +5,20 @@ import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
 import { PLANNER_DEFAULT_INSTRUCTIONS, PLANNER_PLANS, RWANDA_DISTRICTS, planStatusVariant } from '../../data/mockPlannerData'
+import { mockDeploymentPlans } from '../../data/mockDeploymentPlans'
+import { mockPositioningInstructions } from '../../data/mockPositioningInstructions'
+import { getCurrentUser } from '../../utils/authSession'
+import { useNotificationsStore } from '../../store/notificationsStore'
 
-const EMPTY_INSTRUCTION = { unit: '', from: '', to: '', at: '' }
+const EMPTY_INSTRUCTION = { vehicle_id: '', from_location: '', to_location: '', move_time: '' }
 const BASE_COVERAGE = 82
 
+function generateId() {
+  return Math.random().toString(36).slice(2, 10)
+}
+
 function projectedFromInstructions(instructions) {
-  const filled = instructions.filter((i) => i.unit.trim() && i.to.trim())
+  const filled = instructions.filter((i) => i.vehicle_id.trim() && i.to_location.trim())
   const boost = filled.reduce((sum, _, idx) => sum + (3 + (idx % 3)), 0)
   return Math.min(98, BASE_COVERAGE + boost)
 }
@@ -18,22 +26,83 @@ function projectedFromInstructions(instructions) {
 export default function PlannerDeployment() {
   const [searchParams] = useSearchParams()
   const zoneHint = searchParams.get('zone')
+  const addNotification = useNotificationsStore((s) => s.addNotification)
+
   const [instructions, setInstructions] = useState(() =>
     PLANNER_DEFAULT_INSTRUCTIONS.map((i) => ({ ...i }))
   )
   const [planFilter, setPlanFilter] = useState('All')
   const [planName, setPlanName] = useState(zoneHint ? `${zoneHint} Response Plan` : '')
+  const [activeFrom, setActiveFrom] = useState('')
+  const [activeUntil, setActiveUntil] = useState('')
+  const [activeUntilTime, setActiveUntilTime] = useState('')
+  const [plans, setPlans] = useState(() => PLANNER_PLANS.map((p) => ({ ...p })))
 
   const projected = useMemo(() => projectedFromInstructions(instructions), [instructions])
   const improvement = projected - BASE_COVERAGE
 
   const filteredPlans =
-    planFilter === 'All' ? PLANNER_PLANS : PLANNER_PLANS.filter((p) => p.status === planFilter.toUpperCase())
+    planFilter === 'All' ? plans : plans.filter((p) => p.status === planFilter.toUpperCase())
 
   const addInstruction = () => setInstructions((rows) => [...rows, { ...EMPTY_INSTRUCTION }])
   const removeInstruction = (idx) => setInstructions((rows) => rows.filter((_, i) => i !== idx))
   const updateInstruction = (idx, field, value) =>
     setInstructions((rows) => rows.map((r, i) => (i === idx ? { ...r, [field]: value } : r)))
+
+  const savePlan = (isDraft) => {
+    const currentUser = getCurrentUser()
+    const timestamp = new Date().toISOString()
+    const planId = generateId()
+    const activeUntilFull = activeUntil + (activeUntilTime ? 'T' + activeUntilTime : '')
+    const newPlan = {
+      plan_id: planId,
+      plan_name: planName || '(Untitled Plan)',
+      district_id: currentUser?.district_id ?? null,
+      created_by: currentUser?.user_id ?? null,
+      active_from: activeFrom || null,
+      active_until: activeUntilFull || null,
+      projected_coverage: projected,
+      status: isDraft ? 'DRAFT' : 'SUBMITTED',
+      created_at: timestamp,
+    }
+    mockDeploymentPlans.push(newPlan)
+
+    instructions.forEach((inst) => {
+      if (!inst.vehicle_id.trim()) return
+      mockPositioningInstructions.push({
+        instruction_id: generateId(),
+        plan_id: planId,
+        vehicle_id: inst.vehicle_id,
+        from_location: inst.from_location,
+        to_location: inst.to_location,
+        move_time: inst.move_time,
+      })
+    })
+
+    // Add to displayed Plan Library immediately
+    const libraryEntry = {
+      id: 'PLN-' + planId.slice(0, 4).toUpperCase(),
+      plan_name: newPlan.plan_name,
+      district: 'Kigali',
+      active_from: activeFrom || '—',
+      active_until: activeUntilFull || '—',
+      status: newPlan.status,
+    }
+    PLANNER_PLANS.unshift(libraryEntry)
+    setPlans((prev) => [libraryEntry, ...prev])
+
+    if (!isDraft) {
+      addNotification({
+        id: 'notif-' + generateId(),
+        type: 'DEPLOYMENT_PLAN_SUBMITTED',
+        target_role: 'operations_manager',
+        title: 'Deployment Plan Submitted',
+        message: `Planner submitted "${newPlan.plan_name}" for OM approval.`,
+        timestamp,
+        read: false,
+      })
+    }
+  }
 
   return (
     <div className="portal-page flex flex-col gap-4 min-w-[1024px]">
@@ -66,13 +135,28 @@ export default function PlannerDeployment() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="text-[12px] font-medium text-(--text-secondary)">
                 Active from *
-                <input type="date" className="dispatcher-input h-10 w-full mt-1" />
+                <input
+                  type="date"
+                  className="dispatcher-input h-10 w-full mt-1"
+                  value={activeFrom}
+                  onChange={(e) => setActiveFrom(e.target.value)}
+                />
               </label>
               <label className="text-[12px] font-medium text-(--text-secondary)">
                 Active until *
                 <div className="flex gap-2 mt-1">
-                  <input type="date" className="dispatcher-input h-10 flex-1" />
-                  <input type="time" className="dispatcher-input h-10 w-28" />
+                  <input
+                    type="date"
+                    className="dispatcher-input h-10 flex-1"
+                    value={activeUntil}
+                    onChange={(e) => setActiveUntil(e.target.value)}
+                  />
+                  <input
+                    type="time"
+                    className="dispatcher-input h-10 w-28"
+                    value={activeUntilTime}
+                    onChange={(e) => setActiveUntilTime(e.target.value)}
+                  />
                 </div>
               </label>
             </div>
@@ -93,28 +177,28 @@ export default function PlannerDeployment() {
                   <input
                     className="dispatcher-input h-9 text-[12px]"
                     placeholder="Unit ID"
-                    value={row.unit}
-                    onChange={(e) => updateInstruction(idx, 'unit', e.target.value)}
+                    value={row.vehicle_id}
+                    onChange={(e) => updateInstruction(idx, 'vehicle_id', e.target.value)}
                   />
                   <input
                     className="dispatcher-input h-9 text-[12px]"
                     placeholder="Current location"
-                    value={row.from}
-                    onChange={(e) => updateInstruction(idx, 'from', e.target.value)}
+                    value={row.from_location}
+                    onChange={(e) => updateInstruction(idx, 'from_location', e.target.value)}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <input
                     className="dispatcher-input h-9 text-[12px]"
                     placeholder="Target standby point"
-                    value={row.to}
-                    onChange={(e) => updateInstruction(idx, 'to', e.target.value)}
+                    value={row.to_location}
+                    onChange={(e) => updateInstruction(idx, 'to_location', e.target.value)}
                   />
                   <input
                     className="dispatcher-input h-9 text-[12px]"
                     placeholder="Move time"
-                    value={row.at}
-                    onChange={(e) => updateInstruction(idx, 'at', e.target.value)}
+                    value={row.move_time}
+                    onChange={(e) => updateInstruction(idx, 'move_time', e.target.value)}
                   />
                 </div>
               </div>
@@ -133,8 +217,10 @@ export default function PlannerDeployment() {
             </label>
 
             <div className="flex flex-wrap gap-2 mt-2">
-              <button type="button" className="dispatcher-btn-ghost">Save as Draft</button>
-              <button type="button" className="dispatcher-btn-primary inline-flex items-center gap-1.5">
+              <button type="button" className="dispatcher-btn-ghost" onClick={() => savePlan(true)}>
+                Save as Draft
+              </button>
+              <button type="button" className="dispatcher-btn-primary inline-flex items-center gap-1.5" onClick={() => savePlan(false)}>
                 <Send size={16} />
                 Submit to Operations Manager
               </button>
@@ -218,9 +304,9 @@ export default function PlannerDeployment() {
                 className="flex flex-wrap items-center gap-2 py-2.5 border-t border-(--border-subtle) text-[12px] hover:bg-(--bg-elevated) -mx-2 px-2 rounded"
               >
                 <span className="font-mono text-(--accent) font-bold">{plan.id}</span>
-                <span className="text-[13px] truncate flex-1 min-w-[120px]">{plan.name}</span>
+                <span className="text-[13px] truncate flex-1 min-w-[120px]">{plan.plan_name}</span>
                 <span className="text-(--text-secondary)">{plan.district}</span>
-                <span className="font-mono text-[11px] text-(--text-muted)">{plan.range}</span>
+                <span className="font-mono text-[11px] text-(--text-muted)">{plan.active_from}</span>
                 <StatusBadge label={plan.status} variant={planStatusVariant(plan.status)} />
                 <button type="button" className="dispatcher-btn-ghost text-[11px] py-1 px-2">
                   Open

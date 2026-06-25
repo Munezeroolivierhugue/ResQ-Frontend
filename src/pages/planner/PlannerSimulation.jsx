@@ -4,6 +4,8 @@ import { Play, ArrowRight, FileDown, Plus, Loader2 } from 'lucide-react'
 import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
 import { PLANNER_SAVED_SCENARIOS } from '../../data/mockPlannerData'
+import { mockSimulations } from '../../data/mockSimulations'
+import { getCurrentUser } from '../../utils/authSession'
 
 const SCENARIOS = [
   'Flash Flood — Kigali',
@@ -19,11 +21,34 @@ export default function PlannerSimulation() {
   const [resourceMode, setResourceMode] = useState('current')
   const [loading, setLoading] = useState(false)
   const [showResults, setShowResults] = useState(true)
+  const [savedScenarios, setSavedScenarios] = useState(() => PLANNER_SAVED_SCENARIOS.map((s) => ({ ...s })))
 
   const runSimulation = () => {
     setLoading(true)
     setShowResults(false)
     setTimeout(() => {
+      const currentUser = getCurrentUser()
+      const timestamp = new Date().toISOString()
+      const sim = {
+        simulation_id: Math.random().toString(36).slice(2, 10),
+        created_by: currentUser?.user_id ?? null,
+        scenario_type: resourceMode === 'ai' ? 'AI_OPTIMIZED' : 'CURRENT_RESOURCES',
+        multiplier,
+        duration: null,
+        focus_area: null,
+        projected_response_time: null,
+        projected_coverage: null,
+        created_at: timestamp,
+      }
+      mockSimulations.push(sim)
+      const scenarioEntry = {
+        name: `${resourceMode === 'ai' ? 'AI Optimized' : 'Current'} · ${multiplier}× baseline`,
+        scenario_type: sim.scenario_type,
+        created_at: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+        result_summary: resourceMode === 'ai' ? 'Sufficient' : 'Insufficient',
+      }
+      PLANNER_SAVED_SCENARIOS.unshift(scenarioEntry)
+      setSavedScenarios((prev) => [scenarioEntry, ...prev])
       setLoading(false)
       setShowResults(true)
     }, 1500)
@@ -215,15 +240,15 @@ export default function PlannerSimulation() {
 
           <div className="dispatcher-surface p-4">
             <h3 className="text-[13px] font-semibold m-0 mb-3">Saved Scenarios</h3>
-            {PLANNER_SAVED_SCENARIOS.map((row) => (
+            {savedScenarios.map((row) => (
               <div
                 key={row.name}
                 className="flex flex-wrap items-center gap-2 py-2 border-t border-(--border-subtle) text-[12px]"
               >
                 <span className="font-medium flex-1 min-w-[140px]">{row.name}</span>
-                <span className="text-(--text-secondary)">{row.type}</span>
-                <span className="font-mono text-(--text-muted)">{row.date}</span>
-                <span>{row.outcome}</span>
+                <span className="text-(--text-secondary)">{row.scenario_type}</span>
+                <span className="font-mono text-(--text-muted)">{row.created_at}</span>
+                <span>{row.result_summary}</span>
                 <button type="button" className="dispatcher-btn-ghost text-[11px] py-1 px-2 ml-auto">
                   Rerun
                 </button>

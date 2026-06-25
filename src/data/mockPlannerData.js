@@ -1,4 +1,10 @@
-/** Emergency Planner — mock strategic planning data (Kigali). */
+/**
+ * Emergency Planner — mock strategic planning data (Kigali).
+ *
+ * NOTE: The `events` table (schema Section 3.13.12) is not surfaced in any
+ * Planner screen. Adding an events planning screen is feature work, not
+ * schema alignment, and is intentionally skipped here.
+ */
 
 export const PLANNER_DISTRICT = 'Kigali City'
 
@@ -46,37 +52,43 @@ export const PLANNER_PREDICTIONS = [
 export const PLANNER_APPROVALS = [
   {
     id: 'PLN-0041',
-    name: 'Friday PM Kimihurura Surge',
+    plan_name: 'Friday PM Kimihurura Surge',
     status: 'PENDING',
-    submittedTo: 'Kagame R. (Ops Manager)',
+    submitted_to: 'Kagame R. (Ops Manager)',
     ago: '2h ago',
-    pendingHours: 2,
+    /** @ui derived from created_at — not a DB column */
+    pending_hours: 2,
   },
   {
     id: 'PLN-0039',
-    name: 'Wednesday AM Coverage Fix',
+    plan_name: 'Wednesday AM Coverage Fix',
     status: 'APPROVED',
-    submittedTo: 'Kagame R. (Ops Manager)',
+    submitted_to: 'Kagame R. (Ops Manager)',
     ago: '1d ago',
   },
   {
     id: 'PLN-0038',
-    name: 'Overnight Nyamirambo Plan',
+    plan_name: 'Overnight Nyamirambo Plan',
     status: 'REJECTED',
-    submittedTo: 'Kagame R. (Ops Manager)',
+    submitted_to: 'Kagame R. (Ops Manager)',
     ago: '2d ago',
-    reason: 'Insufficient units available',
+    rejection_reason: 'Insufficient units available',
   },
   {
     id: 'PLN-0035',
-    name: 'Weekend Market Day Gasabo',
+    plan_name: 'Weekend Market Day Gasabo',
     status: 'PENDING',
-    submittedTo: 'Kagame R. (Ops Manager)',
+    submitted_to: 'Kagame R. (Ops Manager)',
     ago: '6h ago',
-    pendingHours: 6,
+    /** @ui derived from created_at — not a DB column */
+    pending_hours: 6,
   },
 ]
 
+/**
+ * Heatmap zones — UI-only aggregates derived from incidents table.
+ * @ui density, topType, count — not DB columns, computed display values
+ */
 export const PLANNER_HEATMAP_ZONES = [
   { name: 'Kimironko', lat: -1.944, lng: 30.062, count: 47, topType: 'Theft', density: 'high' },
   { name: 'Nyamirambo', lat: -1.974, lng: 30.041, count: 38, topType: 'Theft', density: 'high' },
@@ -107,6 +119,10 @@ export const PLANNER_MONTH_DATA = [
   { month: 'Oct', n: 190 }, { month: 'Nov', n: 215 }, { month: 'Dec', n: 188 },
 ]
 
+/**
+ * Emerging hotspots — UI-only aggregates.
+ * @ui increase, count, topType — not DB columns, computed display values
+ */
 export const PLANNER_EMERGING_HOTSPOTS = [
   { zone: 'Kimironko', increase: 34, count: 47, topType: 'Theft', severity: 'critical' },
   { zone: 'Biryogo', increase: 21, count: 31, topType: 'Theft', severity: 'medium' },
@@ -131,6 +147,9 @@ export const PLANNER_COVERAGE_GAPS = [
   { zone: 'Gikondo', coverage: 74, incidents: 22, unit: 'AMB-02', distance: '3.1km', rec: 'Reposition AMB-02' },
 ]
 
+/**
+ * @ui PLANNER_COVERAGE_TREND — display-only aggregation, not a DB column.
+ */
 export const PLANNER_COVERAGE_TREND = [
   { week: 'W1', overall: 91, gasabo: 89, nyarugenge: 88, kicukiro: 90 },
   { week: 'W2', overall: 90, gasabo: 88, nyarugenge: 87, kicukiro: 89 },
@@ -146,34 +165,52 @@ export const PLANNER_COVERAGE_TREND = [
   { week: 'W12', overall: 88, gasabo: 82, nyarugenge: 81, kicukiro: 83 },
 ]
 
+/**
+ * @ui PLANNER_HOURLY_COVERAGE — display-only aggregation, not a DB column.
+ */
 export const PLANNER_HOURLY_COVERAGE = Array.from({ length: 24 }, (_, h) => ({
   hour: String(h),
   pct: h >= 2 && h <= 5 ? 72 + (h % 3) : h >= 18 && h <= 22 ? 78 + (h % 4) : 85 + (h % 8),
 }))
 
+/**
+ * Default positioning instructions (maps to positioning_instructions table).
+ * Schema fields: vehicle_id, from_location, to_location, move_time
+ */
 export const PLANNER_DEFAULT_INSTRUCTIONS = [
-  { unit: 'P-07', from: 'Kicukiro Depot', to: 'Kimihurura Standby B', at: '13:30' },
-  { unit: 'M-01', from: 'Remera Station', to: 'Biryogo Checkpoint', at: '13:00' },
+  { vehicle_id: 'P-07', from_location: 'Kicukiro Depot', to_location: 'Kimihurura Standby B', move_time: '13:30' },
+  { vehicle_id: 'M-01', from_location: 'Remera Station', to_location: 'Biryogo Checkpoint', move_time: '13:00' },
 ]
 
+/**
+ * Deployment plans library (maps to deployment_plans table).
+ * Schema fields: plan_id (id), plan_name, district, active_from, active_until, status
+ */
 export const PLANNER_PLANS = [
-  { id: 'PLN-0041', name: 'Friday PM Kimihurura Surge', district: 'Kigali', range: 'May 30 14:00–20:00', status: 'PENDING' },
-  { id: 'PLN-0039', name: 'Wed AM Coverage Fix', district: 'Nyarugenge', range: 'May 28 08:00–12:00', status: 'APPROVED' },
-  { id: 'PLN-0038', name: 'Overnight Nyamirambo Plan', district: 'Kigali', range: 'May 27 22:00–06:00', status: 'REJECTED' },
-  { id: 'PLN-0035', name: 'Weekend Market Gasabo', district: 'Gasabo', range: 'Jun 1 08:00–18:00', status: 'PENDING' },
-  { id: 'PLN-0031', name: 'Independence Day Plan', district: 'All Districts', range: 'Jul 4 All Day', status: 'DRAFT' },
+  { id: 'PLN-0041', plan_name: 'Friday PM Kimihurura Surge', district: 'Kigali', active_from: 'May 30 14:00', active_until: 'May 30 20:00', status: 'PENDING' },
+  { id: 'PLN-0039', plan_name: 'Wed AM Coverage Fix', district: 'Nyarugenge', active_from: 'May 28 08:00', active_until: 'May 28 12:00', status: 'APPROVED' },
+  { id: 'PLN-0038', plan_name: 'Overnight Nyamirambo Plan', district: 'Kigali', active_from: 'May 27 22:00', active_until: 'May 28 06:00', status: 'REJECTED' },
+  { id: 'PLN-0035', plan_name: 'Weekend Market Gasabo', district: 'Gasabo', active_from: 'Jun 1 08:00', active_until: 'Jun 1 18:00', status: 'PENDING' },
+  { id: 'PLN-0031', plan_name: 'Independence Day Plan', district: 'All Districts', active_from: 'Jul 4 00:00', active_until: 'Jul 4 23:59', status: 'DRAFT' },
 ]
 
+/**
+ * Response zones (maps to predictions table).
+ * Schema fields: zone, lat, lng, predicted_response_time, assigned_unit_id, distance, route, confidence_pct
+ */
 export const PLANNER_RESPONSE_ZONES = [
-  { zone: 'Kimironko', lat: -1.944, lng: 30.062, minutes: 4.2, unit: 'P-07', distance: '1.2km', route: 'KG 7 Ave', confidence: 91 },
-  { zone: 'Kicukiro', lat: -1.969, lng: 30.123, minutes: 6.8, unit: 'P-12', distance: '2.4km', route: 'KK 15 Ave', confidence: 86 },
-  { zone: 'Nyamirambo', lat: -1.974, lng: 30.041, minutes: 7.1, unit: 'M-03', distance: '2.8km', route: 'KN 3 Ave', confidence: 84 },
-  { zone: 'Biryogo', lat: -1.978, lng: 30.055, minutes: 11.4, unit: 'P-19', distance: '3.2km', route: 'KN 9 Ave via Muhanga', confidence: 84 },
-  { zone: 'Gisozi', lat: -1.936, lng: 30.072, minutes: 13.2, unit: 'P-19', distance: '4.1km', route: 'KG 11 Ave', confidence: 78 },
-  { zone: 'Remera', lat: -1.959, lng: 30.104, minutes: 5.9, unit: 'M-01', distance: '1.9km', route: 'KN 3 Rd', confidence: 88 },
-  { zone: 'Kanombe', lat: -1.968, lng: 30.139, minutes: 9.8, unit: 'AMB-04', distance: '3.5km', route: 'KK 3 Ave', confidence: 82 },
+  { zone: 'Kimironko', lat: -1.944, lng: 30.062, predicted_response_time: 4.2, assigned_unit_id: 'P-07', distance: '1.2km', route: 'KG 7 Ave', confidence_pct: 91 },
+  { zone: 'Kicukiro', lat: -1.969, lng: 30.123, predicted_response_time: 6.8, assigned_unit_id: 'P-12', distance: '2.4km', route: 'KK 15 Ave', confidence_pct: 86 },
+  { zone: 'Nyamirambo', lat: -1.974, lng: 30.041, predicted_response_time: 7.1, assigned_unit_id: 'M-03', distance: '2.8km', route: 'KN 3 Ave', confidence_pct: 84 },
+  { zone: 'Biryogo', lat: -1.978, lng: 30.055, predicted_response_time: 11.4, assigned_unit_id: 'P-19', distance: '3.2km', route: 'KN 9 Ave via Muhanga', confidence_pct: 84 },
+  { zone: 'Gisozi', lat: -1.936, lng: 30.072, predicted_response_time: 13.2, assigned_unit_id: 'P-19', distance: '4.1km', route: 'KG 11 Ave', confidence_pct: 78 },
+  { zone: 'Remera', lat: -1.959, lng: 30.104, predicted_response_time: 5.9, assigned_unit_id: 'M-01', distance: '1.9km', route: 'KN 3 Rd', confidence_pct: 88 },
+  { zone: 'Kanombe', lat: -1.968, lng: 30.139, predicted_response_time: 9.8, assigned_unit_id: 'AMB-04', distance: '3.5km', route: 'KK 3 Ave', confidence_pct: 82 },
 ]
 
+/**
+ * @ui PLANNER_PREDICTION_FACTORS — model factor weights, display only, not a DB column.
+ */
 export const PLANNER_PREDICTION_FACTORS = [
   { icon: 'route', label: 'Distance to nearest unit', impact: 40 },
   { icon: 'traffic', label: 'Current traffic', impact: 25 },
@@ -193,14 +230,17 @@ export const PLANNER_PREDICTED_VS_ACTUAL = [
 ]
 
 export const PLANNER_RECOMMENDATIONS = [
-  { id: 'REC-041', type: 'Deployment Plan', status: 'Implemented', desc: 'Reposition P-07 to Kimihurura before Friday PM surge', outcome: 'Coverage: +8% in zone', date: 'Submitted May 24' },
-  { id: 'REC-038', type: 'Coverage Fix', status: 'Pending', desc: 'Overnight motorcycle patrol in Gisozi sector', date: 'Submitted May 26' },
-  { id: 'REC-035', type: 'Resource Request', status: 'Rejected', desc: 'Additional ambulance staging at Nyabugogo', reason: 'Insufficient units', date: 'Submitted May 22' },
-  { id: 'REC-032', type: 'Deployment Plan', status: 'Implemented', desc: 'AMB-04 pre-position at Kacyiru junction', outcome: 'Response: −2.1m avg', date: 'Submitted May 20' },
-  { id: 'REC-028', type: 'Coverage Fix', status: 'Pending', desc: 'Shift P-12 start time 30 min earlier weekdays', date: 'Submitted May 18' },
-  { id: 'REC-025', type: 'Deployment Plan', status: 'Implemented', desc: 'Weekend market day Gasabo patrol increase', outcome: 'Incidents: −12%', date: 'Submitted May 15' },
+  { id: 'REC-041', type: 'Deployment Plan', status: 'Implemented', content: 'Reposition P-07 to Kimihurura before Friday PM surge', outcome: 'Coverage: +8% in zone', created_at: 'Submitted May 24' },
+  { id: 'REC-038', type: 'Coverage Fix', status: 'Pending', content: 'Overnight motorcycle patrol in Gisozi sector', created_at: 'Submitted May 26' },
+  { id: 'REC-035', type: 'Resource Request', status: 'Rejected', content: 'Additional ambulance staging at Nyabugogo', rejection_reason: 'Insufficient units', created_at: 'Submitted May 22' },
+  { id: 'REC-032', type: 'Deployment Plan', status: 'Implemented', content: 'AMB-04 pre-position at Kacyiru junction', outcome: 'Response: −2.1m avg', created_at: 'Submitted May 20' },
+  { id: 'REC-028', type: 'Coverage Fix', status: 'Pending', content: 'Shift P-12 start time 30 min earlier weekdays', created_at: 'Submitted May 18' },
+  { id: 'REC-025', type: 'Deployment Plan', status: 'Implemented', content: 'Weekend market day Gasabo patrol increase', outcome: 'Incidents: −12%', created_at: 'Submitted May 15' },
 ]
 
+/**
+ * @ui PLANNER_AI_INSIGHTS — AI-generated display strings, not a DB column.
+ */
 export const PLANNER_AI_INSIGHTS = [
   { type: 'EMERGING TREND', icon: 'trend', text: 'Friday incident volume has increased 18% month-over-month for 6 consecutive weeks in Kicukiro.', ago: 'Detected 2h ago' },
   { type: 'COVERAGE CONCERN', icon: 'alert', text: 'Gisozi sector coverage has declined below 65% for 3 consecutive days. Deployment plan recommended.', ago: 'Detected 6h ago' },
@@ -208,12 +248,16 @@ export const PLANNER_AI_INSIGHTS = [
   { type: 'EMERGING TREND', icon: 'trend', text: 'Rainy season correlation with traffic incidents in Nyarugenge now at 0.81 — highest in 12 months.', ago: 'Detected 1d ago' },
 ]
 
+/**
+ * Saved simulation scenarios (maps to simulations table).
+ * Schema fields: scenario_type, created_at, result_summary
+ */
 export const PLANNER_SAVED_SCENARIOS = [
-  { name: 'Amahoro Stadium', type: 'Public Gathering', date: 'May 26', outcome: 'Insufficient' },
-  { name: 'Independence Day 2026', type: 'Public Gathering', date: 'May 20', outcome: 'Sufficient' },
-  { name: 'Flash Flood Nyamirambo', type: 'Flood', date: 'May 15', outcome: 'Critical gaps' },
-  { name: 'Kigali Marathon', type: 'Public Gathering', date: 'May 10', outcome: 'Borderline' },
-  { name: 'Power Outage Gasabo', type: 'Outage', date: 'May 5', outcome: 'Insufficient' },
+  { name: 'Amahoro Stadium', scenario_type: 'Public Gathering', created_at: 'May 26', result_summary: 'Insufficient' },
+  { name: 'Independence Day 2026', scenario_type: 'Public Gathering', created_at: 'May 20', result_summary: 'Sufficient' },
+  { name: 'Flash Flood Nyamirambo', scenario_type: 'Flood', created_at: 'May 15', result_summary: 'Critical gaps' },
+  { name: 'Kigali Marathon', scenario_type: 'Public Gathering', created_at: 'May 10', result_summary: 'Borderline' },
+  { name: 'Power Outage Gasabo', scenario_type: 'Outage', created_at: 'May 5', result_summary: 'Insufficient' },
 ]
 
 export const RWANDA_DISTRICTS = ['All Districts', 'Kigali', 'Nyarugenge', 'Kicukiro', 'Gasabo', 'Bugesera', 'Rwamagana']
