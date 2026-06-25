@@ -1,4 +1,5 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { logout } from '../../utils/authSession'
 import {
   UserCircle,
   Palette,
@@ -17,6 +18,8 @@ import { FR_OFFICER } from '../../data/mockFieldResponderData'
 import { useFieldResponderStore } from '../../store/fieldResponderStore'
 
 export default function FRProfile() {
+  const navigate = useNavigate()
+  const handleLogout = () => { logout(); navigate('/login', { replace: true }) }
   const dutyStatus = useFieldResponderStore((s) => s.dutyStatus)
   const gpsActive = useFieldResponderStore((s) => s.gpsActive)
 
@@ -86,10 +89,10 @@ export default function FRProfile() {
       </div>
 
       <div className="fr-page-fill-footer">
-        <Link to="/login" className="fr-logout-link">
+        <button type="button" onClick={handleLogout} className="fr-logout-link">
           <LogOut size={16} />
           Log out
-        </Link>
+        </button>
       </div>
     </div>
   )

@@ -66,7 +66,7 @@ export default function FRNavigation() {
   const mapRef = useRef(null)
   const a = FR_ASSIGNMENT
 
-  const officerPos = useMemo(() => [a.officerLat, a.officerLng], [a.officerLat, a.officerLng])
+  const officerPos = useMemo(() => [a.current_lat, a.current_lng], [a.current_lat, a.current_lng])
   const incidentPos = useMemo(() => [a.lat, a.lng], [a.lat, a.lng])
   const routePoints = useMemo(
     () => buildRoutePoints(officerPos, incidentPos),
@@ -160,7 +160,7 @@ export default function FRNavigation() {
           </div>
           <p className="fr-nav-turn-sub">{a.turnSub}</p>
           <div className="fr-nav-turn-chips">
-            <span className="fr-nav-turn-chip fr-nav-turn-chip--eta font-mono">{a.etaMin} min</span>
+            <span className="fr-nav-turn-chip fr-nav-turn-chip--eta font-mono">{a.eta_minutes} min</span>
             <span className="fr-nav-turn-chip fr-nav-turn-chip--dist font-mono">{a.distanceKm} km</span>
           </div>
         </div>
