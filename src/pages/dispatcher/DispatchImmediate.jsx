@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { MapContainer, TileLayer, CircleMarker, Tooltip } from 'react-leaflet'
 import {
   Zap, MapPin, Route, Users, Check, ChevronDown,
@@ -8,6 +8,7 @@ import { useThemeStore } from '../../store/themeStore'
 import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
 import { RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM, RWANDA_BOUNDS } from '../../components/map/rwandaConstants'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
+import { useNotificationsStore } from '../../store/notificationsStore'
 import DispatchImmediateHeader from '../../components/dispatcher/DispatchImmediateHeader'
 import DispatchImmediateTypeStep from '../../components/dispatcher/DispatchImmediateTypeStep'
 import {
@@ -23,11 +24,23 @@ import 'leaflet/dist/leaflet.css'
 export default function DispatchImmediate() {
   const { incidentId } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const { theme } = useThemeStore()
+  const addNotification = useNotificationsStore((state) => state.addNotification)
   const baseIncident = useMemo(() => getImmediateIncident(incidentId), [incidentId])
 
-  const [step, setStep] = useState('select-type')
-  const [selectedType, setSelectedType] = useState(null)
+  // Pre-select type when navigating from LiveDispatchMap IMMEDIATE DISPATCH button
+  const immediateTypeFromState = location.state?.immediateType
+  const [step, setStep] = useState(immediateTypeFromState ? 'dispatch' : 'select-type')
+  const [selectedType, setSelectedType] = useState(() => {
+    if (!immediateTypeFromState) return null
+    return {
+      ...immediateTypeFromState,
+      selectedAt: new Date().toLocaleTimeString('en-GB', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+      }),
+    }
+  })
   const [elapsed, setElapsed] = useState(227)
   const [omNotified, setOmNotified] = useState(false)
   const [selectedUnitId, setSelectedUnitId] = useState(mockNearestUnits[0].id)
@@ -90,10 +103,20 @@ export default function DispatchImmediate() {
 
   const handleDispatch = () => {
     const now = new Date()
-    setDispatchTime(
-      now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-    )
+    const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    setDispatchTime(timeStr)
     setDispatched(true)
+    addNotification({
+      id: `dispatch-imm-${Date.now()}`,
+      type: 'immediate_dispatch',
+      title: `${selectedUnit.id} dispatched — ${incident?.type ?? 'Immediate'}`,
+      message: `Immediate dispatch confirmed at ${timeStr}. ETA ${selectedUnit.eta}. Location: ${incident?.location ?? 'Unknown'}.`,
+      time: now.toISOString(),
+      read: false,
+      target_role: 'ops_manager',
+      is_immediate: true,
+      ai_recommended: false,
+    })
   }
 
   const mapUnits = getAvailableUnitsForMap()
@@ -133,7 +156,7 @@ export default function DispatchImmediate() {
                 className="text-[11px] text-(--text-muted) m-0 mb-2"
                 style={{ fontFamily: 'var(--font-mono)' }}
               >
-                Type selected manually by dispatcher · {selectedType.selectedAt}
+                Immediate dispatch · type confirmed by dispatcher · {selectedType.selectedAt}
               </p>
               <p className="flex items-center gap-1.5 text-[13px] text-(--text-secondary) m-0 mb-2">
                 <MapPin size={14} className="text-(--accent) shrink-0" />
@@ -252,11 +275,23 @@ export default function DispatchImmediate() {
               className="dispatcher-surface p-4"
               style={{ border: '1px solid var(--accent)' }}
             >
-              <div
-                className="text-[10px] font-bold uppercase tracking-wider text-(--accent) mb-2"
-                style={{ fontFamily: 'var(--font-mono)' }}
-              >
-                AI FAST ASSESSMENT
+              <div className="flex items-center gap-2 mb-2">
+                <div
+                  className="text-[10px] font-bold uppercase tracking-wider text-(--status-critical)"
+                  style={{ fontFamily: 'var(--font-mono)' }}
+                >
+                  FAST DISPATCH ASSESSMENT
+                </div>
+                <span
+                  className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                  style={{
+                    background: 'color-mix(in srgb, var(--status-medium) 15%, transparent)',
+                    color: 'var(--status-medium)',
+                    fontFamily: 'var(--font-display)',
+                  }}
+                >
+                  AI BYPASSED
+                </span>
               </div>
               <div className="text-xl font-bold text-(--text-primary) mb-1">{unitLabel}</div>
               <p className="text-[13px] text-(--text-secondary) m-0 mb-3">
@@ -272,14 +307,8 @@ export default function DispatchImmediate() {
                   Crew: {mockImmediateAssessment.crew}
                 </span>
               </div>
-              <div
-                className="text-[11px] font-bold uppercase mb-2"
-                style={{ color: 'var(--status-low)', fontFamily: 'var(--font-display)' }}
-              >
-                {mockImmediateAssessment.confidence}
-              </div>
               <p className="text-[11px] text-(--text-muted) m-0">
-                AI analysis limited — life-threatening mode. Full analysis bypassed.
+                Dispatcher-confirmed dispatch. Automated analysis bypassed for life-critical response.
               </p>
             </div>
 
