@@ -7,7 +7,7 @@ import { RWANDA_CENTER, RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import { OPS_ESCALATIONS, OPS_AGENCIES, OPS_AGENCY_OPTIONS } from '../../data/mockOpsManagerData'
 import OpsManagerDistrictLabel from '../../components/ops-manager/OpsManagerDistrictLabel'
-import { mockUnits } from '../../data/mockData'
+import { mockUnits } from '../../data/mockVehicles'
 import 'leaflet/dist/leaflet.css'
 
 const AGENCY_UNIT_COLORS = {
