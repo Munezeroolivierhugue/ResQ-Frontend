@@ -4,7 +4,7 @@ import SettingsProfileSection from '../../components/settings/SettingsProfileSec
 export default function AnalystProfile() {
   return (
     <div className="portal-page">
-      <AnalystPageHeader title="My Profile" subtitle="Analyst account and workspace identity." />
+      <AnalystPageHeader title="My Profile" subtitle="Analyst account and workspace identity." badge="Profile" />
       <SettingsProfileSection
         initials="GI"
         roleLabel="ANALYST"
