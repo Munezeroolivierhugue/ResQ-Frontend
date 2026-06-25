@@ -31,6 +31,7 @@ export default function AnalystModels() {
       <AnalystPageHeader
         title="AI Model Performance Monitor"
         subtitle="Quality control for all RESQ AI models."
+        badge="AI Models"
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
