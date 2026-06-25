@@ -1,6 +1,12 @@
 /** Field Responder mobile — mock officer + assignment data (Kigali). */
 
 export const FR_OFFICER = {
+  // DB-backed (users + agency_assignments)
+  user_id: 'u4444444-0000-4000-8000-000000000004',
+  vehicle_id: 'v7070707-0000-4000-8000-000000000070',
+  current_lat: -1.9532,
+  current_lng: 30.0588,
+  // UI display fields
   initials: 'JB',
   name: 'Jean Bosco Nkurunziza',
   badge: 'DSP-0042',
@@ -15,6 +21,8 @@ export const FR_BRIEFING = {
 }
 
 export const FR_ASSIGNMENT = {
+  // DB-backed (incidents)
+  incident_id: 'i3333333-0000-4000-8000-000000000003',
   id: 'INC-2403',
   type: 'Armed Robbery',
   severity: 'critical',
@@ -22,11 +30,12 @@ export const FR_ASSIGNMENT = {
   landmark: 'Near BK Arena',
   lat: -1.9441,
   lng: 30.0619,
-  officerLat: -1.9532,
-  officerLng: 30.0588,
-  etaMin: 3.2,
-  distanceKm: 1.1,
+  // DB-backed (gps_pings / dispatches.current_lat|lng)
+  current_lat: -1.9532,
+  current_lng: 30.0588,
+  eta_minutes: 3.2,
   priority: 'HIGH',
+  // UI-only — denormalized triage summary; not a DB column
   caller: {
     persons: '2–3 reported',
     weapons: 'YES',
@@ -34,8 +43,13 @@ export const FR_ASSIGNMENT = {
     description:
       'Caller reports two men with a firearm at the KG 11 Ring Road entrance. Victim is a shop owner.',
   },
+  // UI-only — computed by routing API; not a DB column
+  distanceKm: 1.1,
+  // UI-only — denormalized join over dispatches + units; not a DB column
   otherUnits: [{ id: 'P-19', type: 'Police Van', eta: '5 min' }],
+  // UI-only — computed turn-by-turn instruction; not a DB column
   turnInstruction: 'Turn right onto KN 4 Ave in 400m',
+  // UI-only
   turnSub: 'Then continue 650m to destination',
 }
 
