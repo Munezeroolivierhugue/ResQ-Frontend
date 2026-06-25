@@ -1,8 +1,14 @@
 /** Mock data for smart dispatch intake UI (visual simulation only). */
 
+import { mockCallers } from './mockCallers'
+import { mockIncidents } from './mockIncidents'
+
+// Retrieve active caller from callers database
+const activeCallerRecord = mockCallers.find(c => c.caller_id === "c1111111-0000-4000-8000-000000000001");
+
 export const mockActiveCall = {
-  callerNumber: '+250788123456',
-  callerIdentity: 'Unknown',
+  callerNumber: activeCallerRecord ? activeCallerRecord.phone_number : '+250788123456',
+  callerIdentity: activeCallerRecord ? activeCallerRecord.identity : 'Unknown',
   duration: '02:14',
   status: 'ACTIVE',
   district: 'Gasabo',
@@ -11,11 +17,17 @@ export const mockActiveCall = {
 }
 
 export const mockAutoCaller = {
-  phone: '+250788123456',
-  name: 'Unknown / Anonymous',
-  previousIncidents: 2,
-  trustLevel: 'Normal',
+  phone_number: activeCallerRecord ? activeCallerRecord.phone_number : '+250788123456',
+  identity: activeCallerRecord ? activeCallerRecord.identity : 'Unknown / Anonymous',
+  previous_incidents: activeCallerRecord ? activeCallerRecord.previous_incidents : 2,
+  trust_level: activeCallerRecord ? activeCallerRecord.trust_level : 'Normal',
   gpsStatus: 'GPS Pending',
+  
+  // Legacy aliases
+  phone: activeCallerRecord ? activeCallerRecord.phone_number : '+250788123456',
+  name: activeCallerRecord ? activeCallerRecord.identity : 'Unknown / Anonymous',
+  previousIncidents: activeCallerRecord ? activeCallerRecord.previous_incidents : 2,
+  trustLevel: activeCallerRecord ? activeCallerRecord.trust_level : 'Normal',
 }
 
 export const mockLocationSharing = {
@@ -58,41 +70,16 @@ export const mockLandmarkAssist = {
 export const mockLiveNotesPlaceholder =
   'Caller reports suspicious activity near Kimironko market. Possible altercation in progress.'
 
-export const mockDispatchQueue = [
-  {
-    id: 'RSE-1102',
-    time: '14:02:11',
-    title: 'Cardiac Arrest',
-    summary: 'Elderly male, unconscious — Nyamirambo. Bystander CPR in progress.',
-    severity: 'critical',
-    active: true,
-  },
-  {
-    id: 'RSE-1098',
-    time: '13:47:33',
-    title: 'MVA — Multi Vehicle',
-    summary: 'Three vehicles, possible injuries — KG 11 Ring Road.',
-    severity: 'high',
-    active: false,
-  },
-  {
-    id: 'RSE-1095',
-    time: '13:22:01',
-    title: 'Water Main Burst',
-    summary: 'Flooding on main street; schools notified.',
-    severity: 'medium',
-    active: false,
-  },
-  {
-    id: 'RSE-1088',
-    time: '12:15:44',
-    title: 'Cat in Tree',
-    summary: 'Low priority; owner on scene. Unit cleared.',
-    severity: 'resolved',
-    active: false,
-    resolved: true,
-  },
-]
+// Map incidents to intake dispatch queue structure
+export const mockDispatchQueue = mockIncidents.slice(0, 4).map((inc, idx) => ({
+  id: inc.incident_ref,
+  time: inc.reported,
+  title: `${inc.incident_type} Incident`,
+  summary: `Active report in ${inc.sector}, ${inc.district}. Coordinates: ${inc.lat}, ${inc.lng}.`,
+  severity: inc.severity,
+  active: idx === 0,
+  resolved: inc.status === 'resolved'
+}));
 
 export const INCIDENT_CATEGORIES = [
   'Security / Disturbance',
