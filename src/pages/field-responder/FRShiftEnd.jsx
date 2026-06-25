@@ -25,9 +25,13 @@ export default function FRShiftEnd() {
   const navigate = useNavigate()
   const endShift = useFieldResponderStore((s) => s.endShift)
   const showToast = useFieldResponderStore((s) => s.showToast)
+  const hasActiveAssignment = useFieldResponderStore((s) => s.hasActiveAssignment)
+  const assignmentStage = useFieldResponderStore((s) => s.assignmentStage)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const outstanding = FR_OUTSTANDING_REPORTS
-  const blocked = outstanding.length > 0
+  const reportBlocked = outstanding.length > 0
+  const assignmentBlocked = hasActiveAssignment && assignmentStage !== 'incident_clear'
+  const blocked = reportBlocked || assignmentBlocked
 
   const confirmEnd = () => {
     endShift()
@@ -93,7 +97,17 @@ export default function FRShiftEnd() {
           ))}
         </div>
 
-        {blocked && (
+        {assignmentBlocked && (
+          <div className="fr-outstanding">
+            <AlertCircle size={20} className="text-(--status-critical)" />
+            <div className="font-semibold text-[13px] text-(--status-critical)">Active Assignment</div>
+            <p className="text-[12px] text-(--status-critical) m-0 mt-2">
+              Cannot end shift with active assignment. Complete or transfer the current incident first.
+            </p>
+          </div>
+        )}
+
+        {reportBlocked && (
           <div className="fr-outstanding">
             <AlertCircle size={20} className="text-(--status-critical)" />
             <div className="font-semibold text-[13px] text-(--status-critical)">Outstanding Reports</div>
@@ -116,8 +130,14 @@ export default function FRShiftEnd() {
         <button
           type="button"
           className={`fr-end-shift-btn${blocked ? ' fr-end-shift-btn--disabled' : ''}`}
-          disabled={blocked}
-          onClick={() => !blocked && setConfirmOpen(true)}
+          disabled={reportBlocked}
+          onClick={() => {
+            if (assignmentBlocked) {
+              showToast('Cannot end shift with active assignment. Complete or transfer the current incident first.', 'critical')
+              return
+            }
+            setConfirmOpen(true)
+          }}
         >
           <LogOut size={20} />
           END SHIFT

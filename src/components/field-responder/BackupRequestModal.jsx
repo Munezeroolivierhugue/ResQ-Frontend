@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { AlertTriangle, Users, ShieldAlert, Star } from 'lucide-react'
 import BottomSheet, { BottomSheetClose } from './BottomSheet'
-import { FR_BACKUP_REASONS } from '../../data/mockFieldResponderData'
+import { FR_BACKUP_REASONS, FR_OFFICER, FR_ASSIGNMENT } from '../../data/mockFieldResponderData'
+import { mockBackupRequests } from '../../data/mockBackupRequests'
+import { generateUuid } from '../../utils/formHelpers'
 import { useFieldResponderStore } from '../../store/fieldResponderStore'
 
 const ICONS = { users: Users, shield: ShieldAlert, star: Star }
@@ -13,6 +15,15 @@ export default function BackupRequestModal({ open, onClose }) {
 
   const confirm = () => {
     if (!reason) return
+    const reasonObj = FR_BACKUP_REASONS.find((r) => r.id === reason)
+    mockBackupRequests.push({
+      backup_id: generateUuid(),
+      incident_id: FR_ASSIGNMENT.incident_id,
+      requesting_unit_id: FR_OFFICER.vehicle_id,
+      reason: reasonObj?.label || reason,
+      notes: notes || null,
+      created_at: new Date().toISOString(),
+    })
     showToast('Backup requested · OM notified · Units navigating to your GPS', 'critical')
     setReason('')
     setNotes('')
