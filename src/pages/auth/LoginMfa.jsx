@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { Lock, RefreshCw, Smartphone } from 'lucide-react'
 import AuthCenterLayout from '../../components/auth/AuthCenterLayout'
 import { ASSIGNED_ROLES } from '../../data/mockAuthData'
+import { setSession, getDemoRole, navigatePortal } from '../../utils/authSession'
+import { verifyMfa } from '../../api/auth'
 
 const OTP_LEN = 6
 
@@ -10,6 +12,7 @@ export default function LoginMfa() {
   const navigate = useNavigate()
   const [digits, setDigits] = useState(Array(OTP_LEN).fill(''))
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
   const refs = useRef([])
 
   const email = sessionStorage.getItem('resq-login-email') || 'user@rnp.gov.rw'
@@ -39,17 +42,62 @@ export default function LoginMfa() {
     refs.current[focusIndex]?.focus()
   }
 
-  const handleVerify = (e) => {
+  const handleVerify = async (e) => {
     e.preventDefault()
     if (digits.some((d) => !d)) {
       setError('Please enter the complete 6-digit secure code.')
       return
     }
     setError('')
-    sessionStorage.setItem('resq-trusted-device', 'true')
-    const role = sessionStorage.getItem('resq-demo-role') || 'dispatcher'
-    const portal = ASSIGNED_ROLES.find((r) => r.value === role)?.portal || '/dispatcher'
-    navigate(portal)
+
+    const challengeToken = sessionStorage.getItem('resq-challenge-token')
+
+    if (challengeToken) {
+      // Real API flow
+      setLoading(true)
+      try {
+        const result = await verifyMfa(challengeToken, digits.join(''))
+        setSession({
+          access_token: result.accessToken,
+          refresh_token: result.refreshToken,
+          user: result.user ?? null,
+        })
+        sessionStorage.removeItem('resq-challenge-token')
+        sessionStorage.setItem('resq-trusted-device', 'true')
+
+        const role = result.user?.role
+        if (role) {
+          const roleMap = {
+            DISPATCHER: 'dispatcher',
+            FIELD_RESPONDER: 'field_responder',
+            OPERATIONS_MANAGER: 'ops_manager',
+            OPS_MANAGER: 'ops_manager',
+            DISTRICT_COMMANDER: 'district_commander',
+            EMERGENCY_PLANNER: 'emergency_planner',
+            ANALYST: 'analyst',
+            SUPER_ADMIN: 'super_admin',
+          }
+          const mapped = roleMap[role] ?? role.toLowerCase()
+          navigatePortal(mapped, navigate)
+        } else {
+          navigate('/dispatcher')
+        }
+      } catch (err) {
+        const msg =
+          err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          'Verification failed. Check your code and try again.'
+        setError(msg)
+      } finally {
+        setLoading(false)
+      }
+    } else {
+      // Demo mode: no real token
+      sessionStorage.setItem('resq-trusted-device', 'true')
+      const role = getDemoRole() || sessionStorage.getItem('resq-demo-role') || 'dispatcher'
+      const portal = ASSIGNED_ROLES.find((r) => r.value === role)?.portal || '/dispatcher'
+      navigate(portal)
+    }
   }
 
   return (
@@ -91,9 +139,9 @@ export default function LoginMfa() {
 
           {error && <p className="auth-field-error" style={{ textAlign: 'center', marginTop: '12px' }}>{error}</p>}
 
-          <button type="submit" className="auth-otp-submit">
+          <button type="submit" className="auth-otp-submit" disabled={loading}>
             <Lock size={16} />
-            Verify & authorize
+            {loading ? 'Verifying…' : 'Verify & authorize'}
           </button>
         </form>
 

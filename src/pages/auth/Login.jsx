@@ -8,24 +8,82 @@ import {
   PrimaryButton,
   DemoPortalDropdown,
 } from '../../components/auth/AuthShared'
-import { getDemoRole, getPortalForRole } from '../../utils/authSession'
+import { getDemoRole, getPortalForRole, setSession, navigatePortal } from '../../utils/authSession'
+import { login } from '../../api/auth'
 
 export default function Login() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
   const [deviceRecognized] = useState(
     () => sessionStorage.getItem('resq-trusted-device') === 'true',
   )
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    if (deviceRecognized) {
+    setError('')
+
+    // Demo mode: no credentials entered, demo role already set via dropdown
+    if (!email && !password) {
+      const role = getDemoRole()
+      if (role) {
+        navigate(getPortalForRole(role))
+        return
+      }
+    }
+
+    if (deviceRecognized && !email) {
       navigate(getPortalForRole(getDemoRole()))
       return
     }
-    sessionStorage.setItem('resq-login-email', email || 'user@rnp.gov.rw')
-    navigate('/login/mfa')
+
+    setLoading(true)
+    try {
+      const result = await login(email, password)
+
+      if (result.mfaRequired) {
+        sessionStorage.setItem('resq-login-email', email)
+        if (result.challengeToken) {
+          sessionStorage.setItem('resq-challenge-token', result.challengeToken)
+        }
+        navigate('/login/mfa')
+        return
+      }
+
+      setSession({
+        access_token: result.accessToken,
+        refresh_token: result.refreshToken,
+        user: result.user ?? null,
+      })
+
+      const role = result.user?.role
+      if (role) {
+        const roleMap = {
+          DISPATCHER: 'dispatcher',
+          FIELD_RESPONDER: 'field_responder',
+          OPERATIONS_MANAGER: 'ops_manager',
+          OPS_MANAGER: 'ops_manager',
+          DISTRICT_COMMANDER: 'district_commander',
+          EMERGENCY_PLANNER: 'emergency_planner',
+          ANALYST: 'analyst',
+          SUPER_ADMIN: 'super_admin',
+        }
+        const mapped = roleMap[role] ?? role.toLowerCase()
+        navigatePortal(mapped, navigate)
+      } else {
+        navigate('/login/mfa')
+      }
+    } catch (err) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        'Login failed. Check your credentials.'
+      setError(msg)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -41,6 +99,12 @@ export default function Login() {
         </div>
       )}
 
+      {error && (
+        <div className="auth-banner auth-banner--error">
+          {error}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="auth-form-grid">
         <AuthField label="Professional email" className="auth-field--full">
           <AuthInput
@@ -48,7 +112,6 @@ export default function Login() {
             placeholder="j.doe@agency.gov"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            required
           />
         </AuthField>
         <AuthField label="Access key" className="auth-field--full">
@@ -57,7 +120,6 @@ export default function Login() {
             placeholder="••••••••••••"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            required
           />
         </AuthField>
 
@@ -77,7 +139,9 @@ export default function Login() {
         </div>
 
         <div className="auth-field--full">
-          <PrimaryButton type="submit">Authorize terminal</PrimaryButton>
+          <PrimaryButton type="submit" disabled={loading}>
+            {loading ? 'Authorizing…' : 'Authorize terminal'}
+          </PrimaryButton>
         </div>
       </form>
     </AuthSplitLayout>
