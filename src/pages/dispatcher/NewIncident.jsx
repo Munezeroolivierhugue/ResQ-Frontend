@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
-import { Phone, Mic, Zap, AlertTriangle, Check, X } from 'lucide-react'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
+import { Phone, Mic, Zap, AlertTriangle, Check, X, PhoneCall } from 'lucide-react'
 import { DEFAULT_IMMEDIATE_INCIDENT_ID } from '../../data/mockDispatchImmediateData'
 import { useThemeStore } from '../../store/themeStore'
 import {
@@ -13,8 +13,10 @@ import {
   mockDispatchQueue,
   INCIDENT_CATEGORIES,
 } from '../../data/mockIntakeData'
-import { mockCallers } from '../../data/mockCallers'
+import { useCallChannelStore } from '../../store/callChannelStore'
+import { mockCallerProfiles } from '../../data/mockCallData'
 import { mockIncidents } from '../../data/mockIncidents'
+import { mockCallers } from '../../data/mockCallers'
 import { mockTriageQuestions } from '../../data/mockTriageQuestions'
 import { calculateSeverity } from '../../utils/severityEngine'
 import { haversineMeters } from '../../utils/geo'
@@ -85,13 +87,39 @@ const activeCallerRecord = mockCallers.find(
 
 export default function NewIncident() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { theme } = useThemeStore()
+
+  // ── Inbound call context (from banner answer) ────────────────────────────────
+  const callId    = searchParams.get('call_id')
+  const callPhone = searchParams.get('phone')
+  const { endCall } = useCallChannelStore()
+
+  // Look up caller profile from mock DB
+  const callerProfile = callPhone
+    ? (mockCallerProfiles.find((p) => p.phone_number === callPhone) ?? null)
+    : null
+
+  // ── Live call timer ──────────────────────────────────────────────────────────
+  const [callElapsed, setCallElapsed] = useState(0)
+  useEffect(() => {
+    if (!callId) return
+    const t = setInterval(() => setCallElapsed((s) => s + 1), 1000)
+    return () => clearInterval(t)
+  }, [callId])
+
+  const fmtCallTime = (s) => {
+    const m = Math.floor(s / 60).toString().padStart(2, '0')
+    const sec = (s % 60).toString().padStart(2, '0')
+    return `${m}:${sec}`
+  }
 
   // Capture call_time at mount (the moment the call is being handled)
   const callTimeRef = useRef(new Date().toISOString())
 
   // ── Triage ──────────────────────────────────────────────────────────────────
   const [incidentType, setIncidentType] = useState('')
+  const [ setIncidentTypeVersion] = useState(0)
   const [triageResponses, setTriageResponses] = useState([])
 
   // ── Severity override ────────────────────────────────────────────────────────
@@ -116,8 +144,14 @@ export default function NewIncident() {
   })
 
   // ── Duplicate detection ──────────────────────────────────────────────────────
-  const [duplicates, setDuplicates] = useState([])
   const [duplicateAction, setDuplicateAction] = useState(null) // null | 'link' | 'new'
+  const [detectedLocation, setDetectedLocation] = useState(null)
+
+  const handleLocationChange = useCallback((loc) => {
+    setLocation(loc)
+    setDetectedLocation(loc)
+    setDuplicateAction(null)
+  }, [])
   const [linkedIncidentId, setLinkedIncidentId] = useState(null)
   const [investigateIncident, setInvestigateIncident] = useState(null)
 
@@ -125,6 +159,25 @@ export default function NewIncident() {
   const [district, setDistrict] = useState('')
   const [districtError, setDistrictError] = useState(false)
   const [notes, setNotes] = useState(mockLiveNotesPlaceholder)
+
+  // ── Derived: duplicates computed from location (no setState in effect) ───────
+  const duplicates = useMemo(() => {
+    if (!detectedLocation || detectedLocation.source === 'TELECOM_ROUGH') return []
+    return mockIncidents
+      .filter((inc) => {
+        if (!ACTIVE_STATUSES.has(inc.status)) return false
+        if (inc.lat == null || inc.lng == null) return false
+        const distM = haversineMeters(detectedLocation.lat, detectedLocation.lng, inc.lat, inc.lng)
+        if (distM > 500) return false
+        const minutesAgo = (DEMO_NOW - new Date(inc.call_time)) / 60000
+        return minutesAgo <= 30
+      })
+      .map((inc) => ({
+        ...inc,
+        _distance: Math.round(haversineMeters(detectedLocation.lat, detectedLocation.lng, inc.lat, inc.lng)),
+        _minutesAgo: Math.round((DEMO_NOW - new Date(inc.call_time)) / 60000),
+      }))
+  }, [detectedLocation])
 
   // ── Derived: triage questions for selected category ──────────────────────────
   const triageTypeCode = CATEGORY_TO_TRIAGE_TYPE[incidentType]
@@ -154,38 +207,6 @@ export default function NewIncident() {
   // Duplicate banner shown when pending action
   const showDuplicateBanner = duplicates.length > 0 && duplicateAction == null
   const firstDuplicate = duplicates[0]
-
-  // ── Effects ──────────────────────────────────────────────────────────────────
-
-  // Reset triage answers whenever incident type changes
-  useEffect(() => {
-    setTriageResponses([])
-  }, [incidentType])
-
-  // Duplicate detection: runs whenever a precise location is established
-  useEffect(() => {
-    if (!location || location.source === 'TELECOM_ROUGH') {
-      setDuplicates([])
-      setDuplicateAction(null)
-      return
-    }
-    const matches = mockIncidents
-      .filter((inc) => {
-        if (!ACTIVE_STATUSES.has(inc.status)) return false
-        if (inc.lat == null || inc.lng == null) return false
-        const distM = haversineMeters(location.lat, location.lng, inc.lat, inc.lng)
-        if (distM > 500) return false
-        const minutesAgo = (DEMO_NOW - new Date(inc.call_time)) / 60000
-        return minutesAgo <= 30
-      })
-      .map((inc) => ({
-        ...inc,
-        _distance: Math.round(haversineMeters(location.lat, location.lng, inc.lat, inc.lng)),
-        _minutesAgo: Math.round((DEMO_NOW - new Date(inc.call_time)) / 60000),
-      }))
-    setDuplicates(matches)
-    setDuplicateAction(null)
-  }, [location])
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
@@ -279,6 +300,57 @@ export default function NewIncident() {
 
       <div className="flex-1 min-h-0 max-w-[1800px] w-full mx-auto px-5 md:px-6 py-4 flex flex-col gap-4">
         <LiveEmergencyBanner call={mockActiveCall} />
+
+        {/* ── Active inbound call banner ── */}
+        {callId && (
+          <div
+            className="rounded-xl border px-4 py-3 flex flex-wrap items-center gap-3 animate-fade-in-up"
+            style={{
+              background: 'var(--status-low-bg)',
+              borderColor: 'var(--status-low)',
+            }}
+          >
+            <span
+              className="inline-flex items-center justify-center w-8 h-8 rounded-full shrink-0"
+              style={{ background: 'var(--status-low)', color: '#fff' }}
+            >
+              <PhoneCall size={15} />
+            </span>
+            <div className="flex-1 min-w-0">
+              <p
+                className="m-0 text-[11px] font-bold uppercase tracking-widest"
+                style={{ fontFamily: 'var(--font-display)', color: 'var(--status-low)' }}
+              >
+                Call active
+              </p>
+              <p
+                className="m-0 text-[13px] font-semibold"
+                style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}
+              >
+                {callPhone}
+              </p>
+            </div>
+            <span
+              className="text-[13px] font-bold shrink-0"
+              style={{ fontFamily: 'var(--font-mono)', color: 'var(--status-low)' }}
+            >
+              {fmtCallTime(callElapsed)}
+            </span>
+            <button
+              type="button"
+              onClick={() => { endCall(); navigate('/dispatcher') }}
+              className="text-[11px] font-bold px-3 py-1.5 rounded-lg border-none cursor-pointer shrink-0"
+              style={{
+                fontFamily: 'var(--font-display)',
+                background: 'var(--status-critical-bg)',
+                color: 'var(--status-critical)',
+                border: '1px solid var(--status-critical)',
+              }}
+            >
+              End call
+            </button>
+          </div>
+        )}
 
         {/* ── Duplicate detection banner (full-width, above form) ── */}
         {showDuplicateBanner && firstDuplicate && (
@@ -374,18 +446,35 @@ export default function NewIncident() {
           {/* ════════════ LEFT ════════════ */}
           <div className="intake-col--left flex flex-col gap-4">
 
-            {/* Caller profile — unchanged */}
+            {/* Caller profile — pre-filled from call when available */}
             <IntakePanel className="p-4 md:p-5">
               <PanelHeader
                 icon={Phone}
-                title="Auto-filled caller profile"
-                badge={<StatusPill label={mockAutoCaller.gpsStatus} color="var(--status-medium)" />}
+                title={callId ? 'Inbound call — caller profile' : 'Auto-filled caller profile'}
+                badge={
+                  callId
+                    ? <StatusPill label="Call Active" color="var(--status-low)" />
+                    : <StatusPill label={mockAutoCaller.gpsStatus} color="var(--status-medium)" />
+                }
               />
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-2.5">
-                <ReadonlyField label="Phone number" value={mockAutoCaller.phone_number} mono />
-                <ReadonlyField label="Caller" value={mockAutoCaller.identity} />
-                <ReadonlyField label="Previous incidents" value={String(mockAutoCaller.previous_incidents)} />
-                <ReadonlyField label="Caller trust level" value={mockAutoCaller.trust_level} />
+                <ReadonlyField
+                  label="Phone number"
+                  value={callPhone ?? mockAutoCaller.phone_number}
+                  mono
+                />
+                <ReadonlyField
+                  label="Caller"
+                  value={callerProfile?.identity ?? mockAutoCaller.identity}
+                />
+                <ReadonlyField
+                  label="Previous incidents"
+                  value={String(callerProfile?.previous_incidents ?? mockAutoCaller.previous_incidents)}
+                />
+                <ReadonlyField
+                  label="Caller trust level"
+                  value={callerProfile?.trust_level ?? mockAutoCaller.trust_level}
+                />
               </div>
             </IntakePanel>
 
@@ -409,7 +498,11 @@ export default function NewIncident() {
                 <select
                   className="dispatcher-input dispatcher-select mt-1"
                   value={incidentType}
-                  onChange={(e) => setIncidentType(e.target.value)}
+                  onChange={(e) => {
+                    setIncidentType(e.target.value)
+                    setTriageResponses([])
+                    setIncidentTypeVersion((v) => v + 1)
+                  }}
                   required
                   style={{ appearance: 'none' }}
                 >
@@ -628,6 +721,40 @@ export default function NewIncident() {
                 Auto-save active · synced from live transcript
               </p>
             </IntakePanel>
+
+            {/* Live transcript placeholder (backend will stream later) */}
+            {callId && (
+              <IntakePanel className="p-4 md:p-5 flex flex-col gap-2">
+                <PanelHeader
+                  icon={Mic}
+                  title="Live transcript"
+                  badge={
+                    <span className="text-[9px] font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: 'var(--status-low)' }}>
+                      <span
+                        className="w-1.5 h-1.5 rounded-full inline-block"
+                        style={{ background: 'var(--status-low)', animation: 'pulse 1.4s infinite' }}
+                      />
+                      Listening
+                    </span>
+                  }
+                />
+                <div
+                  className="rounded-lg px-3 py-2.5 text-[12px] leading-relaxed"
+                  style={{
+                    background: 'var(--bg-input)',
+                    border: '1px solid var(--border)',
+                    color: 'var(--text-muted)',
+                    fontStyle: 'italic',
+                    minHeight: 72,
+                  }}
+                >
+                  Transcript will stream here once the backend connects the voice pipeline.
+                </div>
+                <p className="text-[10px] text-(--text-muted) m-0">
+                  Powered by Africa’s Talking STT · streams on call_id {callId}
+                </p>
+              </IntakePanel>
+            )}
           </div>
 
           {/* ════════════ CENTER ════════════ */}
@@ -695,7 +822,7 @@ export default function NewIncident() {
             </IntakePanel>
 
             {/* Three-way location map */}
-            <TriageLocationMap caller={activeCallerRecord} onLocationChange={setLocation} />
+            <TriageLocationMap caller={activeCallerRecord} onLocationChange={handleLocationChange} />
 
             {/* Occurrence time */}
             <IntakePanel className="p-4 md:p-5 shrink-0">

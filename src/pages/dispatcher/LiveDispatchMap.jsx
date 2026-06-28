@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useCallChannelStore } from '../../store/callChannelStore'
 import { MapContainer, TileLayer, CircleMarker, Tooltip } from 'react-leaflet'
 import { useThemeStore } from '../../store/themeStore'
 import {
-  Radio, Ambulance, Truck, ShieldCheck, Bus, Zap, X,
+  Radio, Ambulance, Truck, ShieldCheck, Bus, Zap, X, PhoneIncoming,
   ShieldAlert, AlertTriangle, Flame, Heart, Car, Users, User, Bell,
 } from 'lucide-react'
 import {
@@ -167,6 +168,7 @@ function ImmediateDispatchModal({ onClose, onSelect }) {
 export default function LiveDispatchMap() {
   const { theme } = useThemeStore()
   const navigate = useNavigate()
+  const { simulateCall } = useCallChannelStore()
   const [unitFilter, setUnitFilter] = useState('All')
   const [liveTime, setLiveTime] = useState(new Date())
   const [showImmediateModal, setShowImmediateModal] = useState(false)
@@ -217,6 +219,23 @@ export default function LiveDispatchMap() {
           <span className="text-[11px] text-(--text-muted)" style={{ fontFamily: 'var(--font-mono)' }}>
             {liveTime.toLocaleTimeString()}
           </span>
+          {import.meta.env.DEV && (
+            <button
+              type="button"
+              onClick={simulateCall}
+              className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-lg border-none cursor-pointer text-[10px] font-bold uppercase tracking-wide"
+              style={{
+                background: 'var(--accent-ghost)',
+                color: 'var(--accent)',
+                border: '1px solid var(--accent)',
+                fontFamily: 'var(--font-display)',
+              }}
+              title="Dev: simulate an incoming call"
+            >
+              <PhoneIncoming size={11} />
+              Simulate Call
+            </button>
+          )}
         </div>
       </div>
 

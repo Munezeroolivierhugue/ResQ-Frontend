@@ -3,6 +3,8 @@ import { Outlet, useLocation } from 'react-router-dom'
 import Navbar from './Navbar'
 import Sidebar from './Sidebar'
 import { getCurrentUser } from '../../utils/authSession'
+import IncomingCallBanner from '../dispatcher/IncomingCallBanner'
+import CallEndedToast from '../dispatcher/CallEndedToast'
 
 export default function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -33,6 +35,8 @@ export default function AppShell() {
           <Outlet />
         </main>
       </div>
+      <IncomingCallBanner />
+      <CallEndedToast />
     </div>
   )
 }
