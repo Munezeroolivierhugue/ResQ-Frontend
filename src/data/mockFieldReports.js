@@ -1,3 +1,5 @@
+// PARTIAL INTEGRATION: submitFieldReport(), listMyReports(), getReportForIncident() wired to backend.
+// TODO: backend gap — unified comms / messages not stored by backend.
 export const mockFieldReports = [
   {
     report_id: "fr111111-0000-4000-8000-000000000001",
