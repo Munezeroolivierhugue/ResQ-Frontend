@@ -1,3 +1,5 @@
+// PARTIAL INTEGRATION: listDispatchesForIncident(), getDispatch(), createDispatch() wired to backend.
+// TODO: backend gap — route field (turn-by-turn directions) is not returned by backend.
 export const mockDispatches = [
   {
     dispatch_id: "e1111111-0000-4000-8000-000000000001",
