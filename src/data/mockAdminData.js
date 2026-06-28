@@ -1,3 +1,5 @@
+// TODO: backend gap — GET /api/admin/security-events exists but viewer not yet built.
+// Other admin data (HEALTH_ALERTS, SYSTEM_STATUS, INTEGRATIONS_HEALTH) has no backend equivalent.
 /** Super Admin — mock system administration data. */
 
 export const ADMIN_HEALTH_ALERTS = 1

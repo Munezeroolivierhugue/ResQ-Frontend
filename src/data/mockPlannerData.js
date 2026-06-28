@@ -1,3 +1,4 @@
+// TODO: backend gap — no analytics/hotspot/prediction endpoints in backend.
 /**
  * Emergency Planner — mock strategic planning data (Kigali).
  *
