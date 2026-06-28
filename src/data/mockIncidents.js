@@ -1,3 +1,8 @@
+// PARTIAL INTEGRATION: listIncidents(), getIncident(), createIncident(), updateIncidentStatus(),
+// checkDuplicates(), getAiRecommendation() all wired to backend.
+// Components importing mockIncidents directly should use src/api/incidents.js instead.
+// TODO: backend gap — incident_ref (INC-XXXX format), elapsed time, sector, unit alias fields
+// are UI-only and derived; the backend does not store them.
 export const mockIncidents = [
   {
     // Database Fields
