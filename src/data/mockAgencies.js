@@ -1,5 +1,5 @@
-// TODO: backend gap — GET /api/agencies and /api/stations exist but admin UI not yet built.
-// When Super Admin portal is implemented, replace with src/api/agencies.js.
+// PARTIAL INTEGRATION: listAgencies(), getAgency(), listStations() wired to backend.
+// Admin UI create/update flows also available via src/api/agencies.js.
 export const mockAgencies = [
   { agency_id: 'agency-0001-rnp0-0000-000000000001', name: 'Rwanda National Police',     type: 'POLICE',        is_default: true  },
   { agency_id: 'agency-0002-fire-0000-000000000002', name: 'Fire and Rescue',             type: 'FIRE',          is_default: false },

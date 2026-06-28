@@ -64,6 +64,6 @@ export async function checkDuplicates(lat, lng) {
 }
 
 export async function getAiRecommendation(incidentId) {
-  const { data } = await api.get(`/api/incidents/${incidentId}/ai-recommend`)
+  const { data } = await api.get(`/api/dispatch/ai-recommend/${incidentId}`)
   return transformAiRecommend(data.data ?? data)
 }

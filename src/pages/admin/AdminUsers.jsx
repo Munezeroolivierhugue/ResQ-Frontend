@@ -1,11 +1,27 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { UserPlus, Users, Monitor, Mail, UserX, ShieldCheck, ShieldX, Pencil, Key, Upload, Download } from 'lucide-react'
 import MetricCard from '../../components/dispatcher/MetricCard'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
-import { ADMIN_USERS, adminRoleBadge } from '../../data/mockAdminData'
+import { adminRoleBadge } from '../../data/mockAdminData'
 import { ADMIN_PENDING_INVITES } from '../../data/mockAdminData'
+import { listUsers } from '../../api/users'
+
+function adaptUser(u) {
+  const names = (u.full_name || '').split(' ')
+  return {
+    ...u,
+    name: u.full_name,
+    initials: names.map(n => n[0]).join('').slice(0, 2).toUpperCase(),
+    district: u.district_id ?? '—',
+    last_login: '—',
+    session: 'UNKNOWN',
+    mfa_enabled: false,
+    tint: undefined,
+    opacity: 1,
+  }
+}
 
 const ROLE_FILTERS = ['All Roles', 'Dispatcher', 'Field Responder', 'Ops Manager', 'District Commander', 'Emergency Planner', 'Analyst', 'Super Admin']
 const STATUS_FILTERS = ['All', 'Active', 'Pending', 'Suspended']
@@ -23,10 +39,14 @@ function showToast(setToast, msg) {
 
 export default function AdminUsers() {
   const navigate = useNavigate()
-  const [users, setUsers] = useState(() => ADMIN_USERS.map((u) => ({ ...u })))
+  const [users, setUsers] = useState([])
   const [roleFilter, setRoleFilter] = useState('All Roles')
   const [statusFilter, setStatusFilter] = useState('All')
   const [toast, setToast] = useState(null)
+
+  useEffect(() => {
+    listUsers().then((data) => setUsers(data.map(adaptUser))).catch(console.error)
+  }, [])
 
   function handleActivate(user_id) {
     setUsers((prev) => prev.map((u) => u.user_id === user_id ? { ...u, status: 'ACTIVE' } : u))
@@ -58,7 +78,7 @@ export default function AdminUsers() {
       />
 
       <div className="portal-grid-4">
-        <MetricCard icon={Users} label="Total Users" value="47" hintTone="neutral" />
+        <MetricCard icon={Users} label="Total Users" value={String(users.length || '—')} hintTone="neutral" />
         <MetricCard icon={Monitor} label="Active Sessions" value="12" hintTone="neutral" />
         <MetricCard
           icon={Mail}

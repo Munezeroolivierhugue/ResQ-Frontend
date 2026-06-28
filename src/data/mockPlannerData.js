@@ -1,4 +1,5 @@
-// TODO: backend gap — no analytics/hotspot/prediction endpoints in backend.
+// PARTIAL INTEGRATION: listCoverageGaps(), listEvents(), createEvent() wired to backend.
+// TODO: backend gap — hotspot/prediction analytics not yet available.
 /**
  * Emergency Planner — mock strategic planning data (Kigali).
  *

@@ -1,3 +1,3 @@
-// TODO: backend gap — no deployment planning endpoints exist in backend. Emergency Planner portal stays on mock.
+// PARTIAL INTEGRATION: listPlans(), createPlan(), getPlan(), updatePlanStatus() wired to backend.
 /** Deployment plans authored by Emergency Planners. Maps to deployment_plans table. */
 export const mockDeploymentPlans = []

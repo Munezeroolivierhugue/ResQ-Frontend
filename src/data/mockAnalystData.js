@@ -1,4 +1,4 @@
-// TODO: backend gap — no analyst-specific endpoints. GET /api/admin/audit-logs available when portal is built.
+// PARTIAL INTEGRATION: listReports(), generateReport(), listUnitPerformance(), listDataQuality(), listResourceRequests() wired via src/api/reporting.js.
 /** Analyst role — mock intelligence & reporting data. */
 
 export const ANALYST_ALERT_BADGE = 3

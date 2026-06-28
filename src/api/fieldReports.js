@@ -69,6 +69,22 @@ export async function getClosureForIncident(incidentId) {
   return transformClosure(data.data ?? data)
 }
 
+export async function uploadAttachment(reportId, file, caption) {
+  const form = new FormData()
+  form.append('file', file)
+  if (caption) form.append('caption', caption)
+  const { data } = await api.post(`/api/field-reports/${reportId}/attachments`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  const a = data.data ?? data
+  return {
+    attachment_id: a.attachmentId,
+    file_url: a.fileUrl,
+    file_type: a.fileType,
+    caption: a.caption,
+  }
+}
+
 export async function createClosure(body) {
   const payload = {
     incidentId: body.incident_id,

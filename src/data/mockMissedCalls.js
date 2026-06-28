@@ -1,5 +1,4 @@
-// TODO: backend gap — GET /api/missed-calls exists but creation is via Africa's Talking webhook only.
-// PATCH /api/missed-calls/{id}/callback exists. Implement missed calls UI when telephony is integrated.
+// PARTIAL INTEGRATION: listMissedCalls(), markCalledBack() wired to backend.
 export const mockMissedCalls = [
   {
     // Database Fields

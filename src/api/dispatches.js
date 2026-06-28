@@ -36,3 +36,18 @@ export async function createDispatch(body) {
   const { data } = await api.post('/api/dispatches', body)
   return transform(data.data ?? data)
 }
+
+export async function findNearestUnit(lat, lng) {
+  const { data } = await api.get('/api/dispatch/immediate/nearest', { params: { lat, lng } })
+  const u = data.data ?? data
+  if (!u) return null
+  return {
+    vehicle_id: u.vehicleId,
+    plate_number: u.plateNumber,
+    vehicle_type: u.vehicleType,
+    current_lat: u.currentLat,
+    current_lng: u.currentLng,
+    eta_minutes: u.etaMinutes,
+    distance_km: u.distanceKm,
+  }
+}
