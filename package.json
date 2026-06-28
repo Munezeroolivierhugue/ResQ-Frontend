@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@stomp/stompjs": "^7.3.0",
+    "axios": "^1.18.1",
     "framer-motion": "^12.39.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.16.0",
@@ -18,6 +20,7 @@
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.15.1",
     "recharts": "^3.8.1",
+    "sockjs-client": "^1.6.1",
     "zustand": "^5.0.13"
   },
   "devDependencies": {
