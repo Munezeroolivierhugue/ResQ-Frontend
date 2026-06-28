@@ -1,58 +1,51 @@
 /**
  * callChannel.js
- * Thin WebSocket wrapper with a dev-mode mock fallback.
- *
- * Handlers object shape:
- *   { onIncomingCall, onCallEnded, onError }
+ * STOMP over SockJS WebSocket wrapper with dev-mode mock fallback.
  */
+import { connect as wsConnect, subscribe, disconnect as wsDisconnect } from '../lib/wsClient'
+import { getAccessToken } from './authSession'
 
-let _ws = null
+let _unsubs = []
 let _mockTimer = null
 
-// ── Real WebSocket ────────────────────────────────────────────────────────────
-export function connect(url, handlers) {
-  disconnect()
-  _ws = new WebSocket(url)
-
-  _ws.onmessage = (e) => {
-    try {
-      const msg = JSON.parse(e.data)
-      if (msg.event === 'incoming_call' && handlers.onIncomingCall) {
-        handlers.onIncomingCall(msg.payload)
+// ── Real STOMP connection ─────────────────────────────────────────────────────
+export function connect(handlers) {
+  const token = getAccessToken()
+  wsConnect(token, (client) => {
+    // Subscribe to incoming calls broadcast
+    const unsub1 = subscribe('/topic/calls', (payload) => {
+      if (payload.type === 'incoming_call' && handlers.onIncomingCall) {
+        handlers.onIncomingCall({
+          call_id: payload.sessionId,
+          session_id: payload.sessionId,
+          phone_number: payload.callerPhone,
+          destination_number: payload.destinationNumber,
+          incident_type_hint: payload.incidentTypeHint,
+          rough_lat: payload.roughLat,
+          rough_lng: payload.roughLng,
+          started_at: new Date().toISOString(),
+        })
       }
-      if (msg.event === 'call_ended' && handlers.onCallEnded) {
-        handlers.onCallEnded(msg.payload)
-      }
-    } catch {
-      // ignore malformed frames
-    }
-  }
-
-  _ws.onerror = (e) => {
-    if (handlers.onError) handlers.onError(e)
-  }
-
-  return _ws
+    })
+    _unsubs.push(unsub1)
+  })
 }
 
-/** Emit an event to the server (no-op in mock mode). */
+/** Emit an event by calling the REST API (STOMP is server→client only for calls). */
 export function emit(event, payload) {
-  if (_ws && _ws.readyState === WebSocket.OPEN) {
-    _ws.send(JSON.stringify({ event, payload }))
-  } else {
-    // Mock / dev mode: just log
-    console.info(`[callChannel] mock emit →`, event, payload)
-  }
+  // No-op here — call claim/pass/miss via REST API in the store actions
+  console.info('[callChannel] emit →', event, payload)
 }
 
-// ── Mock fallback ─────────────────────────────────────────────────────────────
-/**
- * Fires a fake incoming_call event immediately on mount, then every 60s.
- * phoneGenerator is a () => string function injected by the caller.
- */
+export function disconnect() {
+  _unsubs.forEach((u) => u())
+  _unsubs = []
+  wsDisconnect()
+}
+
+// ── Mock fallback (dev mode, no real WS URL) ─────────────────────────────────
 export function connectMock(handlers, phoneGenerator) {
   disconnectMock()
-
   const fire = () => {
     if (handlers.onIncomingCall) {
       handlers.onIncomingCall({
@@ -62,22 +55,13 @@ export function connectMock(handlers, phoneGenerator) {
       })
     }
   }
-
   _mockTimer = setInterval(fire, 60_000)
-  return { fireMock: fire }  // expose so the "Simulate" button can call it instantly
+  return { fireMock: fire }
 }
 
 export function disconnectMock() {
   if (_mockTimer) {
     clearInterval(_mockTimer)
     _mockTimer = null
-  }
-}
-
-export function disconnect() {
-  disconnectMock()
-  if (_ws) {
-    _ws.close()
-    _ws = null
   }
 }
