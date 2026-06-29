@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import {
   Sun,
   Moon,
@@ -49,13 +49,14 @@ export const FR_SETTINGS_NAV = [
 
 export default function FieldResponderSettingsView() {
   const { section: sectionParam } = useParams()
+  const navigate = useNavigate()
   const section = sectionParam || 'profile'
   const { theme, setTheme } = useThemeStore()
   const gpsActive = useFieldResponderStore((s) => s.gpsActive)
   const setGpsActive = useFieldResponderStore((s) => s.setGpsActive)
   const [toast, setToast] = useState(false)
   const [language, setLanguage] = useState('en')
-  const [twoFa, setTwoFa] = useState(false)
+  const [mfaEnabled, setMfaEnabled] = useState(false)
   const [toggles, setToggles] = useState({
     newAssignment: true,
     dispatcherMessages: true,
@@ -90,21 +91,12 @@ export default function FieldResponderSettingsView() {
 
       {section === 'profile' && (
         <SettingsProfileSection
-          initials={FR_OFFICER.initials}
-          roleLabel="FIELD RESPONDER"
-          badge={FR_OFFICER.badge}
-          defaultForm={{
-            name: FR_OFFICER.name,
-            email: 'jb.nkurunziza@resq.rw',
-            phone: '+250 788 456 789',
-            station: 'Kimironko Sector · Gasabo District',
-          }}
-          stationAdminNote="Unit assigned by ops manager · contact HQ to change"
+          onUserLoaded={(u) => setMfaEnabled(u.mfa_enabled)}
           shiftStats={[
             { label: 'Shift window', value: FR_OFFICER.shift },
             { label: 'Unit', value: FR_OFFICER.unit },
-            { label: 'Incidents today', value: '14' },
-            { label: 'Assigned sector', value: 'Kimironko / Gasabo' },
+            { label: 'Incidents today', value: '—' },
+            { label: 'Assigned sector', value: '—' },
           ]}
         />
       )}
@@ -351,21 +343,15 @@ export default function FieldResponderSettingsView() {
                 Recommended for field responder accounts.
               </p>
             </div>
-            {twoFa ? (
-              <StatusBadge label="ENABLED" variant="resolved" />
+            {mfaEnabled ? (
+              <>
+                <StatusBadge label="ENABLED" variant="resolved" />
+                <button type="button" className="dispatcher-btn-ghost text-[12px]" onClick={() => navigate('/fr/mfa-setup')}>Manage 2FA</button>
+              </>
             ) : (
               <>
                 <StatusBadge label="NOT ENABLED" variant="critical" />
-                <button
-                  type="button"
-                  className="dispatcher-btn-outline text-[12px]"
-                  onClick={() => {
-                    setTwoFa(true)
-                    flashToast()
-                  }}
-                >
-                  Enable 2FA
-                </button>
+                <button type="button" className="dispatcher-btn-outline text-[12px]" onClick={() => navigate('/fr/mfa-setup')}>Enable 2FA</button>
               </>
             )}
           </div>

@@ -1,3 +1,5 @@
+// PARTIAL INTEGRATION: audit logs wired via src/api/admin.js. Security events also available.
+// TODO: backend gap — ADMIN_HEALTH_ALERTS, ADMIN_SYSTEM_STATUS, ADMIN_INTEGRATIONS_HEALTH have no backend equivalent.
 /** Super Admin — mock system administration data. */
 
 export const ADMIN_HEALTH_ALERTS = 1

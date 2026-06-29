@@ -4,6 +4,18 @@ import {
   Bell, AlertTriangle, Cpu, Users, Clock, Check,
 } from 'lucide-react'
 import { useNotificationsStore } from '../../store/notificationsStore'
+import { getCurrentUser } from '../../utils/authSession'
+
+const ROLE_NOTIF_HREF = {
+  DISPATCHER: '/dispatcher/notifications',
+  OPS_MANAGER: '/ops-manager/notifications',
+  ADMIN: '/admin/notifications',
+  SUPER_ADMIN: '/admin/notifications',
+  DISTRICT_COMMANDER: '/district-commander/notifications',
+  ANALYST: '/analyst/notifications',
+  PLANNER: '/planner/notifications',
+  FIELD_RESPONDER: '/field-responder/notifications',
+}
 
 const ICONS = {
   critical: AlertTriangle,
@@ -37,6 +49,8 @@ export default function NotificationsDropdown({ open, onClose, onToggle }) {
   const panelRef = useRef(null)
   const { items, markAllRead, markRead } = useNotificationsStore()
   const unread = items.filter((n) => !n.read).length
+  const role = getCurrentUser()?.role
+  const viewAllHref = ROLE_NOTIF_HREF[role] ?? '/dispatcher/notifications'
 
   useEffect(() => {
     if (!open) return undefined
@@ -83,6 +97,12 @@ export default function NotificationsDropdown({ open, onClose, onToggle }) {
           </div>
 
           <div className="flex-1 overflow-y-auto">
+            {items.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-10 gap-2 text-(--text-muted)">
+                <Bell size={28} className="opacity-30" />
+                <p className="text-[13px] font-medium m-0">No notifications</p>
+              </div>
+            )}
             {items.map((n) => (
               <button
                 key={n.id}
@@ -95,7 +115,7 @@ export default function NotificationsDropdown({ open, onClose, onToggle }) {
                 onClick={() => {
                   markRead(n.id)
                   onClose()
-                  navigate(n.href)
+                  if (n.href) navigate(n.href)
                 }}
               >
                 <NotifIcon type={n.type} />
@@ -130,7 +150,7 @@ export default function NotificationsDropdown({ open, onClose, onToggle }) {
 
           <div className="sticky bottom-0 bg-(--bg-surface) border-t border-(--border-subtle) px-4 py-2.5 text-center">
             <Link
-              to="/dispatcher/notifications"
+              to={viewAllHref}
               className="text-[12px] font-medium text-(--accent) no-underline hover:underline"
               onClick={onClose}
             >

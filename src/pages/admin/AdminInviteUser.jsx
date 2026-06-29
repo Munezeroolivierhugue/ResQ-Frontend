@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { inviteUser } from '../../api/users'
 import {
   Send,
-  Copy,
   CheckCircle,
   Users,
   User,
@@ -10,16 +10,12 @@ import {
   Phone,
   Shield,
   MapPin,
-  ExternalLink,
-  UserPlus,
   ArrowRight,
-  Check,
   Sparkles,
   Building2,
 } from 'lucide-react'
 import { ASSIGNED_ROLES, mockInvitedUsers } from '../../data/mockAuthData'
 import { mockAgencies } from '../../data/mockAgencies'
-import FieldLabel from '../../components/ui/FieldLabel'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
 
 const RECENT_LIMIT = 5
@@ -152,8 +148,9 @@ export default function AdminInviteUser() {
     district: '',
   })
   const [sent, setSent] = useState(null)
-  const [copied, setCopied] = useState(false)
   const [districtError, setDistrictError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [apiError, setApiError] = useState('')
 
   const showDistrictField = roleRequiresDistrict(form.role)
 
@@ -168,11 +165,10 @@ export default function AdminInviteUser() {
     }))
   }
 
-  const inviteLink = sent
-    ? `${window.location.origin}/register?invite=1&email=${encodeURIComponent(sent.email)}`
-    : ''
+  // The real invitation link (with secure token) is sent directly to the user's email by the backend.
+  // The frontend does not receive the token — it is generated and embedded in the email server-side.
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     if (showDistrictField && !form.district) {
       setDistrictError('Please assign a district for this role.')
@@ -182,28 +178,22 @@ export default function AdminInviteUser() {
       fullName: form.fullName,
       email: form.email,
       phone: form.phone,
-      agency_id: form.agency_id,
-      role: form.role,
-      ...(showDistrictField ? { district: form.district } : {}),
+      role: form.role.toUpperCase(),
     }
-    sessionStorage.setItem('resq-invite-email', form.email)
-    sessionStorage.setItem('resq-invite-name', form.fullName)
-    sessionStorage.setItem('resq-invite-phone', form.phone)
-    sessionStorage.setItem('resq-invite-agency-id', form.agency_id)
-    sessionStorage.setItem('resq-invite-role', form.role)
-    sessionStorage.setItem('resq-demo-role', form.role)
-    if (payload.district) {
-      sessionStorage.setItem('resq-invite-district', payload.district)
-    } else {
-      sessionStorage.removeItem('resq-invite-district')
+    setSubmitting(true)
+    setApiError('')
+    try {
+      await inviteUser(payload)
+      setSent({ ...payload, district: form.district })
+    } catch (err) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        'Failed to send invitation. Please try again.'
+      setApiError(msg)
+    } finally {
+      setSubmitting(false)
     }
-    setSent(payload)
-  }
-
-  const copyLink = () => {
-    navigator.clipboard?.writeText(inviteLink)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
   }
 
   const roleLabel = ASSIGNED_ROLES.find((r) => r.value === form.role)?.label || form.role
@@ -229,10 +219,11 @@ export default function AdminInviteUser() {
                   <CheckCircle size={28} />
                 </div>
                 <div>
-                  <div className="aiu-success-title">Invitation Dispatched!</div>
+                  <div className="aiu-success-title">Invitation Email Sent!</div>
                   <p className="aiu-success-desc">
-                    An invitation link has been generated for{' '}
-                    <strong>{sent.fullName}</strong>.
+                    A secure invitation link has been emailed directly to{' '}
+                    <strong>{sent.fullName}</strong>. They can use it to set their
+                    password and activate their account.
                   </p>
                 </div>
               </div>
@@ -255,35 +246,18 @@ export default function AdminInviteUser() {
               </div>
 
               <div className="aiu-link-section">
-                <FieldLabel className="aiu-link-label">Mock Invitation Link</FieldLabel>
-                <div className="aiu-link-row">
-                  <input
-                    readOnly
-                    value={inviteLink}
-                    className="aiu-link-input"
-                  />
-                  <button
-                    type="button"
-                    onClick={copyLink}
-                    className={`aiu-copy-btn ${copied ? 'aiu-copy-btn--copied' : ''}`}
-                  >
-                    {copied ? <Check size={14} /> : <Copy size={14} />}
-                    {copied ? 'Copied!' : 'Copy'}
-                  </button>
-                </div>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.6 }}>
+                  <Mail size={13} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />
+                  The invitation link contains a one-time secure token generated by the server.
+                  It was sent to <strong>{sent.email}</strong> and expires in <strong>48 hours</strong>.
+                  If they don't see it, ask them to check their spam folder.
+                </p>
               </div>
 
               <div className="aiu-success-actions">
-                <Link
-                  to={`/register?invite=1&email=${encodeURIComponent(sent.email)}`}
-                  className="aiu-open-reg-link"
-                >
-                  Open registration as invited user
-                  <ExternalLink size={13} />
-                </Link>
                 <button
                   type="button"
-                  onClick={() => { setSent(null); setCopied(false) }}
+                  onClick={() => setSent(null)}
                   className="aiu-invite-another-btn"
                 >
                   <Sparkles size={14} />
@@ -430,10 +404,13 @@ export default function AdminInviteUser() {
                 </label>
               </div>
 
+              {apiError && (
+                <p className="text-[12px] mt-2" style={{ color: 'var(--status-medium)' }}>{apiError}</p>
+              )}
               <div className="aiu-form-footer">
-                <button type="submit" className="aiu-submit-btn">
+                <button type="submit" className="aiu-submit-btn" disabled={submitting}>
                   <Send size={16} />
-                  Send Invitation Link
+                  {submitting ? 'Sending…' : 'Send Invitation Link'}
                 </button>
               </div>
             </form>

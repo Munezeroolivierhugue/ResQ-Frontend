@@ -1,3 +1,5 @@
+// PARTIAL INTEGRATION: listDistricts() wired to backend GET /api/districts.
+// District objects embedded here are UI display data; migrate to src/api/districts.js when needed.
 export const DC_CHART_MONTHS = ['Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May']
 
 export const DC_RESPONSE_TIME_TREND = [

@@ -15,15 +15,13 @@ import {
 } from 'lucide-react'
 import SidebarToggle from './SidebarToggle'
 import { useSidebarClasses } from '../../hooks/useSidebarClasses'
-import { PLANNER_HOTSPOT_BADGE, PLANNER_DEPLOYMENT_BADGE } from '../../data/mockPlannerData'
-
 const PLANNING = [
-  { icon: LayoutDashboard, label: 'Dashboard', href: '/planner/dashboard' },
-  { icon: Flame, label: 'Hotspot Analysis', href: '/planner/hotspots', badge: 'amber', count: PLANNER_HOTSPOT_BADGE },
-  { icon: Map, label: 'Coverage Analysis', href: '/planner/coverage' },
-  { icon: Send, label: 'Deployment Planning', href: '/planner/deployment', badge: 'accent', count: PLANNER_DEPLOYMENT_BADGE },
-  { icon: ChartScatter, label: 'Simulation', href: '/planner/simulation' },
-  { icon: Zap, label: 'Response Prediction', href: '/planner/prediction' },
+  { icon: LayoutDashboard, label: 'Dashboard',          href: '/planner/dashboard' },
+  { icon: Flame,           label: 'Hotspot Analysis',   href: '/planner/hotspots' },
+  { icon: Map,             label: 'Coverage Analysis',  href: '/planner/coverage' },
+  { icon: Send,            label: 'Deployment Planning',href: '/planner/deployment' },
+  { icon: ChartScatter,    label: 'Simulation',         href: '/planner/simulation' },
+  { icon: Zap,             label: 'Response Prediction',href: '/planner/prediction' },
 ]
 
 const REPORTS = [
@@ -38,10 +36,6 @@ const ACCOUNT = [
 
 function NavItem({ item, isActive, onClose }) {
   const Icon = item.icon
-  const badgeStyle =
-    item.badge === 'accent'
-      ? { background: 'var(--accent)', color: '#ffffff' }
-      : { background: 'var(--status-medium)', color: '#ffffff' }
   return (
     <div className={`sidebar-item-wrap${isActive ? ' active' : ''}`}>
       {isActive && (
@@ -59,11 +53,6 @@ function NavItem({ item, isActive, onClose }) {
       >
         <span className="sidebar-icon"><Icon size={18} /></span>
         <span className="sidebar-label">{item.label}</span>
-        {item.count > 0 && (
-          <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={badgeStyle}>
-            {item.count}
-          </span>
-        )}
       </Link>
     </div>
   )

@@ -1,3 +1,5 @@
+// PARTIAL INTEGRATION: getMyShifts(), startShift(), endShift() wired to backend.
+// TODO: backend gap — handoverNotes, handoverAt fields not yet in backend Shift entity.
 import {
   AlertTriangle,
   Clock,

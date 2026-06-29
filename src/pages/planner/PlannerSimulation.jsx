@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Play, ArrowRight, FileDown, Plus, Loader2 } from 'lucide-react'
 import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
@@ -6,6 +6,7 @@ import SectionTitle from '../../components/dispatcher/SectionTitle'
 import { PLANNER_SAVED_SCENARIOS } from '../../data/mockPlannerData'
 import { mockSimulations } from '../../data/mockSimulations'
 import { getCurrentUser } from '../../utils/authSession'
+import { listSimulations, runSimulation as apiRunSimulation } from '../../api/planning'
 
 const SCENARIOS = [
   'Flash Flood — Kigali',
@@ -22,6 +23,20 @@ export default function PlannerSimulation() {
   const [loading, setLoading] = useState(false)
   const [showResults, setShowResults] = useState(true)
   const [savedScenarios, setSavedScenarios] = useState(() => PLANNER_SAVED_SCENARIOS.map((s) => ({ ...s })))
+
+  useEffect(() => {
+    listSimulations().then((sims) => {
+      if (sims.length > 0) {
+        const adapted = sims.map((s) => ({
+          name: s.name ?? `${s.scenario_type} simulation`,
+          scenario_type: s.scenario_type,
+          created_at: s.ran_at ? new Date(s.ran_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—',
+          result_summary: s.coverage_score != null ? `${s.coverage_score}% coverage` : '—',
+        }))
+        setSavedScenarios(adapted)
+      }
+    }).catch(() => { /* keep mock fallback */ })
+  }, [])
 
   const runSimulation = () => {
     setLoading(true)
@@ -41,6 +56,15 @@ export default function PlannerSimulation() {
         created_at: timestamp,
       }
       mockSimulations.push(sim)
+
+      // Attempt backend persist (non-blocking)
+      apiRunSimulation({
+        name: `${resourceMode === 'ai' ? 'AI Optimized' : 'Current'} · ${multiplier}× baseline`,
+        scenario_type: sim.scenario_type,
+        district_id: currentUser?.district_id ?? null,
+        notes: null,
+      }).catch(() => { /* keep local state */ })
+
       const scenarioEntry = {
         name: `${resourceMode === 'ai' ? 'AI Optimized' : 'Current'} · ${multiplier}× baseline`,
         scenario_type: sim.scenario_type,

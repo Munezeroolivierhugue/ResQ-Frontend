@@ -15,9 +15,10 @@ import {
 } from '../../data/mockIntakeData'
 import { useCallChannelStore } from '../../store/callChannelStore'
 import { mockCallerProfiles } from '../../data/mockCallData'
-import { mockIncidents } from '../../data/mockIncidents'
 import { mockCallers } from '../../data/mockCallers'
-import { mockTriageQuestions } from '../../data/mockTriageQuestions'
+import { getTriageQuestions, getSeverityRules } from '../../api/triage'
+import { checkDuplicates } from '../../api/incidents'
+import { listDistricts } from '../../api/districts'
 import { calculateSeverity } from '../../utils/severityEngine'
 import { haversineMeters } from '../../utils/geo'
 import LiveEmergencyBanner from '../../components/intake/LiveEmergencyBanner'
@@ -42,35 +43,9 @@ const CATEGORY_TO_TRIAGE_TYPE = {
   'Security / Disturbance': 'SECURITY',
 }
 
-const RWANDA_DISTRICT_GROUPS = [
-  {
-    label: '── Kigali City ──',
-    districts: ['Nyarugenge', 'Kicukiro', 'Gasabo'],
-  },
-  {
-    label: '── Northern Province ──',
-    districts: ['Musanze', 'Burera', 'Gakenke', 'Rulindo', 'Gicumbi'],
-  },
-  {
-    label: '── Southern Province ──',
-    districts: ['Huye', 'Nyamagabe', 'Gisagara', 'Nyaruguru', 'Muhanga', 'Kamonyi', 'Ruhango', 'Nyanza'],
-  },
-  {
-    label: '── Eastern Province ──',
-    districts: ['Rwamagana', 'Bugesera', 'Gatsibo', 'Kayonza', 'Kirehe', 'Ngoma', 'Nyagatare'],
-  },
-  {
-    label: '── Western Province ──',
-    districts: ['Rubavu', 'Karongi', 'Ngororero', 'Nyabihu', 'Nyamasheke', 'Rusizi', 'Rutsiro'],
-  },
-]
-
 const SEVERITY_OPTIONS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
 
 const ACTIVE_STATUSES = new Set(['RECEIVED', 'DISPATCHED', 'EN_ROUTE', 'ON_SCENE', 'active', 'pending'])
-
-// Anchor "now" to mock data timestamp so duplicate detection fires in demo
-const DEMO_NOW = new Date('2026-06-24T15:10:00Z')
 
 const VERIFICATION_ITEMS = [
   { key: 'callback_confirmed',    label: 'Callback confirmed' },
@@ -119,7 +94,7 @@ export default function NewIncident() {
 
   // ── Triage ──────────────────────────────────────────────────────────────────
   const [incidentType, setIncidentType] = useState('')
-  const [ setIncidentTypeVersion] = useState(0)
+  const [, setIncidentTypeVersion] = useState(0)
   const [triageResponses, setTriageResponses] = useState([])
 
   // ── Severity override ────────────────────────────────────────────────────────
@@ -155,43 +130,52 @@ export default function NewIncident() {
   const [linkedIncidentId, setLinkedIncidentId] = useState(null)
   const [investigateIncident, setInvestigateIncident] = useState(null)
 
+  // ── Districts from backend ───────────────────────────────────────────────────
+  const [districts, setDistricts] = useState([])
+  useEffect(() => {
+    listDistricts().then(setDistricts).catch(() => {})
+  }, [])
+
   // ── Basic form fields ────────────────────────────────────────────────────────
-  const [district, setDistrict] = useState('')
+  const [district, setDistrict] = useState('')   // stores district_id UUID
   const [districtError, setDistrictError] = useState(false)
   const [notes, setNotes] = useState(mockLiveNotesPlaceholder)
 
-  // ── Derived: duplicates computed from location (no setState in effect) ───────
-  const duplicates = useMemo(() => {
-    if (!detectedLocation || detectedLocation.source === 'TELECOM_ROUGH') return []
-    return mockIncidents
-      .filter((inc) => {
-        if (!ACTIVE_STATUSES.has(inc.status)) return false
-        if (inc.lat == null || inc.lng == null) return false
-        const distM = haversineMeters(detectedLocation.lat, detectedLocation.lng, inc.lat, inc.lng)
-        if (distM > 500) return false
-        const minutesAgo = (DEMO_NOW - new Date(inc.call_time)) / 60000
-        return minutesAgo <= 30
-      })
-      .map((inc) => ({
+  // ── Duplicates from backend ──────────────────────────────────────────────────
+  const [duplicates, setDuplicates] = useState([])
+  useEffect(() => {
+    if (!detectedLocation || detectedLocation.source === 'TELECOM_ROUGH') {
+      setDuplicates([])
+      return
+    }
+    checkDuplicates(detectedLocation.lat, detectedLocation.lng)
+      .then((incs) => setDuplicates(incs.map((inc) => ({
         ...inc,
         _distance: Math.round(haversineMeters(detectedLocation.lat, detectedLocation.lng, inc.lat, inc.lng)),
-        _minutesAgo: Math.round((DEMO_NOW - new Date(inc.call_time)) / 60000),
-      }))
+        _minutesAgo: Math.round((Date.now() - new Date(inc.call_time).getTime()) / 60000),
+      }))))
+      .catch(() => setDuplicates([]))
   }, [detectedLocation])
 
-  // ── Derived: triage questions for selected category ──────────────────────────
+  // ── Derived: triage questions + severity rules for selected category ──────────
   const triageTypeCode = CATEGORY_TO_TRIAGE_TYPE[incidentType]
-  const triageQuestions = useMemo(() => {
-    if (!triageTypeCode) return []
-    return mockTriageQuestions
-      .filter((q) => q.incident_type === triageTypeCode)
-      .sort((a, b) => a.display_order - b.display_order)
+  const [triageQuestions, setTriageQuestions] = useState([])
+  const [severityRules, setSeverityRules] = useState(null)
+  useEffect(() => {
+    if (!triageTypeCode) { setTriageQuestions([]); setSeverityRules(null); return }
+    Promise.all([
+      getTriageQuestions(triageTypeCode),
+      getSeverityRules(triageTypeCode),
+    ]).then(([qs, rules]) => {
+      setTriageQuestions(qs.sort((a, b) => a.display_order - b.display_order))
+      setSeverityRules(rules)
+    }).catch(() => { setTriageQuestions([]); setSeverityRules(null) })
   }, [triageTypeCode])
 
   // ── Derived: severity from triage answers ────────────────────────────────────
   const calculatedSeverity = useMemo(
-    () => calculateSeverity(incidentType, triageResponses),
-    [incidentType, triageResponses]
+    () => calculateSeverity(incidentType, triageResponses, severityRules),
+    [incidentType, triageResponses, severityRules]
   )
 
   // Effective severity: override wins when active
@@ -266,7 +250,7 @@ export default function NewIncident() {
       location_source: location?.source ?? 'TELECOM_ROUGH',
       lat: location?.lat ?? activeCallerRecord?.rough_lat,
       lng: location?.lng ?? activeCallerRecord?.rough_lng,
-      district,
+      districtId: district,
       sector: mockLocationSharing.sector,
       occurrence_time: occurrenceTime || null,
       call_time: callTimeRef.current,
@@ -531,7 +515,8 @@ export default function NewIncident() {
                     const response = triageResponses.find(
                       (r) => r.question_code === q.question_code
                     )
-                    const useDropdown = q.answer_options.length > 4
+                    const opts = Array.isArray(q.answer_options) ? q.answer_options : []
+                    const useDropdown = opts.length > 4
 
                     return (
                       <div key={q.question_id} className="flex flex-col gap-1.5">
@@ -551,7 +536,7 @@ export default function NewIncident() {
                             <option value="" disabled>
                               Select answer...
                             </option>
-                            {q.answer_options.map((opt) => (
+                            {opts.map((opt) => (
                               <option key={opt} value={opt}>
                                 {opt}
                               </option>
@@ -563,7 +548,7 @@ export default function NewIncident() {
                             role="group"
                             aria-label={q.question_text}
                           >
-                            {q.answer_options.map((opt) => {
+                            {opts.map((opt) => {
                               const selected = response?.answer === opt
                               return (
                                 <button
@@ -790,11 +775,17 @@ export default function NewIncident() {
                     <option value="" disabled>
                       Select district — confirm with caller
                     </option>
-                    {RWANDA_DISTRICT_GROUPS.map((group) => (
-                      <optgroup key={group.label} label={group.label}>
-                        {group.districts.map((d) => (
-                          <option key={d} value={d}>
-                            {d}
+                    {Object.entries(
+                      districts.reduce((acc, d) => {
+                        const p = d.province ?? 'Other'
+                        ;(acc[p] = acc[p] ?? []).push(d)
+                        return acc
+                      }, {})
+                    ).map(([province, list]) => (
+                      <optgroup key={province} label={`── ${province} ──`}>
+                        {list.map((d) => (
+                          <option key={d.district_id} value={d.district_id}>
+                            {d.name}
                           </option>
                         ))}
                       </optgroup>

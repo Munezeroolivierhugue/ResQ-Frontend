@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useLocation, Link } from 'react-router-dom'
 import {
   Map, Zap, Bot, Radio, ScrollText, FileCheck, ClipboardList,
@@ -5,11 +6,8 @@ import {
 } from 'lucide-react'
 import SidebarToggle from './SidebarToggle'
 import { useSidebarClasses } from '../../hooks/useSidebarClasses'
-import { mockIncidents } from '../../data/mockIncidents'
-import { mockMissedCalls } from '../../data/mockMissedCalls'
-
-const pendingReportsCount = mockIncidents.filter((i) => i.status === 'PENDING_REPORT').length
-const missedCallsCount = mockMissedCalls.filter((c) => c.status === 'pending').length
+import { listIncidents } from '../../api/incidents'
+import { listMissedCalls } from '../../api/missedCalls'
 
 const NAV_ITEMS = [
   { icon: Map,          label: 'Live Dispatch Map', href: '/dispatcher' },
@@ -19,8 +17,8 @@ const NAV_ITEMS = [
   { icon: ScrollText,   label: 'Incident History',   href: '/dispatcher/history' },
   { icon: FileCheck,    label: 'Incident Report',    href: '/dispatcher/incident-report' },
   { icon: ClipboardList,label: 'Shift Handover',     href: '/dispatcher/shift-handover' },
-  { icon: FileClock,    label: 'Pending Reports',    href: '/dispatcher/pending-reports', badge: pendingReportsCount },
-  { icon: PhoneMissed,  label: 'Missed Calls',       href: '/dispatcher/missed-calls',   badge: missedCallsCount },
+  { icon: FileClock,    label: 'Pending Reports',    href: '/dispatcher/pending-reports', badgeKey: 'pendingReports', badgeColor: 'accent' },
+  { icon: PhoneMissed,  label: 'Missed Calls',       href: '/dispatcher/missed-calls',   badgeKey: 'missedCalls',    badgeColor: 'critical' },
 ]
 
 const BOTTOM_ITEMS = [
@@ -29,7 +27,7 @@ const BOTTOM_ITEMS = [
   { icon: LogOut,     label: 'Logout',   href: '/login', danger: true },
 ]
 
-function NavItem({ item, isActive, onClose }) {
+function NavItem({ item, isActive, onClose, badge }) {
   const Icon = item.icon
   return (
     <div className={`sidebar-item-wrap${isActive ? ' active' : ''}`}>
@@ -47,12 +45,12 @@ function NavItem({ item, isActive, onClose }) {
       >
         <span className="sidebar-icon"><Icon size={18} /></span>
         <span className="sidebar-label">{item.label}</span>
-        {item.badge > 0 && (
+        {badge > 0 && (
           <span
             className="ml-auto shrink-0"
             style={{
-              background: item.href === '/dispatcher/pending-reports' ? 'var(--accent)' : 'var(--status-critical)',
-              color: item.href === '/dispatcher/pending-reports' ? 'var(--accent-text)' : '#fff',
+              background: item.badgeColor === 'accent' ? 'var(--accent)' : 'var(--status-critical)',
+              color: '#fff',
               fontSize: '9px',
               fontWeight: 700,
               padding: '1px 6px',
@@ -61,7 +59,7 @@ function NavItem({ item, isActive, onClose }) {
               lineHeight: '16px',
             }}
           >
-            {item.badge}
+            {badge}
           </span>
         )}
       </Link>
@@ -72,6 +70,16 @@ function NavItem({ item, isActive, onClose }) {
 export default function Sidebar({ mobileOpen, onClose }) {
   const location = useLocation()
   const sidebarClasses = useSidebarClasses(mobileOpen)
+  const [counts, setCounts] = useState({ pendingReports: 0, missedCalls: 0 })
+
+  useEffect(() => {
+    listIncidents({ status: 'PENDING_REPORT' })
+      .then((items) => setCounts((c) => ({ ...c, pendingReports: items.length })))
+      .catch(() => {})
+    listMissedCalls()
+      .then((items) => setCounts((c) => ({ ...c, missedCalls: items.filter((m) => m.status === 'pending').length })))
+      .catch(() => {})
+  }, [])
 
   return (
     <aside className={sidebarClasses}>
@@ -87,19 +95,18 @@ export default function Sidebar({ mobileOpen, onClose }) {
         </button>
       </div>
 
-      {/* Nav items */}
       <nav className="sidebar-nav">
         <div className="sidebar-section-label">Operations</div>
 
         {NAV_ITEMS.map(item => {
           const isActive = location.pathname === item.href ||
             (item.href !== '/dispatcher' && location.pathname.startsWith(item.href))
-          return <NavItem key={item.href} item={item} isActive={isActive} onClose={onClose} />
+          const badge = item.badgeKey ? counts[item.badgeKey] : 0
+          return <NavItem key={item.href} item={item} isActive={isActive} onClose={onClose} badge={badge} />
         })}
 
       </nav>
 
-      {/* Bottom pinned */}
       <div className="sidebar-bottom">
         {BOTTOM_ITEMS.map(item => {
           const Icon = item.icon

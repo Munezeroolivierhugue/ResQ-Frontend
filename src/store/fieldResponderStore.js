@@ -2,11 +2,14 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { mockUnifiedComms } from '../data/mockUnifiedComms'
 import { mockFieldReports } from '../data/mockFieldReports'
-import { mockGpsPings } from '../data/mockGpsPings'
 import { FR_OFFICER, FR_ASSIGNMENT } from '../data/mockFieldResponderData'
 import { generateUuid, yesNoToBoolean } from '../utils/formHelpers'
+import { recordGpsPing } from '../api/vehicles'
+import { submitFieldReport } from '../api/fieldReports'
+import { getAccessToken } from '../utils/authSession'
 
 const STAGES = ['dispatched', 'en_route', 'on_scene', 'incident_clear']
+const MOCK_VEHICLE_ID = FR_OFFICER.vehicle_id  // placeholder — never send to real API
 
 let gpsIntervalId = null
 
@@ -15,17 +18,14 @@ function startGpsInterval() {
   let lat = FR_OFFICER.current_lat
   let lng = FR_OFFICER.current_lng
   gpsIntervalId = setInterval(() => {
-    const { gpsActive } = useFieldResponderStore.getState()
+    const { gpsActive, vehicleId } = useFieldResponderStore.getState()
     if (!gpsActive) { stopGpsInterval(); return }
+    if (!getAccessToken()) return
+    // Only ping when we have a real vehicle ID assigned — skip mock placeholder
+    if (!vehicleId || vehicleId === MOCK_VEHICLE_ID) return
     lat += (Math.random() * 2 - 1) * 0.0001
     lng += (Math.random() * 2 - 1) * 0.0001
-    mockGpsPings.push({
-      ping_id: generateUuid(),
-      vehicle_id: FR_OFFICER.vehicle_id,
-      latitude: lat,
-      longitude: lng,
-      recorded_at: new Date().toISOString(),
-    })
+    recordGpsPing(vehicleId, lat, lng).catch(() => {})
   }, 30000)
 }
 
@@ -45,6 +45,7 @@ function buildDescription(form) {
 export const useFieldResponderStore = create(
   persist(
     (set, get) => ({
+      vehicleId: null,        // set via setVehicleId() when shift is started with a real vehicle
       gpsActive: true,
       dutyStatus: 'offline',
       assignmentStage: 'dispatched',
@@ -54,6 +55,7 @@ export const useFieldResponderStore = create(
       outstandingReports: [],
       toast: null,
 
+      setVehicleId: (vehicleId) => set({ vehicleId }),
       setGpsActive: (gpsActive) => set({ gpsActive }),
       goAvailable: () => set({ dutyStatus: 'available', gpsActive: true }),
       acceptAssignment: () => set({ assignmentStage: 'en_route', dutyStatus: 'available' }),
@@ -68,7 +70,7 @@ export const useFieldResponderStore = create(
         stopGpsInterval()
         set({ dutyStatus: 'offline', gpsActive: false, hasActiveAssignment: false, assignmentStage: 'dispatched' })
       },
-      submitReport: (form) => {
+      submitReport: async (form) => {
         const payload = {
           report_id: generateUuid(),
           incident_id: FR_ASSIGNMENT.incident_id,
@@ -84,7 +86,13 @@ export const useFieldResponderStore = create(
           entry_method: 'STRUCTURED',
           submitted_at: new Date().toISOString(),
         }
-        mockFieldReports.push(payload)
+        try {
+          await submitFieldReport(payload)
+        } catch (err) {
+          // Fallback: push to mock array so UI doesn't break offline
+          mockFieldReports.push(payload)
+          throw err
+        }
         set({
           reportSubmitted: true,
           dutyStatus: 'available',
@@ -120,6 +128,7 @@ export const useFieldResponderStore = create(
       name: 'fr-store',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
+        vehicleId: state.vehicleId,
         gpsActive: state.gpsActive,
         dutyStatus: state.dutyStatus,
         assignmentStage: state.assignmentStage,

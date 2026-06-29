@@ -1,100 +1,201 @@
-import { useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Smartphone, ShieldCheck, Info, Check } from 'lucide-react'
+import { Mail, Lock, RefreshCw, ShieldCheck, Check } from 'lucide-react'
 import AuthCenterLayout from '../../components/auth/AuthCenterLayout'
-import { MFA_SETUP_OPTIONS } from '../../data/mockAuthData'
+import { setupMfa, confirmMfaSetup } from '../../api/auth'
+import { getAccessToken, getDemoRole, navigatePortal } from '../../utils/authSession'
 
-const ICONS = {
-  google_auth: Smartphone,
-  trusted_device: ShieldCheck,
-}
+const OTP_LEN = 6
 
 export default function MfaSetup() {
   const navigate = useNavigate()
-  const [showSuccess, setShowSuccess] = useState(false)
+  const [challengeToken, setChallengeToken] = useState(null)
+  const [message, setMessage] = useState('')
+  const [digits, setDigits] = useState(Array(OTP_LEN).fill(''))
+  const [error, setError] = useState('')
+  const [setupLoading, setSetupLoading] = useState(true)
+  const [verifying, setVerifying] = useState(false)
+  const [success, setSuccess] = useState(false)
+  const refs = useRef([])
 
-  const handleConfirm = () => {
-    setShowSuccess(true)
+  // Guard: redirect to login if not authenticated
+  useEffect(() => {
+    if (!getAccessToken()) {
+      navigate('/login', { replace: true })
+    }
+  }, [navigate])
+
+  useEffect(() => {
+    if (!getAccessToken()) return   // skip if not authenticated (redirect pending)
+    let cancelled = false
+    setupMfa()
+      .then((res) => {
+        if (cancelled) return
+        setChallengeToken(res.challengeToken)
+        setMessage(res.message || 'A 6-digit verification code has been sent to your email.')
+      })
+      .catch((err) => {
+        if (cancelled) return
+        const status = err?.response?.status
+        const msg = err?.response?.data?.message
+        if (status === 503) {
+          setError('MFA service is temporarily unavailable (Redis may be down). Please try again shortly.')
+        } else {
+          setError(msg || 'Failed to initiate MFA setup. Please try again.')
+        }
+      })
+      .finally(() => { if (!cancelled) setSetupLoading(false) })
+    return () => { cancelled = true }
+  }, [])
+
+  const handleChange = (i, val) => {
+    if (!/^\d?$/.test(val)) return
+    const next = [...digits]
+    next[i] = val
+    setDigits(next)
+    if (val && i < OTP_LEN - 1) refs.current[i + 1]?.focus()
   }
 
-  const handleFinalContinue = () => {
-    sessionStorage.setItem('resq-mfa-enabled', 'true')
-    sessionStorage.setItem('resq-trusted-device', 'true')
-    navigate('/login')
+  const handleKeyDown = (i, e) => {
+    if (e.key === 'Backspace' && !digits[i] && i > 0) refs.current[i - 1]?.focus()
+  }
+
+  const handlePaste = (e) => {
+    e.preventDefault()
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, OTP_LEN)
+    if (!pasted) return
+    const next = [...digits]
+    pasted.split('').forEach((char, idx) => { next[idx] = char })
+    setDigits(next)
+    refs.current[Math.min(pasted.length, OTP_LEN - 1)]?.focus()
+  }
+
+  const handleVerify = async (e) => {
+    e.preventDefault()
+    if (digits.some((d) => !d)) {
+      setError('Please enter the complete 6-digit code.')
+      return
+    }
+    if (!challengeToken) {
+      setError('No active challenge. Please resend the code.')
+      return
+    }
+    setError('')
+    setVerifying(true)
+    try {
+      await confirmMfaSetup(challengeToken, digits.join(''))
+      setSuccess(true)
+    } catch (err) {
+      setError(
+        err?.response?.data?.message || 'Verification failed. The code may be incorrect or expired.'
+      )
+    } finally {
+      setVerifying(false)
+    }
+  }
+
+  const handleResend = () => {
+    setSetupLoading(true)
+    setDigits(Array(OTP_LEN).fill(''))
+    setError('')
+    setupMfa()
+      .then((res) => {
+        setChallengeToken(res.challengeToken)
+        setMessage(res.message || 'A new verification code has been sent to your email.')
+      })
+      .catch((err) => {
+        setError(err?.response?.data?.message || 'Failed to resend code.')
+      })
+      .finally(() => setSetupLoading(false))
+  }
+
+  if (success) {
+    return (
+      <AuthCenterLayout>
+        <div className="auth-otp-card">
+          <div className="auth-otp-icon-wrap">
+            <ShieldCheck size={28} className="text-(--accent)" />
+          </div>
+          <p className="auth-otp-eyebrow">MFA enabled</p>
+          <h1 className="auth-otp-title">Account secured</h1>
+          <p className="auth-otp-desc">
+            Two-factor authentication is now active. Your account is protected by email OTP verification on every login.
+          </p>
+          <button type="button" className="auth-otp-submit" onClick={() => navigatePortal(getDemoRole(), navigate)}>
+            <Check size={16} />
+            Enter your portal
+          </button>
+        </div>
+      </AuthCenterLayout>
+    )
   }
 
   return (
     <AuthCenterLayout>
-      <div className="auth-mfa-wrap auth-mfa-wrap--centered">
-        <span className="auth-mfa-badge">Identity protection active</span>
-        <h1 className="auth-mfa-title">Command profile secured</h1>
-        <p className="auth-mfa-desc">
-          Multi-factor authentication has been successfully established. Google Authenticator and
-          trusted device recognition are now active for your account.
+      <div className="auth-otp-card">
+        <span className="auth-otp-corner auth-otp-corner--tl" />
+        <span className="auth-otp-corner auth-otp-corner--br" />
+
+        <div className="auth-otp-icon-wrap">
+          <Mail size={28} className="text-(--accent)" />
+        </div>
+
+        <p className="auth-otp-eyebrow">Two-factor authentication setup</p>
+        <h1 className="auth-otp-title">Secure your account</h1>
+        <p className="auth-otp-desc">
+          {setupLoading
+            ? 'Sending verification code to your email…'
+            : message}
         </p>
 
-        <div className="auth-mfa-cards auth-mfa-cards--two">
-          {MFA_SETUP_OPTIONS.map((opt) => {
-            const Icon = ICONS[opt.id] || Smartphone
-            return (
-              <div
-                key={opt.id}
-                className="auth-mfa-card auth-mfa-card--active"
-                style={{ cursor: 'default' }}
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <Icon size={22} className="auth-mfa-card-icon m-0" />
-                  <span className="text-[13px] font-bold text-(--accent)">CONFIGURED</span>
-                </div>
-                <div className="auth-mfa-card-title">{opt.title}</div>
-                <p className="auth-mfa-card-text">{opt.description}</p>
-                <span className="auth-mfa-radio auth-mfa-radio--on" />
-              </div>
-            )
-          })}
-        </div>
-
-        <div className="auth-mfa-protocol">
-          <Info size={16} className="shrink-0 text-(--text-muted)" />
-          <div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-(--text-secondary)">
-              System protocol 4.0
+        {!setupLoading && (
+          <form onSubmit={handleVerify}>
+            <div className="auth-otp-inputs">
+              {digits.map((d, i) => (
+                <input
+                  key={i}
+                  ref={(el) => { refs.current[i] = el }}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={d}
+                  onChange={(e) => handleChange(i, e.target.value)}
+                  onKeyDown={(e) => handleKeyDown(i, e)}
+                  onPaste={handlePaste}
+                  autoFocus={i === 0}
+                  className="auth-otp-digit"
+                  aria-label={`Digit ${i + 1}`}
+                />
+              ))}
             </div>
-            <p className="text-[12px] text-(--text-muted) m-0 mt-0.5">
-              All authentication attempts are logged and geo-tagged for security audit.
-            </p>
-          </div>
-          <button type="button" onClick={handleConfirm} className="auth-mfa-confirm">
-            Complete Registration
-          </button>
-        </div>
-      </div>
 
-      {showSuccess && (
-        <div className="fixed inset-0 z-[500] flex items-center justify-center p-4" style={{ background: 'rgba(0, 0, 0, 0.65)', backdropFilter: 'blur(4px)' }}>
-          <div className="bg-(--bg-base) rounded-xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col animate-in fade-in zoom-in duration-300">
-            <div className="p-10 flex flex-col items-center justify-center text-center" style={{ background: 'var(--accent)', color: 'var(--accent-text)' }}>
-              <div className="w-16 h-16 rounded-full border-4 flex items-center justify-center mb-4" style={{ borderColor: 'rgba(255,255,255,0.3)' }}>
-                <Check size={36} strokeWidth={3} />
-              </div>
-              <div className="font-bold tracking-widest text-lg uppercase">Success</div>
-            </div>
-            <div className="p-8 text-center flex flex-col gap-6">
-              <p className="text-(--text-secondary) text-[14px] leading-relaxed m-0">
-                Congratulations, your account has been successfully created and secured.
+            {error && (
+              <p className="auth-field-error" style={{ textAlign: 'center', marginTop: '12px' }}>
+                {error}
               </p>
-              <button
-                type="button"
-                className="dispatcher-btn-primary w-full justify-center"
-                style={{ background: 'var(--accent)', color: 'var(--accent-text)', border: 'none' }}
-                onClick={handleFinalContinue}
-              >
-                Continue
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            )}
+
+            <button type="submit" className="auth-otp-submit" disabled={verifying}>
+              <Lock size={16} />
+              {verifying ? 'Verifying…' : 'Enable MFA'}
+            </button>
+          </form>
+        )}
+
+        {setupLoading && error && (
+          <p className="auth-field-error" style={{ textAlign: 'center', marginTop: '12px' }}>{error}</p>
+        )}
+
+        <button
+          type="button"
+          className="auth-otp-resend"
+          onClick={handleResend}
+          disabled={setupLoading}
+        >
+          <RefreshCw size={14} />
+          Resend code
+        </button>
+      </div>
     </AuthCenterLayout>
   )
 }

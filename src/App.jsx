@@ -31,6 +31,7 @@ import FRVerifyOtp from './pages/auth/FRVerifyOtp'
 import FRMfaSetup from './pages/auth/FRMfaSetup'
 import LoginMfa from './pages/auth/LoginMfa'
 import Register from './pages/auth/Register'
+import SetPassword from './pages/auth/SetPassword'
 import VerifyOtp from './pages/auth/VerifyOtp'
 import MfaSetup from './pages/auth/MfaSetup'
 import AdminInviteUser from './pages/admin/AdminInviteUser'
@@ -114,6 +115,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/login/mfa" element={<LoginMfa />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/set-password" element={<SetPassword />} />
         <Route path="/register/password" element={<Navigate to="/register" replace />} />
         <Route path="/verify-otp" element={<VerifyOtp />} />
         <Route path="/mfa-setup" element={<MfaSetup />} />

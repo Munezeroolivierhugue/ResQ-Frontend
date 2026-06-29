@@ -1,3 +1,6 @@
+// PARTIAL INTEGRATION: listVehicles(), getVehicle(), updateVehicleStatus(), recordGpsPing() wired to backend.
+// Components using mockVehicles directly should migrate to src/api/vehicles.js listVehicles().
+// TODO: backend gap — POST /api/vehicles (create) requires SUPER_ADMIN; admin UI not yet built.
 export const mockVehicles = [
   {
     // Database Fields

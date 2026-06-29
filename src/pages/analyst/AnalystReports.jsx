@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   Play,
   BarChart3,
@@ -29,6 +29,7 @@ import { getCurrentUser } from '../../utils/authSession'
 import { mockReports } from '../../data/mockReports'
 import { useNotificationsStore } from '../../store/notificationsStore'
 import { ANALYST_LIBRARY_ROWS } from '../../data/mockAnalystData'
+import { listReports } from '../../api/reporting'
 import {
   ANALYST_REPORT_METRICS,
   ANALYST_RESPONSE_TREND,
@@ -56,8 +57,15 @@ export default function AnalystReports() {
   )
   const [toast, setToast] = useState('')
   const [lastReportId, setLastReportId] = useState(null)
+  const [apiReports, setApiReports] = useState([])
   const reportNameRef = useRef(null)
   const addNotification = useNotificationsStore((s) => s.addNotification)
+
+  useEffect(() => {
+    listReports()
+      .then((reports) => { if (reports && reports.length > 0) setApiReports(reports) })
+      .catch(() => { /* API unavailable — library shows mock data only */ })
+  }, [])
 
   const toggleMetric = (id) => setMetrics((m) => ({ ...m, [id]: !m[id] }))
 
@@ -356,6 +364,19 @@ export default function AnalystReports() {
           <Library size={14} />
           Post to Report Library
         </button>
+        {apiReports.length > 0 && (
+          <div className="mt-1 mb-2">
+            <div className="text-[10px] font-mono text-(--text-muted) mb-1">LIBRARY ({apiReports.length})</div>
+            <div className="max-h-[120px] overflow-y-auto flex flex-col gap-1">
+              {apiReports.slice(0, 5).map((r) => (
+                <div key={r.report_id} className="text-[10px] text-(--text-secondary) px-2 py-1 rounded" style={{ background: 'var(--bg-elevated)' }}>
+                  <div className="font-medium truncate">{r.report_type}</div>
+                  <div className="text-(--text-muted)">{r.district_name || '—'} · {r.status}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <hr className="border-(--border) my-3" />
         <div className="font-semibold text-[12px] mb-2">Schedule Report</div>
         <select className="dispatcher-input h-9 w-full text-[12px] mb-2">

@@ -1,6 +1,8 @@
 import { create } from 'zustand'
-import { connectMock, disconnectMock, emit } from '../utils/callChannel'
+import { connect, connectMock, disconnectMock, emit } from '../utils/callChannel'
 import { randomRwandanPhone, mockCallerProfiles, mockCallRecords } from '../data/mockCallData'
+import { claimCall, passCall } from '../api/calls'
+import { getCallerByPhone } from '../api/callers'
 
 // ── Store ─────────────────────────────────────────────────────────────────────
 export const useCallChannelStore = create((set, get) => {
@@ -30,10 +32,12 @@ export const useCallChannelStore = create((set, get) => {
     },
   }
 
-  // Start mock connector immediately unless a real WS URL is configured
+  // Start connector: use STOMP if WS URL is configured, otherwise mock
   let _mockRef = null
   const wsUrl = import.meta.env.VITE_WS_URL
-  if (!wsUrl) {
+  if (wsUrl) {
+    connect(handlers)
+  } else {
     _mockRef = connectMock(handlers, randomRwandanPhone)
   }
 
@@ -47,10 +51,16 @@ export const useCallChannelStore = create((set, get) => {
     // ── Actions ──────────────────────────────────────────────────────────────
     receiveCall: (payload) => handlers.onIncomingCall(payload),
 
-    answerCall: () => {
+    answerCall: async () => {
       const { incomingCall } = get()
       if (!incomingCall) return
-      emit('call_claimed', { call_id: incomingCall.call_id })
+      const sessionId = incomingCall.session_id ?? incomingCall.call_id
+      // Fire REST claim — don't block UI transition on this
+      if (sessionId && !sessionId.startsWith('CALL-MOCK-') && !sessionId.startsWith('CALL-SIM-')) {
+        claimCall(sessionId).catch(console.error)
+      } else {
+        emit('call_claimed', { call_id: sessionId })
+      }
       set({
         currentCall: incomingCall,
         incomingCall: null,
@@ -58,10 +68,15 @@ export const useCallChannelStore = create((set, get) => {
       })
     },
 
-    declineCall: () => {
+    declineCall: async () => {
       const { incomingCall } = get()
       if (!incomingCall) return
-      emit('call_passed', { call_id: incomingCall.call_id })
+      const sessionId = incomingCall.session_id ?? incomingCall.call_id
+      if (sessionId && !sessionId.startsWith('CALL-MOCK-') && !sessionId.startsWith('CALL-SIM-')) {
+        passCall(sessionId).catch(console.error)
+      } else {
+        emit('call_passed', { call_id: sessionId })
+      }
       set({ incomingCall: null, showIncomingBanner: false })
     },
 
@@ -85,9 +100,14 @@ export const useCallChannelStore = create((set, get) => {
       }
     },
 
-    /** Look up caller profile by phone number */
-    getCallerProfile: (phone_number) =>
-      mockCallerProfiles.find((p) => p.phone_number === phone_number) ?? null,
+    /** Look up caller profile by phone number — tries API first, falls back to mock */
+    getCallerProfile: async (phone_number) => {
+      try {
+        return await getCallerByPhone(phone_number)
+      } catch {
+        return mockCallerProfiles.find((p) => p.phone_number === phone_number) ?? null
+      }
+    },
 
     _cleanup: () => disconnectMock(),
   }

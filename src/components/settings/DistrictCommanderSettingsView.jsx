@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import {
   Sun,
   Moon,
@@ -54,7 +54,8 @@ export default function DistrictCommanderSettingsView() {
   const { theme, setTheme } = useThemeStore()
   const [toast, setToast] = useState(false)
   const [language, setLanguage] = useState('en')
-  const [twoFa, setTwoFa] = useState(true)
+  const navigate = useNavigate()
+  const [mfaEnabled, setMfaEnabled] = useState(false)
   const [toggles, setToggles] = useState({
     shiftReportsPending: true,
     coverageCritical: true,
@@ -87,20 +88,11 @@ export default function DistrictCommanderSettingsView() {
     >
       {section === 'profile' && (
         <SettingsProfileSection
-          initials="EH"
-          roleLabel="DIST. COMMANDER"
-          badge="DC-0007"
-          defaultForm={{
-            name: 'Emmanuel Hakizimana',
-            email: 'e.hakizimana@rnp.gov.rw',
-            phone: '+250 788 445 901',
-            station: `${district} District Command`,
-          }}
-          stationAdminNote="Assigned district is set by RNP Headquarters · contact admin to change"
+          onUserLoaded={(u) => setMfaEnabled(u.mfa_enabled)}
           shiftStats={[
-            { label: 'Command window', value: '06:00 – 18:00 · Today' },
-            { label: 'Shift reports pending', value: '2' },
-            { label: 'Time on command', value: '04:18:42', mono: true },
+            { label: 'Command window', value: '—' },
+            { label: 'Shift reports pending', value: '—' },
+            { label: 'Time on command', value: '00:00:00', mono: true },
             { label: 'Assigned district', value: district },
           ]}
         />
@@ -348,21 +340,15 @@ export default function DistrictCommanderSettingsView() {
                 Required for district commander terminal access.
               </p>
             </div>
-            {twoFa ? (
-              <StatusBadge label="ENABLED" variant="resolved" />
+            {mfaEnabled ? (
+              <>
+                <StatusBadge label="ENABLED" variant="resolved" />
+                <button type="button" className="dispatcher-btn-ghost text-[12px]" onClick={() => navigate('/mfa-setup')}>Manage 2FA</button>
+              </>
             ) : (
               <>
                 <StatusBadge label="NOT ENABLED" variant="critical" />
-                <button
-                  type="button"
-                  className="dispatcher-btn-outline text-[12px]"
-                  onClick={() => {
-                    setTwoFa(true)
-                    flashToast()
-                  }}
-                >
-                  Enable 2FA
-                </button>
+                <button type="button" className="dispatcher-btn-outline text-[12px]" onClick={() => navigate('/mfa-setup')}>Enable 2FA</button>
               </>
             )}
           </div>

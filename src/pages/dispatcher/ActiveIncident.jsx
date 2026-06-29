@@ -19,14 +19,11 @@ import FieldLabel from '../../components/ui/FieldLabel'
 import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
 import MapFitBounds from '../../components/map/MapFitBounds'
 import { RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../components/map/rwandaConstants'
-import {
-  activeIncident,
-  activeIncidentUnits,
-  UNIT_COLORS,
-} from '../../data/mockActiveIncidentData'
+import { UNIT_COLORS } from '../../data/mockActiveIncidentData'
 import { fmtDuration } from '../../data/mockAudioCommsData'
-import { mockUnifiedComms } from '../../data/mockUnifiedComms'
 import { useNotificationsStore } from '../../store/notificationsStore'
+import { listIncidents } from '../../api/incidents'
+import { listDispatchesForIncident } from '../../api/dispatches'
 import 'leaflet/dist/leaflet.css'
 
 const MAP_TILES =
@@ -76,20 +73,56 @@ function StatusBadge({ label, color }) {
   )
 }
 
+const ACTIVE_STATUSES = ['DISPATCHED', 'EN_ROUTE', 'ON_SCENE', 'active', 'pending', 'RECEIVED']
+
+function elapsedDisplay(callTime) {
+  if (!callTime) return '—'
+  const mins = Math.floor((Date.now() - new Date(callTime).getTime()) / 60000)
+  if (mins < 60) return `${mins}m`
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`
+}
+
 export default function ActiveIncident() {
   const navigate = useNavigate()
   const [message, setMessage] = useState('')
-  const [comms, setComms] = useState(mockUnifiedComms)
+  const [comms, setComms] = useState([])
   const [sceneComplete, setSceneComplete] = useState(false)
+  const [incident, setIncident] = useState(null)
+  const [units, setUnits] = useState([])
   const addNotification = useNotificationsStore((state) => state.addNotification)
+
+  useEffect(() => {
+    listIncidents().then((incs) => {
+      const active = incs.find(i => ACTIVE_STATUSES.includes(i.status)) ?? incs[0] ?? null
+      setIncident(active)
+      if (active) {
+        listDispatchesForIncident(active.incident_id).then((dispatches) => {
+          setUnits(dispatches.map((d) => ({
+            id: d.vehicle_plate ?? d.vehicle_id,
+            vehicle_id: d.vehicle_id,
+            vehicle_type: 'Ambulance',
+            role: d.responder_name ?? 'Responder',
+            colorKey: 'medical',
+            statusLabel: 'En Route',
+            status: 'enroute',
+            eta: d.eta_minutes != null ? `${d.eta_minutes}m` : null,
+            current_lat: active.lat + (Math.random() - 0.5) * 0.01,
+            current_lng: active.lng + (Math.random() - 0.5) * 0.01,
+            accuracy: 'GPS',
+            timestamp: null,
+          })))
+        }).catch(() => {})
+      }
+    }).catch(() => {})
+  }, [])
 
   const handleSceneComplete = () => {
     setSceneComplete(true)
     addNotification({
       id: `scene-complete-${Date.now()}`,
       type: 'scene_complete',
-      title: `Scene complete — ${activeIncident.incident_ref}`,
-      message: `Units released. Field report required for ${activeIncident.title}.`,
+      title: `Scene complete — ${incident?.incident_ref ?? ''}`,
+      message: `Units released. Field report required for ${incident?.incident_type ?? 'incident'}.`,
       time: new Date().toISOString(),
       read: false,
       target_role: 'dispatcher',
@@ -162,26 +195,27 @@ export default function ActiveIncident() {
     }, 100)
   }
 
+  const incLat = incident?.lat ?? -1.9441
+  const incLng = incident?.lng ?? 30.0619
+
   const mapPoints = useMemo(
     () => [
-      [activeIncident.lat, activeIncident.lng],
-      ...activeIncidentUnits.map((u) => [u.current_lat, u.current_lng]),
+      [incLat, incLng],
+      ...units.map((u) => [u.current_lat, u.current_lng]),
     ],
-    [],
+    [incLat, incLng, units],
   )
 
-  const incidentCenter = mapPoints[0]
+  const incidentCenter = [incLat, incLng]
 
   const mapLegend = useMemo(
     () => [
-      { color: MARKER_HEX.critical, label: `${activeIncident.incident_ref} · incident` },
-      { color: MARKER_HEX.fire, label: 'Fire units (FTK)' },
-      { color: MARKER_HEX.medical, label: 'Medical (AMB)' },
-      { color: MARKER_HEX.police, label: 'Police (POL)' },
+      { color: MARKER_HEX.critical, label: `${incident?.incident_ref ?? 'Incident'} · active` },
+      { color: MARKER_HEX.medical, label: 'Dispatched units' },
       { color: MARKER_HEX.critical, label: 'Hot zone', ring: true },
       { color: MARKER_HEX.police, label: 'Safety line', dashed: true },
     ],
-    [],
+    [incident],
   )
 
   const handleSend = (e) => {
@@ -202,7 +236,8 @@ export default function ActiveIncident() {
     setMessage('')
   }
 
-  const activeIncidentLevel = activeIncident.severity === 'critical' ? 4 : activeIncident.severity === 'high' ? 3 : activeIncident.severity === 'medium' ? 2 : 1;
+  const sev = incident?.severity ?? 'medium'
+  const activeIncidentLevel = sev === 'critical' ? 4 : sev === 'high' ? 3 : sev === 'medium' ? 2 : 1
 
   return (
     <div className="flex flex-col h-full min-h-0 bg-(--bg-base) overflow-hidden relative">
@@ -237,18 +272,18 @@ export default function ActiveIncident() {
                 Critical — level {activeIncidentLevel}
               </span>
               <span className="text-[12px] font-bold text-(--accent)" style={{ fontFamily: 'var(--font-mono)' }}>
-                {activeIncident.incident_ref}
+                {incident?.incident_ref ?? '—'}
               </span>
             </div>
             <h1
               className="text-xl md:text-2xl font-bold text-(--text-primary) m-0 leading-tight"
               style={{ fontFamily: 'var(--font-display)' }}
             >
-              {activeIncident.title}
+              {incident?.incident_type ?? 'Active Incident'}
             </h1>
             <p className="flex items-center gap-1.5 text-[13px] text-(--text-secondary) mt-2 m-0">
               <MapPin size={14} className="text-(--accent) shrink-0" />
-              {activeIncident.address}
+              {incident?.address ?? incident?.district ?? '—'}
             </p>
           </div>
 
@@ -259,7 +294,7 @@ export default function ActiveIncident() {
                 className="text-2xl font-bold text-(--accent) tabular-nums"
                 style={{ fontFamily: 'var(--font-mono)' }}
               >
-                {activeIncident.elapsedDisplay}
+                {elapsedDisplay(incident?.call_time)}
               </div>
             </div>
             <button
@@ -315,7 +350,7 @@ export default function ActiveIncident() {
 
             <Circle
               center={incidentCenter}
-              radius={activeIncident.safetyLineRadiusM}
+              radius={300}
               pathOptions={{
                 color: MARKER_HEX.police,
                 fillColor: MARKER_HEX.police,
@@ -326,7 +361,7 @@ export default function ActiveIncident() {
             />
             <Circle
               center={incidentCenter}
-              radius={activeIncident.hotZoneRadiusM}
+              radius={100}
               pathOptions={{
                 color: MARKER_HEX.critical,
                 fillColor: MARKER_HEX.critical,
@@ -346,17 +381,17 @@ export default function ActiveIncident() {
               }}
             >
               <Tooltip direction="top" offset={[0, -14]}>
-                <strong>{activeIncident.incident_ref}</strong> — {activeIncident.incident_type}
+                <strong>{incident?.incident_ref ?? '—'}</strong> — {incident?.incident_type ?? ''}
                 <br />
-                {activeIncident.sector}, {activeIncident.district}
+                {incident?.address ?? incident?.district ?? ''}
                 <br />
                 <span style={{ fontFamily: 'monospace' }}>
-                  {activeIncident.lat.toFixed(4)}, {activeIncident.lng.toFixed(4)}
+                  {incLat.toFixed(4)}, {incLng.toFixed(4)}
                 </span>
               </Tooltip>
             </CircleMarker>
 
-            {activeIncidentUnits.map((unit) => (
+            {units.map((unit) => (
               <CircleMarker
                 key={`ring-${unit.id}`}
                 center={[unit.current_lat, unit.current_lng]}
@@ -371,7 +406,7 @@ export default function ActiveIncident() {
               />
             ))}
 
-            {activeIncidentUnits.map((unit) => (
+            {units.map((unit) => (
               <Marker
                 key={unit.id}
                 position={[unit.current_lat, unit.current_lng]}
@@ -430,11 +465,11 @@ export default function ActiveIncident() {
               className="text-[10px] font-bold px-2 py-0.5 rounded bg-(--accent-ghost) text-(--accent)"
               style={{ fontFamily: 'var(--font-mono)' }}
             >
-              {activeIncidentUnits.length} total
+              {units.length} total
             </span>
           </div>
           <ul className="list-none m-0 p-0 overflow-y-auto flex-1 min-h-0">
-            {activeIncidentUnits.map((unit) => {
+            {units.map((unit) => {
               const color = UNIT_COLORS[unit.colorKey]
               return (
                 <li
@@ -490,7 +525,7 @@ export default function ActiveIncident() {
               style={{ color: 'var(--status-low)' }}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-(--status-low)" />
-              {activeIncident.sector}
+              {incident?.sector ?? incident?.district ?? 'Field'}
             </span>
           </div>
 

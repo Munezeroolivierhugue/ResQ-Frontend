@@ -14,8 +14,8 @@ import {
 import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
 import MapInvalidateSize from '../../components/map/MapInvalidateSize'
 import { RWANDA_CENTER, RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../components/map/rwandaConstants'
-import { mockIncidents } from '../../data/mockIncidents'
-import { mockVehicles as mockUnits } from '../../data/mockVehicles'
+import { listIncidents } from '../../api/incidents'
+import { listVehicles } from '../../api/vehicles'
 import 'leaflet/dist/leaflet.css'
 
 const SEV_COLOR  = { critical: '#E8354A', high: '#F07820', medium: '#D4A017', low: '#3DAA6A' }
@@ -172,15 +172,22 @@ export default function LiveDispatchMap() {
   const [unitFilter, setUnitFilter] = useState('All')
   const [liveTime, setLiveTime] = useState(new Date())
   const [showImmediateModal, setShowImmediateModal] = useState(false)
+  const [incidents, setIncidents] = useState([])
+  const [vehicles, setVehicles] = useState([])
 
   useEffect(() => {
     const t = setInterval(() => setLiveTime(new Date()), 30000)
     return () => clearInterval(t)
   }, [])
 
-  const deployed      = mockUnits.filter(u => u.status === 'deployed').length
-  const available     = mockUnits.filter(u => u.status === 'available').length
-  const filteredUnits = (unitFilter === 'All' ? mockUnits : mockUnits.filter(u => u.status === unitFilter.toLowerCase())).slice(0, 5)
+  useEffect(() => {
+    listIncidents().then(setIncidents).catch(() => {})
+    listVehicles().then(setVehicles).catch(() => {})
+  }, [])
+
+  const deployed      = vehicles.filter(u => u.status === 'deployed').length
+  const available     = vehicles.filter(u => u.status === 'available').length
+  const filteredUnits = (unitFilter === 'All' ? vehicles : vehicles.filter(u => u.status === unitFilter.toLowerCase())).slice(0, 5)
   const criticalIncident = getCriticalUnassignedIncident()
 
   const handleImmediateTypeSelect = (type) => {
@@ -265,18 +272,18 @@ export default function LiveDispatchMap() {
               className={theme === 'dark' ? 'map-dark-tiles' : ''}
             />
             <RwandaBoundsEnforcer />
-            {mockIncidents.filter(i => i.status !== 'resolved' && i.status !== 'PENDING_REPORT').map(inc => (
+            {incidents.filter(i => i.status !== 'resolved' && i.status !== 'PENDING_REPORT' && i.lat && i.lng).map(inc => (
               <CircleMarker key={inc.incident_id} center={[inc.lat, inc.lng]} radius={9}
-                pathOptions={{ color: '#fff', fillColor: SEV_COLOR[inc.severity], fillOpacity: 1, weight: 2 }}>
+                pathOptions={{ color: '#fff', fillColor: SEV_COLOR[inc.severity] ?? SEV_COLOR.medium, fillOpacity: 1, weight: 2 }}>
                 <Tooltip>
                   <strong>{inc.incident_ref}</strong> — {inc.incident_type}<br />
-                  {inc.district}, {inc.sector} · {inc.elapsed}
+                  {inc.district ?? inc.address ?? ''}
                 </Tooltip>
               </CircleMarker>
             ))}
-            {mockUnits.filter(u => u.status !== 'offline').map(unit => (
+            {vehicles.filter(u => u.status !== 'offline' && u.current_lat && u.current_lng).map(unit => (
               <CircleMarker key={unit.vehicle_id} center={[unit.current_lat, unit.current_lng]} radius={6}
-                pathOptions={{ color: '#fff', fillColor: UNIT_COLOR[unit.status], fillOpacity: 1, weight: 1.5 }}>
+                pathOptions={{ color: '#fff', fillColor: UNIT_COLOR[unit.status] ?? UNIT_COLOR.idle, fillOpacity: 1, weight: 1.5 }}>
                 <Tooltip>
                   <strong>{unit.id}</strong> — {unit.vehicle_type}<br />
                   {unit.status} · {unit.location}
@@ -309,7 +316,7 @@ export default function LiveDispatchMap() {
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="px-3 pt-[11px] pb-[7px] flex items-center justify-between shrink-0">
               <span className="text-[13px] font-bold tracking-[0.04em]" style={{ fontFamily: 'var(--font-display)' }}>ACTIVE UNITS</span>
-              <span className="text-[11px] text-(--text-muted)" style={{ fontFamily: 'var(--font-mono)' }}>{mockUnits.length} total</span>
+              <span className="text-[11px] text-(--text-muted)" style={{ fontFamily: 'var(--font-mono)' }}>{vehicles.length} total</span>
             </div>
             <div className="flex px-3 pb-2 gap-1 shrink-0">
               {['All', 'Deployed', 'Available', 'Offline'].map(tab => (
@@ -332,25 +339,6 @@ export default function LiveDispatchMap() {
         </div>
       </div>
 
-      {criticalIncident && (
-        <Link
-          to={`/dispatcher/dispatch-immediate/${criticalIncident.incident_ref}`}
-          className="dispatch-immediate-fab fixed z-50 inline-flex items-center gap-2 no-underline font-bold text-[12px] uppercase tracking-wide transition-opacity hover:opacity-90"
-          style={{
-            bottom: '2rem',
-            right: '1.5rem',
-            padding: '0.75rem 1.25rem',
-            borderRadius: 8,
-            background: 'var(--status-critical)',
-            color: 'var(--text-on-accent)',
-            boxShadow: '0 4px 20px color-mix(in srgb, var(--status-critical) 40%, transparent)',
-            fontFamily: 'var(--font-display)',
-          }}
-        >
-          <Zap size={16} />
-          Dispatch Immediate
-        </Link>
-      )}
 
       {showImmediateModal && (
         <ImmediateDispatchModal

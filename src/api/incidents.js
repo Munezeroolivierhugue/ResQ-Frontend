@@ -1,0 +1,74 @@
+import api from '../lib/apiClient'
+
+function transform(i) {
+  return {
+    incident_id: i.incidentId,
+    incident_ref: i.incidentNumber,
+    incident_type: i.incidentType,
+    severity: (i.finalSeverity ?? i.severity ?? 'medium').toLowerCase(),
+    final_severity: i.finalSeverity,
+    status: i.status,
+    lat: i.latitude,
+    lng: i.longitude,
+    address: i.address,
+    district: i.district ?? i.districtName ?? null,
+    sector: i.sector ?? null,
+    district_id: i.districtId,
+    call_time: i.reportedAt,
+    caller_id: i.callerId,
+    response_time_minutes: i.responseTimeMinutes ?? null,
+    resolution_time_minutes: i.resolutionTimeMinutes ?? null,
+  }
+}
+
+function transformAiRecommend(r) {
+  return {
+    incident_id: r.incidentId,
+    severity: r.severity,
+    confidence: r.confidence,
+    reasoning: r.reasoning,
+    is_immediate: r.isImmediate,
+    ranked_units: (r.rankedUnits ?? []).map((u) => ({
+      vehicle_id: u.vehicleId,
+      plate_number: u.plateNumber,
+      vehicle_type: u.vehicleType,
+      agency_name: u.agencyName,
+      current_lat: u.currentLat,
+      current_lng: u.currentLng,
+      confidence: u.confidence,
+      eta_minutes: u.etaMinutes,
+      reasoning: u.reasoning,
+    })),
+  }
+}
+
+export async function listIncidents(params = {}) {
+  const { data } = await api.get('/api/incidents', { params })
+  return (data.data ?? data).map(transform)
+}
+
+export async function getIncident(id) {
+  const { data } = await api.get(`/api/incidents/${id}`)
+  return transform(data.data ?? data)
+}
+
+export async function createIncident(body) {
+  // body should have: incidentType, callerId, latitude, longitude, address, districtId, initialSeverity
+  const { data } = await api.post('/api/incidents', body)
+  return transform(data.data ?? data)
+}
+
+export async function updateIncidentStatus(id, status) {
+  const { data } = await api.patch(`/api/incidents/${id}/status`, { status })
+  return transform(data.data ?? data)
+}
+
+export async function checkDuplicates(lat, lng) {
+  const { data } = await api.get('/api/incidents/duplicates', { params: { lat, lng } })
+  return (data.data ?? data).map(transform)
+}
+
+export async function getAiRecommendation(incidentId) {
+  const { data } = await api.get(`/api/dispatch/ai-recommend/${incidentId}`)
+  return transformAiRecommend(data.data ?? data)
+}

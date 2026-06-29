@@ -15,19 +15,11 @@ import {
 } from 'lucide-react'
 import SidebarToggle from './SidebarToggle'
 import { useSidebarClasses } from '../../hooks/useSidebarClasses'
-import { ANALYST_ALERT_BADGE, ANALYST_MODEL_ATTENTION } from '../../data/mockAnalystData'
-
 const INTELLIGENCE = [
-  { icon: LayoutDashboard, label: 'Dashboard', href: '/analyst/dashboard', badge: 'critical', count: ANALYST_ALERT_BADGE },
-  { icon: FileBarChart, label: 'Report Builder', href: '/analyst/reports' },
-  { icon: ChartScatter, label: 'Pattern Analysis', href: '/analyst/patterns' },
-  {
-    icon: Cpu,
-    label: 'AI Model Monitor',
-    href: '/analyst/models',
-    badge: 'critical',
-    countLabel: ANALYST_MODEL_ATTENTION ? 'ATTENTION' : null,
-  },
+  { icon: LayoutDashboard, label: 'Dashboard',       href: '/analyst/dashboard' },
+  { icon: FileBarChart,    label: 'Report Builder',  href: '/analyst/reports' },
+  { icon: ChartScatter,    label: 'Pattern Analysis',href: '/analyst/patterns' },
+  { icon: Cpu,             label: 'AI Model Monitor',href: '/analyst/models' },
 ]
 
 const DATA = [
@@ -44,12 +36,6 @@ const ACCOUNT = [
 
 function NavItem({ item, isActive, onClose }) {
   const Icon = item.icon
-  const badgeStyle =
-    item.badge === 'accent'
-      ? { background: 'var(--accent)', color: '#ffffff' }
-      : item.badge === 'critical'
-        ? { background: 'var(--status-critical)', color: '#ffffff' }
-        : { background: 'var(--status-medium)', color: '#ffffff' }
   return (
     <div className={`sidebar-item-wrap${isActive ? ' active' : ''}`}>
       {isActive && (
@@ -67,16 +53,6 @@ function NavItem({ item, isActive, onClose }) {
       >
         <span className="sidebar-icon"><Icon size={18} /></span>
         <span className="sidebar-label">{item.label}</span>
-        {item.count > 0 && (
-          <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={badgeStyle}>
-            {item.count}
-          </span>
-        )}
-        {item.countLabel && (
-          <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full tracking-wide" style={badgeStyle}>
-            {item.countLabel}
-          </span>
-        )}
       </Link>
     </div>
   )
