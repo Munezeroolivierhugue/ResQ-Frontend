@@ -1,14 +1,14 @@
 import { create } from 'zustand'
-import { mockNotifications } from '../data/mockNotificationsData'
 import {
   listNotifications,
   markNotificationRead,
   markAllNotificationsRead,
+  resolveHref,
 } from '../api/notifications'
-import { subscribe } from '../lib/wsClient'
+import { connect, subscribe } from '../lib/wsClient'
 
 export const useNotificationsStore = create((set, get) => ({
-  items: mockNotifications.map((n) => ({ ...n })),
+  items: [],
   loading: false,
   error: null,
 
@@ -52,6 +52,11 @@ export const useNotificationsStore = create((set, get) => ({
 
   /** Subscribe to real-time notifications via WebSocket /user/queue/notifications */
   subscribeToWs: () => {
+    const token = sessionStorage.getItem('resq-jwt')
+    // Ensure the STOMP client is connecting/connected before subscribing.
+    // connect() is idempotent — safe to call multiple times.
+    connect(token)
+
     const unsub = subscribe('/user/queue/notifications', (payload) => {
       get().addNotification({
         id: payload.notificationId ?? `ws-${Date.now()}`,
@@ -61,7 +66,7 @@ export const useNotificationsStore = create((set, get) => ({
         time: payload.createdAt ?? new Date().toISOString(),
         read: false,
         priority: payload.priority ?? 'normal',
-        href: null,
+        href: resolveHref(payload.type),
         details: null,
       })
     })

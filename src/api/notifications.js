@@ -1,17 +1,92 @@
 import api from '../lib/apiClient'
+import { getCurrentUser } from '../utils/authSession'
+
+const ROLE_HREF = {
+  DISPATCHER: {
+    INCIDENT: '/dispatcher/active-incident',
+    DISPATCH: '/dispatcher/active-incident',
+    AI_RECOMMENDATION: '/dispatcher/ai-engine',
+    UNIT_OFFLINE: '/dispatcher',
+    SHIFT: '/dispatcher/shift-handover',
+    USER_INVITED: null,
+  },
+  OPS_MANAGER: {
+    INCIDENT: '/ops-manager/incidents',
+    DISPATCH: '/ops-manager/incidents',
+    AI_RECOMMENDATION: '/ops-manager',
+    UNIT_OFFLINE: '/ops-manager',
+    SHIFT: '/ops-manager/shift-reports',
+    USER_INVITED: null,
+  },
+  ADMIN: {
+    USER_INVITED: '/admin/users',
+    INCIDENT: '/admin/incidents',
+    DISPATCH: '/admin/incidents',
+    AI_RECOMMENDATION: null,
+    UNIT_OFFLINE: null,
+    SHIFT: null,
+  },
+  SUPER_ADMIN: {
+    USER_INVITED: '/admin/users',
+    INCIDENT: '/admin/incidents',
+    DISPATCH: '/admin/incidents',
+    AI_RECOMMENDATION: null,
+    UNIT_OFFLINE: null,
+    SHIFT: null,
+  },
+  DISTRICT_COMMANDER: {
+    INCIDENT: '/district-commander/incidents',
+    DISPATCH: '/district-commander/incidents',
+    AI_RECOMMENDATION: null,
+    UNIT_OFFLINE: '/district-commander',
+    SHIFT: '/district-commander/shift-reports',
+    USER_INVITED: null,
+  },
+  ANALYST: {
+    INCIDENT: '/analyst/incidents',
+    DISPATCH: '/analyst/incidents',
+    AI_RECOMMENDATION: '/analyst/ai-recommendations',
+    UNIT_OFFLINE: null,
+    SHIFT: null,
+    USER_INVITED: null,
+  },
+  PLANNER: {
+    INCIDENT: null,
+    DISPATCH: null,
+    AI_RECOMMENDATION: '/planner/ai',
+    UNIT_OFFLINE: null,
+    SHIFT: null,
+    USER_INVITED: null,
+  },
+  FIELD_RESPONDER: {
+    INCIDENT: '/field-responder/current-incident',
+    DISPATCH: '/field-responder/current-incident',
+    AI_RECOMMENDATION: null,
+    UNIT_OFFLINE: null,
+    SHIFT: '/field-responder/shift-start',
+    USER_INVITED: null,
+  },
+}
+
+export function resolveHref(type) {
+  const role = getCurrentUser()?.role
+  return ROLE_HREF[role]?.[type] ?? null
+}
+
+function getHref(type) {
+  return resolveHref(type)
+}
 
 function transform(n) {
   return {
     id: n.notificationId,
     type: n.type,
-    // Backend has 'message'; frontend uses 'title' + 'desc'. Split on first ': ' if present.
     title: n.message?.split(': ')[0] ?? n.message ?? '',
     desc: n.message?.split(': ').slice(1).join(': ') ?? '',
     time: n.createdAt,
     read: n.read,
     priority: n.priority,
-    // TODO: backend gap — href and details fields don't exist in backend response
-    href: null,
+    href: getHref(n.type),
     details: null,
   }
 }

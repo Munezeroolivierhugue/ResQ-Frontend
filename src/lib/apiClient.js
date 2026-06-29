@@ -1,7 +1,9 @@
 import axios from 'axios'
 import { getAccessToken, getRefreshToken, setSession, clearSession } from '../utils/authSession'
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+// In dev the Vite proxy forwards /api/* → backend, so we use '' (same-origin).
+// In production set VITE_API_URL to the backend's full URL.
+const BASE_URL = import.meta.env.VITE_API_URL ?? ''
 
 const api = axios.create({ baseURL: BASE_URL })
 
@@ -45,7 +47,7 @@ api.interceptors.response.use(
       try {
         const refresh = getRefreshToken()
         if (!refresh) throw new Error('No refresh token')
-        const { data } = await axios.post(`${BASE_URL}/api/auth/refresh`, { refreshToken: refresh })
+        const { data } = await axios.post(`${BASE_URL || ''}/api/auth/refresh`, { refreshToken: refresh })
         const payload = data.data ?? data
         setSession({
           access_token: payload.accessToken,

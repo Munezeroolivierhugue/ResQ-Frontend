@@ -5,14 +5,19 @@ function transform(i) {
     incident_id: i.incidentId,
     incident_ref: i.incidentNumber,
     incident_type: i.incidentType,
+    severity: (i.finalSeverity ?? i.severity ?? 'medium').toLowerCase(),
     final_severity: i.finalSeverity,
     status: i.status,
     lat: i.latitude,
     lng: i.longitude,
     address: i.address,
+    district: i.district ?? i.districtName ?? null,
+    sector: i.sector ?? null,
     district_id: i.districtId,
     call_time: i.reportedAt,
     caller_id: i.callerId,
+    response_time_minutes: i.responseTimeMinutes ?? null,
+    resolution_time_minutes: i.resolutionTimeMinutes ?? null,
   }
 }
 
