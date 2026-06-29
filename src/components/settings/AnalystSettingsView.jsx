@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { Sun, Moon, Palette, Bell, ShieldCheck, UserCircle, Languages, Check, Monitor } from 'lucide-react'
 import StatusBadge from '../dispatcher/StatusBadge'
 import { useThemeStore } from '../../store/themeStore'
@@ -25,10 +25,11 @@ const NAV = [
 export default function AnalystSettingsView() {
   const { section: sectionParam } = useParams()
   const section = sectionParam || 'profile'
+  const navigate = useNavigate()
   const { theme, setTheme } = useThemeStore()
   const [toast, setToast] = useState(false)
   const [language, setLanguage] = useState('en')
-  const [twoFa, setTwoFa] = useState(false)
+  const [mfaEnabled, setMfaEnabled] = useState(false)
   const [toggles, setToggles] = useState({
     anomalyAlerts: true,
     dataQuality: true,
@@ -56,15 +57,7 @@ export default function AnalystSettingsView() {
     >
       {section === 'profile' && (
         <SettingsProfileSection
-          initials="GI"
-          roleLabel="ANALYST"
-          badge="ANL-0024"
-          defaultForm={{
-            name: 'Grace Ingabire',
-            email: 'g.ingabire@rnp.gov.rw',
-            phone: '+250788998877',
-            station: 'HQ Central Command — Kigali',
-          }}
+          onUserLoaded={(u) => setMfaEnabled(u.mfa_enabled)}
         />
       )}
       {section === 'appearance' && (
@@ -151,12 +144,15 @@ export default function AnalystSettingsView() {
               <div className="font-semibold text-[13px]">Two-factor authentication</div>
               <p className="text-[12px] text-(--text-secondary) m-0 mt-1">Required for analyst terminal access.</p>
             </div>
-            {twoFa ? (
-              <StatusBadge label="ENABLED" variant="resolved" />
+            {mfaEnabled ? (
+              <>
+                <StatusBadge label="ENABLED" variant="resolved" />
+                <button type="button" className="dispatcher-btn-ghost text-[12px]" onClick={() => navigate('/mfa-setup')}>Manage 2FA</button>
+              </>
             ) : (
               <>
                 <StatusBadge label="NOT ENABLED" variant="critical" />
-                <button type="button" className="dispatcher-btn-outline text-[12px]" onClick={() => { setTwoFa(true); flashToast() }}>Enable 2FA</button>
+                <button type="button" className="dispatcher-btn-outline text-[12px]" onClick={() => navigate('/mfa-setup')}>Enable 2FA</button>
               </>
             )}
           </div>

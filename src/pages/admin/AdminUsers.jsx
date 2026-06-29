@@ -15,9 +15,9 @@ function adaptUser(u) {
     name: u.full_name,
     initials: names.map(n => n[0]).join('').slice(0, 2).toUpperCase(),
     district: u.district_id ?? '—',
-    last_login: '—',
+    last_login: u.lastLogin ? new Date(u.lastLogin).toLocaleDateString() : '—',
     session: 'UNKNOWN',
-    mfa_enabled: false,
+    mfa_enabled: u.mfaEnabled,
     tint: undefined,
     opacity: 1,
   }

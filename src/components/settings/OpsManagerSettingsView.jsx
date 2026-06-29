@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import {
   Sun, Moon, Palette, Check, Bell, ShieldCheck, Monitor, Smartphone, UserCircle, Languages, Clock,
 } from 'lucide-react'
@@ -28,10 +28,11 @@ const NAV = [
 export default function OpsManagerSettingsView() {
   const { section: sectionParam } = useParams()
   const section = sectionParam || 'profile'
+  const navigate = useNavigate()
   const { theme, setTheme } = useThemeStore()
   const [toast, setToast] = useState(false)
   const [language, setLanguage] = useState('en')
-  const [twoFa, setTwoFa] = useState(false)
+  const [mfaEnabled, setMfaEnabled] = useState(false)
   const [toggles, setToggles] = useState({
     escalationCritical: true,
     aiRecommendations: true,
@@ -61,22 +62,7 @@ export default function OpsManagerSettingsView() {
     >
       {section === 'profile' && (
         <SettingsProfileSection
-          initials="PN"
-          roleLabel="OPS MANAGER"
-          badge="OM-0012"
-          defaultForm={{
-            name: 'Patrick Nshimiyimana',
-            email: 'p.nshimiyimana@rnp.gov.rw',
-            phone: '+250 788 112 233',
-            station: 'Kigali Central Operations',
-          }}
-          stationAdminNote="Assigned by administrator · contact HQ provisioning to change"
-          shiftStats={[
-            { label: 'Shift window', value: '08:00 – 16:00 · Today' },
-            { label: 'Escalations managed', value: '4' },
-            { label: 'Time on command', value: '05:42:18', mono: true },
-            { label: 'Command zone', value: 'Kigali Central Operations' },
-          ]}
+          onUserLoaded={(u) => setMfaEnabled(u.mfa_enabled)}
         />
       )}
 
@@ -185,12 +171,15 @@ export default function OpsManagerSettingsView() {
               <div className="font-semibold text-[13px]">Two-factor authentication</div>
               <p className="text-[12px] text-(--text-secondary) m-0 mt-1">Required for operations manager terminal access.</p>
             </div>
-            {twoFa ? (
-              <StatusBadge label="ENABLED" variant="resolved" />
+            {mfaEnabled ? (
+              <>
+                <StatusBadge label="ENABLED" variant="resolved" />
+                <button type="button" className="dispatcher-btn-ghost text-[12px]" onClick={() => navigate('/mfa-setup')}>Manage 2FA</button>
+              </>
             ) : (
               <>
                 <StatusBadge label="NOT ENABLED" variant="critical" />
-                <button type="button" className="dispatcher-btn-outline text-[12px]" onClick={() => { setTwoFa(true); flashToast() }}>Enable 2FA</button>
+                <button type="button" className="dispatcher-btn-outline text-[12px]" onClick={() => navigate('/mfa-setup')}>Enable 2FA</button>
               </>
             )}
           </div>

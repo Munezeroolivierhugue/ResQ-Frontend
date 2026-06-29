@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Tooltip } from 'react-leaflet'
 import { MessageSquare, Plus } from 'lucide-react'
 import { useThemeStore } from '../../store/themeStore'
@@ -12,6 +12,8 @@ import { mockBroadcasts } from '../../data/mockBroadcasts'
 import { generateUuid } from '../../utils/formHelpers'
 import { getCurrentUser } from '../../utils/authSession'
 import { useNotificationsStore } from '../../store/notificationsStore'
+import { listBroadcasts } from '../../api/broadcasts'
+import { listMutualAidRequests } from '../../api/mutualAid'
 import 'leaflet/dist/leaflet.css'
 
 const AGENCY_UNIT_COLORS = {
@@ -36,6 +38,18 @@ export default function OpsManagerMultiAgency() {
   const [broadcastType, setBroadcastType] = useState(null)
   const [broadcastMsg, setBroadcastMsg] = useState('')
   const [broadcastPriority, setBroadcastPriority] = useState('NORMAL')
+  const [apiBroadcasts, setApiBroadcasts] = useState([])
+  const [mutualAidRequests, setMutualAidRequests] = useState([])
+  const [feedError, setFeedError] = useState(null)
+
+  useEffect(() => {
+    Promise.all([listBroadcasts(), listMutualAidRequests()])
+      .then(([broadcasts, mutualAid]) => {
+        if (broadcasts && broadcasts.length > 0) setApiBroadcasts(broadcasts)
+        if (mutualAid && mutualAid.length > 0) setMutualAidRequests(mutualAid)
+      })
+      .catch(() => setFeedError('Live broadcast/mutual-aid feed unavailable — showing local data.'))
+  }, [])
 
   const mapUnits = mockUnits.slice(0, 12).map((u, i) => ({
     ...u,
@@ -77,6 +91,66 @@ export default function OpsManagerMultiAgency() {
         <h1 className="dispatcher-page-title m-0">Multi-Agency Control</h1>
         <OpsManagerDistrictLabel />
       </div>
+
+      {feedError && (
+        <div className="text-[12px] px-3 py-2 rounded" style={{ background: 'var(--status-medium-bg)', color: 'var(--status-medium)' }}>
+          {feedError}
+        </div>
+      )}
+
+      {(apiBroadcasts.length > 0 || mutualAidRequests.length > 0) && (
+        <div className="flex flex-col lg:flex-row gap-4">
+          {apiBroadcasts.length > 0 && (
+            <div className="dispatcher-surface p-4 flex-1 min-w-0">
+              <div className="font-semibold text-[13px] mb-3">Recent Broadcasts</div>
+              <div className="flex flex-col gap-2">
+                {apiBroadcasts.slice(0, 5).map((b) => (
+                  <div key={b.broadcast_id} className="flex items-start gap-3 border-b border-(--border-subtle) pb-2 text-[12px]">
+                    <span
+                      className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 mt-0.5"
+                      style={{
+                        background: b.priority === 'EMERGENCY' ? 'var(--status-critical-bg)' : b.priority === 'URGENT' ? 'var(--status-medium-bg)' : 'var(--bg-elevated)',
+                        color: b.priority === 'EMERGENCY' ? 'var(--status-critical)' : b.priority === 'URGENT' ? 'var(--status-medium)' : 'var(--text-muted)',
+                      }}
+                    >
+                      {b.priority}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-(--text-primary) truncate">{b.message}</div>
+                      <div className="text-(--text-muted) text-[11px]">{b.sent_by_name} · {b.target_area}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {mutualAidRequests.length > 0 && (
+            <div className="dispatcher-surface p-4 flex-1 min-w-0">
+              <div className="font-semibold text-[13px] mb-3">Mutual Aid Requests</div>
+              <div className="flex flex-col gap-2">
+                {mutualAidRequests.slice(0, 5).map((r) => (
+                  <div key={r.request_id} className="flex items-center gap-3 border-b border-(--border-subtle) pb-2 text-[12px]">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{r.requesting_district_name} → {r.source_district_name}</div>
+                      <div className="text-(--text-muted) text-[11px]">{r.unit_type} × {r.quantity} · {r.duration}</div>
+                    </div>
+                    <span
+                      className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0"
+                      style={{
+                        background: r.status === 'PENDING' ? 'var(--status-medium-bg)' : r.status === 'APPROVED' ? 'var(--accent-ghost)' : 'var(--bg-elevated)',
+                        color: r.status === 'PENDING' ? 'var(--status-medium)' : r.status === 'APPROVED' ? 'var(--accent)' : 'var(--text-muted)',
+                      }}
+                    >
+                      {r.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <label className="dispatcher-field max-w-md">
         <span className="field-label">Select incident to coordinate</span>
         <select className="dispatcher-input dispatcher-select" value={incidentId} onChange={(e) => setIncidentId(e.target.value)}>

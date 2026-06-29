@@ -31,7 +31,7 @@ export default function AdminAudit() {
 
   useEffect(() => {
     listAuditLogs()
-      .then((rows) => setAuditRows(rows.map(r => ({ ...r, user: r.user_name, role: r.module ?? 'DISPATCHER' }))))
+      .then((rows) => setAuditRows(rows.map(r => ({ ...r, user: r.user_name, role: r.userRole ?? r.module ?? 'DISPATCHER' }))))
       .catch(() => setAuditError('Failed to load audit logs'))
       .finally(() => setAuditLoading(false))
   }, [])
