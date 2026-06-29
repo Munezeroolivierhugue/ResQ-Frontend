@@ -6,10 +6,11 @@ function transform(u) {
     email: u.email,
     full_name: u.fullName,
     role: u.role,
-    phone_number: u.phoneNumber,
+    phone_number: u.phone ?? u.phoneNumber,
     status: u.status,
     district_id: u.districtId,
     agency_id: u.agencyId,
+    mfa_enabled: u.mfaEnabled ?? false,
   }
 }
 
@@ -50,15 +51,13 @@ export async function updateUser(id, body) {
 }
 
 export async function inviteUser(body) {
-  // POST /api/users/invite
-  // body: { email, fullName, role, phoneNumber, districtId, agencyId }
   await api.post('/api/users/invite', {
     email: body.email,
     fullName: body.full_name ?? body.fullName,
     role: (body.role ?? 'DISPATCHER').toUpperCase(),
-    phoneNumber: body.phone_number ?? body.phoneNumber,
-    districtId: body.district_id ?? body.districtId,
-    agencyId: body.agency_id ?? body.agencyId,
+    phone: body.phone ?? body.phone_number ?? body.phoneNumber ?? undefined,
+    districtId: body.district_id ?? body.districtId ?? undefined,
+    agencyId: body.agency_id ?? body.agencyId ?? undefined,
   })
 }
 
