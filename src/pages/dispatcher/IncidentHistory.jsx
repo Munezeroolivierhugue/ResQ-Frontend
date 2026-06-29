@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ChevronRight, ChevronLeft, Download, Search } from 'lucide-react'
-import { mockHistoryIncidents } from '../../data/mockIncidents'
+import { listIncidents } from '../../api/incidents'
 
 const severityColor = { critical: '#E8354A', high: '#F07820', medium: '#D4A017', low: '#3DAA6A' }
 
@@ -14,17 +14,41 @@ function KpiCard({ label, value, sub }) {
   )
 }
 
+function fmtMinutes(m) {
+  if (m == null) return 'N/A'
+  return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`
+}
+
 export default function IncidentHistory() {
   const [search, setSearch] = useState('')
   const [page,   setPage]   = useState(1)
+  const [incidents, setIncidents] = useState([])
+  const [loading, setLoading] = useState(true)
   const perPage = 5
 
-  const data     = [...mockHistoryIncidents, ...mockHistoryIncidents]
-  const filtered = data.filter(i =>
-    !search || i.id.toLowerCase().includes(search.toLowerCase()) ||
-    i.type.toLowerCase().includes(search.toLowerCase()) || i.district.toLowerCase().includes(search.toLowerCase())
+  useEffect(() => {
+    setLoading(true)
+    listIncidents({ status: 'RESOLVED' })
+      .then(setIncidents)
+      .catch(() => listIncidents().then(setIncidents).catch(() => {}))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const totalCount = incidents.length
+  const avgResponseMs = incidents.filter(i => i.response_time_minutes != null)
+  const avgResponse = avgResponseMs.length
+    ? Math.round(avgResponseMs.reduce((s, i) => s + i.response_time_minutes, 0) / avgResponseMs.length)
+    : null
+  const slaCount = avgResponseMs.filter(i => i.response_time_minutes <= 10).length
+  const slaPct = avgResponseMs.length ? Math.round((slaCount / avgResponseMs.length) * 100) : null
+
+  const filtered = incidents.filter(i =>
+    !search ||
+    (i.incident_ref ?? '').toLowerCase().includes(search.toLowerCase()) ||
+    (i.incident_type ?? '').toLowerCase().includes(search.toLowerCase()) ||
+    (i.district ?? i.address ?? '').toLowerCase().includes(search.toLowerCase())
   )
-  const totalPages = Math.ceil(filtered.length / perPage)
+  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage))
   const paged      = filtered.slice((page - 1) * perPage, page * perPage)
 
   return (
@@ -41,10 +65,10 @@ export default function IncidentHistory() {
       </div>
 
       <div className="flex gap-3 mb-5">
-        <KpiCard label="Total This Month"    value="247"  sub="↑ 12% vs last month" />
-        <KpiCard label="Avg Response Time"   value="8.4m" sub="Target: 10 min" />
-        <KpiCard label="Within SLA"          value="91%"  sub="↑ 3% vs last month" />
-        <KpiCard label="Avg Resolution Time" value="32m"  sub="All incident types" />
+        <KpiCard label="Total (Resolved)" value={loading ? '…' : totalCount} sub="Fetched from backend" />
+        <KpiCard label="Avg Response Time" value={loading ? '…' : (avgResponse != null ? `${avgResponse}m` : 'N/A')} sub="Target: 10 min" />
+        <KpiCard label="Within SLA" value={loading ? '…' : (slaPct != null ? `${slaPct}%` : 'N/A')} sub="≤ 10 min response" />
+        <KpiCard label="Incidents Shown" value={loading ? '…' : filtered.length} sub="Filtered results" />
       </div>
 
       <div className="bg-(--bg-surface) border border-(--border) rounded-xl px-4 py-3 mb-4">
@@ -81,39 +105,54 @@ export default function IncidentHistory() {
             </tr>
           </thead>
           <tbody>
-            {paged.map((inc, idx) => {
-              const c = severityColor[inc.severity] || '#44474D'
-              const withinSla = parseInt(inc.responseTime) <= parseInt(inc.target)
+            {loading ? (
+              <tr><td colSpan={9} className="px-3.5 py-12 text-center text-[13px] text-(--text-muted)">Loading…</td></tr>
+            ) : paged.length === 0 ? (
+              <tr><td colSpan={9} className="px-3.5 py-12 text-center text-[13px] text-(--text-muted)">No incidents found.</td></tr>
+            ) : paged.map((inc, idx) => {
+              const sev = inc.severity ?? 'medium'
+              const c = severityColor[sev] || '#44474D'
+              const respMins = inc.response_time_minutes
+              const withinSla = respMins != null && respMins <= 10
+              const location = inc.district
+                ? `${inc.district}${inc.sector ? ' / ' + inc.sector : ''}`
+                : (inc.address ?? '—')
               return (
-                <tr key={inc.id + idx} className="border-b border-(--border-subtle) cursor-pointer hover:bg-(--bg-elevated) transition-colors">
+                <tr key={inc.incident_id + idx} className="border-b border-(--border-subtle) cursor-pointer hover:bg-(--bg-elevated) transition-colors">
                   <td className="px-3.5 h-12">
-                    <span className="text-[12px] font-semibold text-(--accent)" style={{ fontFamily: 'var(--font-mono)' }}>{inc.id}</span>
+                    <span className="text-[12px] font-semibold text-(--accent)" style={{ fontFamily: 'var(--font-mono)' }}>{inc.incident_ref}</span>
                   </td>
                   <td className="px-3.5">
                     <span className="inline-flex items-center px-2.25 py-0.5 rounded text-[10px] font-bold uppercase tracking-[0.07em] border"
                       style={{ background: c + '25', color: c, borderColor: c + '40', fontFamily: 'var(--font-body)' }}>
-                      {inc.severity?.toUpperCase()}
+                      {sev.toUpperCase()}
                     </span>
                   </td>
-                  <td className="px-3.5 text-[13px]">{inc.type}</td>
-                  <td className="px-3.5 text-[12px] text-(--text-secondary)">{inc.district} / {inc.sector}</td>
-                  <td className="px-3.5 text-[12px] text-(--text-secondary)" style={{ fontFamily: 'var(--font-mono)' }}>{inc.reported}</td>
+                  <td className="px-3.5 text-[13px]">{inc.incident_type}</td>
+                  <td className="px-3.5 text-[12px] text-(--text-secondary)">{location}</td>
+                  <td className="px-3.5 text-[12px] text-(--text-secondary)" style={{ fontFamily: 'var(--font-mono)' }}>
+                    {inc.call_time ? new Date(inc.call_time).toLocaleString() : '—'}
+                  </td>
                   <td className="px-3.5">
-                    <span className="text-[12px] font-semibold" style={{ fontFamily: 'var(--font-mono)', color: withinSla ? 'var(--status-low)' : 'var(--status-critical)' }}>
-                      {inc.responseTime}
+                    <span className="text-[12px] font-semibold" style={{ fontFamily: 'var(--font-mono)', color: respMins != null ? (withinSla ? 'var(--status-low)' : 'var(--status-critical)') : 'var(--text-muted)' }}>
+                      {fmtMinutes(respMins)}
                     </span>
                   </td>
-                  <td className="px-3.5 text-[12px] text-(--text-secondary)" style={{ fontFamily: 'var(--font-mono)' }}>{inc.resolutionTime}</td>
-                  <td className="px-3.5 text-[12px] text-(--status-info)" style={{ fontFamily: 'var(--font-mono)' }}>{inc.units?.join(', ')}</td>
+                  <td className="px-3.5 text-[12px] text-(--text-secondary)" style={{ fontFamily: 'var(--font-mono)' }}>{fmtMinutes(inc.resolution_time_minutes)}</td>
+                  <td className="px-3.5 text-[12px] text-(--status-info)" style={{ fontFamily: 'var(--font-mono)' }}>—</td>
                   <td className="px-3.5">
-                    <span className="inline-flex items-center px-2.25 py-0.5 rounded text-[10px] font-bold uppercase tracking-[0.07em]"
-                      style={{
-                        background: withinSla ? 'var(--status-low-bg)' : 'var(--status-critical-bg)',
-                        color: withinSla ? 'var(--status-low)' : 'var(--status-critical)',
-                        fontFamily: 'var(--font-body)',
-                      }}>
-                      {withinSla ? '✓ MET' : '✗ MISSED'}
-                    </span>
+                    {respMins != null ? (
+                      <span className="inline-flex items-center px-2.25 py-0.5 rounded text-[10px] font-bold uppercase tracking-[0.07em]"
+                        style={{
+                          background: withinSla ? 'var(--status-low-bg)' : 'var(--status-critical-bg)',
+                          color: withinSla ? 'var(--status-low)' : 'var(--status-critical)',
+                          fontFamily: 'var(--font-body)',
+                        }}>
+                        {withinSla ? '✓ MET' : '✗ MISSED'}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-(--text-muted)">N/A</span>
+                    )}
                   </td>
                 </tr>
               )

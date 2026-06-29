@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Lock, Save, Upload, FileText, CheckCircle } from 'lucide-react'
 import PageHeader from '../../components/dispatcher/PageHeader'
@@ -11,8 +11,7 @@ import {
   FormTextarea,
   FormInput,
 } from '../../components/dispatcher/FormControls'
-import { mockIncidentClosure } from '../../data/mockIncidentClosureData'
-import { mockIncidentClosures } from '../../data/mockIncidentClosures'
+import { listIncidents, updateIncidentStatus } from '../../api/incidents'
 
 const DISPOSITION_OPTIONS = [
   { value: 'arrests', label: 'Arrest(s) made' },
@@ -24,37 +23,32 @@ const DISPOSITION_OPTIONS = [
 
 export default function IncidentClosure() {
   const navigate = useNavigate()
-  const data = mockIncidentClosure
+  const [incident, setIncident] = useState(null)
+
+  useEffect(() => {
+    listIncidents({ status: 'PENDING_REPORT' })
+      .then((incs) => setIncident(incs[0] ?? null))
+      .catch(() => {})
+  }, [])
 
   const [mode, setMode] = useState('structured') // 'structured' | 'manual_upload'
   const [submitted, setSubmitted] = useState(false)
 
   // Structured mode fields
-  const [personsInvolved, setPersonsInvolved] = useState(String(data.persons_involved ?? ''))
-  const [casualties, setCasualties] = useState(String(data.casualties ?? '0'))
-  const [arrests, setArrests] = useState(String(data.arrests ?? '0'))
-  const [finalDisposition, setFinalDisposition] = useState(data.final_disposition ?? 'scene_cleared')
-  const [closureNotes, setClosureNotes] = useState(data.closure_notes ?? '')
+  const [personsInvolved, setPersonsInvolved] = useState('')
+  const [casualties, setCasualties] = useState('0')
+  const [arrests, setArrests] = useState('0')
+  const [finalDisposition, setFinalDisposition] = useState('scene_cleared')
+  const [closureNotes, setClosureNotes] = useState('')
 
   // Manual upload state
   const [uploadedFile, setUploadedFile] = useState(null)
   const [uploadError, setUploadError] = useState('')
 
   const handleStructuredClose = () => {
-    const entry = {
-      closure_id: `cl-new-${Date.now()}`,
-      incident_id: data.incident_id,
-      field_report_id: null,
-      closed_by: 'u1111111-0000-4000-8000-000000000001',
-      persons_involved: parseInt(personsInvolved) || 0,
-      casualties: parseInt(casualties) || 0,
-      arrests: parseInt(arrests) || 0,
-      final_disposition: finalDisposition,
-      closure_notes: closureNotes,
-      data_source: 'dispatcher_portal',
-      closed_at: new Date().toISOString(),
+    if (incident) {
+      updateIncidentStatus(incident.incident_id, 'RESOLVED').catch(() => {})
     }
-    mockIncidentClosures.unshift(entry)
     setSubmitted(true)
     setTimeout(() => navigate('/dispatcher/shift-handover'), 1800)
   }
@@ -76,20 +70,9 @@ export default function IncidentClosure() {
       setUploadError('Please attach a field report file before closing.')
       return
     }
-    const entry = {
-      closure_id: `cl-new-${Date.now()}`,
-      incident_id: data.incident_id,
-      field_report_id: null,
-      closed_by: 'u1111111-0000-4000-8000-000000000001',
-      persons_involved: null,
-      casualties: null,
-      arrests: null,
-      final_disposition: null,
-      closure_notes: `Manual upload: ${uploadedFile.name}`,
-      data_source: 'field_upload',
-      closed_at: new Date().toISOString(),
+    if (incident) {
+      updateIncidentStatus(incident.incident_id, 'RESOLVED').catch(() => {})
     }
-    mockIncidentClosures.unshift(entry)
     setSubmitted(true)
     setTimeout(() => navigate('/dispatcher/shift-handover'), 1800)
   }
@@ -99,7 +82,7 @@ export default function IncidentClosure() {
       <PageHeader
         breadcrumbCurrent="Incident report"
         title="Incident outcome & closure"
-        subtitle={data.subtitle}
+        subtitle={incident ? `${incident.incident_ref} · ${incident.incident_type} · ${incident.address ?? incident.district ?? ''}` : 'Loading incident…'}
         badges={<span className="dispatcher-eyebrow">Incident closure</span>}
       />
 
@@ -309,15 +292,15 @@ export default function IncidentClosure() {
                 className="text-[12px] font-semibold text-(--status-medium)"
                 style={{ fontFamily: 'var(--font-mono)' }}
               >
-                Total elapsed: {data.timelineElapsed}
+                {incident?.call_time ? `Started: ${new Date(incident.call_time).toLocaleString()}` : ''}
               </span>
             }
             className="mb-4"
           />
-          <VerticalTimeline events={data.timeline} />
+          <VerticalTimeline events={[]} />
         </SurfaceCard>
         <SurfaceCard padding="p-5 md:p-6">
-          <MediaAttachmentGrid items={data.media} />
+          <MediaAttachmentGrid items={[]} />
         </SurfaceCard>
       </div>
     </div>

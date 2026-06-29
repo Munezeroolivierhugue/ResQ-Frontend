@@ -1,16 +1,14 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FileCheck, Clock, ChevronRight, AlertTriangle } from 'lucide-react'
-import { mockIncidents } from '../../data/mockIncidents'
+import { listIncidents } from '../../api/incidents'
 import SeverityBadge from '../../components/dispatcher/SeverityBadge'
-
-const ALL_PENDING = mockIncidents.filter((i) => i.status === 'PENDING_REPORT')
 
 const SEV_UPPER = (s) => (s ?? '').toUpperCase()
 
 function ElapsedChip({ callTime }) {
   if (!callTime) return null
-  const mins = Math.round((new Date('2026-06-24T15:12:00Z') - new Date(callTime)) / 60000)
+  const mins = Math.round((Date.now() - new Date(callTime).getTime()) / 60000)
   const over60 = mins > 60
   return (
     <span
@@ -30,8 +28,22 @@ function ElapsedChip({ callTime }) {
 export default function PendingReports() {
   const navigate = useNavigate()
   const [tab, setTab] = useState('pending')
+  const [allIncidents, setAllIncidents] = useState([])
+  const [pendingIncidents, setPendingIncidents] = useState([])
+  const [loading, setLoading] = useState(true)
 
-  const items = tab === 'pending' ? ALL_PENDING : mockIncidents
+  useEffect(() => {
+    setLoading(true)
+    Promise.all([
+      listIncidents({ status: 'PENDING_REPORT' }),
+      listIncidents(),
+    ]).then(([pending, all]) => {
+      setPendingIncidents(pending)
+      setAllIncidents(all)
+    }).catch(() => {}).finally(() => setLoading(false))
+  }, [])
+
+  const items = tab === 'pending' ? pendingIncidents : allIncidents
 
   return (
     <div className="portal-page dispatcher-page">
@@ -46,7 +58,7 @@ export default function PendingReports() {
             Pending Reports
           </h1>
         </div>
-        {ALL_PENDING.length > 0 && (
+        {pendingIncidents.length > 0 && (
           <div
             className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-semibold border"
             style={{
@@ -57,7 +69,7 @@ export default function PendingReports() {
             }}
           >
             <AlertTriangle size={14} />
-            {ALL_PENDING.length} report{ALL_PENDING.length !== 1 ? 's' : ''} awaiting closure
+            {pendingIncidents.length} report{pendingIncidents.length !== 1 ? 's' : ''} awaiting closure
           </div>
         )}
       </div>
@@ -65,7 +77,7 @@ export default function PendingReports() {
       {/* Tabs */}
       <div className="flex gap-1 mb-4 p-1 rounded-lg border border-(--border) bg-(--bg-surface) w-fit">
         {[
-          { key: 'pending', label: `Pending (${ALL_PENDING.length})` },
+          { key: 'pending', label: `Pending (${pendingIncidents.length})` },
           { key: 'all', label: 'All incidents' },
         ].map(({ key, label }) => (
           <button
@@ -86,7 +98,9 @@ export default function PendingReports() {
 
       {/* Table */}
       <div className="bg-(--bg-surface) border border-(--border) rounded-xl overflow-hidden">
-        {items.length === 0 ? (
+        {loading ? (
+          <div className="py-16 text-center text-(--text-muted) text-[13px]">Loading…</div>
+        ) : items.length === 0 ? (
           <div className="py-16 text-center text-(--text-muted) text-[13px]">
             No incidents found.
           </div>
@@ -120,7 +134,7 @@ export default function PendingReports() {
                   </td>
                   <td className="px-4 text-[13px] text-(--text-primary)">{inc.incident_type}</td>
                   <td className="px-4 text-[12px] text-(--text-secondary)">
-                    {inc.district} / {inc.sector}
+                    {inc.district ? `${inc.district}${inc.sector ? ' / ' + inc.sector : ''}` : (inc.address ?? '—')}
                   </td>
                   <td className="px-4">
                     <SeverityBadge severity={SEV_UPPER(inc.severity)} />
@@ -129,7 +143,7 @@ export default function PendingReports() {
                     className="px-4 text-[12px] text-(--text-secondary)"
                     style={{ fontFamily: 'var(--font-mono)' }}
                   >
-                    {inc.reported}
+                    {inc.call_time ? new Date(inc.call_time).toLocaleString() : '—'}
                   </td>
                   <td className="px-4">
                     <ElapsedChip callTime={inc.call_time} />
@@ -138,7 +152,7 @@ export default function PendingReports() {
                     className="px-4 text-[12px] text-(--status-info)"
                     style={{ fontFamily: 'var(--font-mono)' }}
                   >
-                    {inc.unit ?? '—'}
+                    —
                   </td>
                   <td className="px-4">
                     {inc.status === 'PENDING_REPORT' ? (

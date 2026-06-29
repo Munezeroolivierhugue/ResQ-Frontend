@@ -1,14 +1,14 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Bell } from 'lucide-react'
 import DataTable from '../../components/dispatcher/DataTable'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import { useNotificationsStore } from '../../store/notificationsStore'
 import MutualAidOfferModal from '../../components/dispatcher/MutualAidOfferModal'
-import { useState } from 'react'
 
 export default function Notifications() {
   const navigate = useNavigate()
-  const { items, markRead } = useNotificationsStore()
+  const { items, markRead, loading } = useNotificationsStore()
   const [selectedMutualAid, setSelectedMutualAid] = useState(null)
 
   const columns = [
@@ -22,27 +22,31 @@ export default function Notifications() {
         />
       ),
     },
-    { key: 'type', label: 'Type', render: (row) => row.type.toUpperCase() },
+    { key: 'type', label: 'Type', render: (row) => row.type?.toUpperCase?.() ?? row.type },
     { key: 'title', label: 'Title' },
     { key: 'time', label: 'Time' },
     {
       key: 'action',
       label: '',
-      render: (row) => (
-        <button
-          type="button"
-          className="text-[12px] text-(--accent) bg-transparent border-none cursor-pointer font-semibold"
-          onClick={() => {
-            if (row.type === 'mutual_aid') {
-              setSelectedMutualAid(row)
-            } else {
-              navigate(row.href)
-            }
-          }}
-        >
-          Open →
-        </button>
-      ),
+      render: (row) => {
+        const canOpen = row.type === 'mutual_aid' || !!row.href
+        if (!canOpen) return null
+        return (
+          <button
+            type="button"
+            className="text-[12px] text-(--accent) bg-transparent border-none cursor-pointer font-semibold"
+            onClick={() => {
+              if (row.type === 'mutual_aid') {
+                setSelectedMutualAid(row)
+              } else if (row.href) {
+                navigate(row.href)
+              }
+            }}
+          >
+            Open →
+          </button>
+        )
+      },
     },
   ]
 
@@ -63,16 +67,27 @@ export default function Notifications() {
       </div>
 
       <div className="dispatcher-surface overflow-hidden">
-        <DataTable columns={columns} rows={items} />
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-(--text-muted) text-[13px]">
+            Loading notifications…
+          </div>
+        ) : items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-3 text-(--text-muted)">
+            <Bell size={36} className="opacity-30" />
+            <p className="text-[14px] font-medium m-0">No notifications</p>
+            <p className="text-[12px] m-0">You're all caught up. New alerts will appear here.</p>
+          </div>
+        ) : (
+          <DataTable columns={columns} rows={items} />
+        )}
       </div>
 
       <MutualAidOfferModal
         isOpen={!!selectedMutualAid}
         requestDetails={selectedMutualAid?.details || selectedMutualAid}
         onClose={() => setSelectedMutualAid(null)}
-        onPledge={(units) => {
+        onPledge={() => {
           if (selectedMutualAid) markRead(selectedMutualAid.id)
-          // Implement pledging logic here, like a toast message or API call
         }}
       />
     </div>
