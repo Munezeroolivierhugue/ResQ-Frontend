@@ -9,9 +9,11 @@ import { Navigation, Crosshair, MapPin } from 'lucide-react'
 import RwandaBoundsEnforcer from '../map/RwandaBoundsEnforcer'
 import { RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../map/rwandaConstants'
 import { IntakePanel } from '../intake/IntakeUi'
+import api from '../../lib/apiClient'
 import 'leaflet/dist/leaflet.css'
 
 const MAP_TILES = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
+const RWANDA_CENTER = [-1.9441, 30.0619]
 
 /** Auto-zoom/pan to the most precise available location */
 function MapAutoFit({ roughPos, precisePos, manualPos }) {
@@ -65,17 +67,14 @@ function makeIcon(color, label) {
 const GPS_STATES = {
   idle: null,
   sending: 'Sending...',
-  waiting: 'Link sent. Waiting for caller to tap...',
-  tapping: 'Link tapped. Receiving GPS...',
+  waiting: 'Link sent. Waiting for caller...',
   received: 'Precise GPS received',
+  error: 'SMS failed — retry?',
 }
 
 export default function TriageLocationMap({ caller, onLocationChange }) {
-  // Memoize so the array reference stays stable between renders.
-  // Without this, a new array is created every render → the location effect
-  // sees roughPos "changed" → calls onLocationChange → parent re-renders → loop.
   const roughPos = useMemo(
-    () => (caller ? [caller.rough_lat, caller.rough_lng] : null),
+    () => (caller?.rough_lat && caller?.rough_lng ? [caller.rough_lat, caller.rough_lng] : null),
     [caller?.rough_lat, caller?.rough_lng], // eslint-disable-line react-hooks/exhaustive-deps
   )
 
@@ -84,7 +83,6 @@ export default function TriageLocationMap({ caller, onLocationChange }) {
   const [gpsState, setGpsState] = useState('idle')
   const [isPinDropMode, setIsPinDropMode] = useState(false)
 
-  // Derived authoritative source
   const locationSource = precisePos
     ? 'GPS_PRECISE'
     : manualPos
@@ -93,46 +91,63 @@ export default function TriageLocationMap({ caller, onLocationChange }) {
     ? 'TELECOM_ROUGH'
     : null
 
-  // Icons (memo to avoid re-creating on every render)
   const gpsIcon = useMemo(() => makeIcon('var(--location-precise)', 'GPS'), [])
   const manualIcon = useMemo(() => makeIcon('var(--location-manual)', 'PIN'), [])
 
-  // Notify parent when authoritative location changes
   useEffect(() => {
     const pos = precisePos || manualPos || roughPos
     if (!pos || !locationSource) return
     onLocationChange?.({ lat: pos[0], lng: pos[1], source: locationSource })
   }, [precisePos, manualPos, roughPos, locationSource, onLocationChange])
 
-  function runGpsStateMachine() {
+  async function handleSendSms() {
+    const phone = caller?.phone_number
+    if (!phone) return
     setGpsState('sending')
-    setTimeout(() => setGpsState('waiting'), 1500)
-    setTimeout(() => setGpsState('tapping'), 4000)
-    setTimeout(() => {
-      // Offset rough position by a small delta to simulate precise GPS
-      const precise = [
-        caller.rough_lat + (Math.random() - 0.5) * 0.002,
-        caller.rough_lng + (Math.random() - 0.5) * 0.002,
-      ]
-      setPrecisePos(precise)
-      setGpsState('received')
-    }, 6000)
+    try {
+      const { data } = await api.get('/api/location/sms-gps', { params: { phoneNumber: phone } })
+      setGpsState('waiting')
+      // If backend returns coordinates immediately (e.g. device already has GPS)
+      const coords = data?.data ?? data
+      if (coords?.lat && coords?.lng) {
+        setPrecisePos([coords.lat, coords.lng])
+        setGpsState('received')
+      }
+    } catch {
+      setGpsState('error')
+      setTimeout(() => setGpsState('idle'), 3000)
+    }
   }
 
-  function handlePinDrop(latlng) {
+  async function handlePinDrop(latlng) {
     if (!isPinDropMode) return
-    setManualPos([latlng.lat, latlng.lng])
+    const pos = [latlng.lat, latlng.lng]
+    setManualPos(pos)
     setIsPinDropMode(false)
+    try {
+      await api.post('/api/location/map-pin', null, { params: { lat: latlng.lat, lng: latlng.lng } })
+    } catch {
+      // Non-fatal — coordinates are still captured locally
+    }
   }
 
-  const canSendGps = caller?.device_type === 'smartphone' && gpsState === 'idle'
-  const gpsLabel = gpsState === 'idle' ? 'Send GPS link via SMS' : GPS_STATES[gpsState]
+  const hasPhone = !!caller?.phone_number
+  const canSendSms = hasPhone && (gpsState === 'idle' || gpsState === 'error')
+  const gpsLabel =
+    gpsState === 'idle' || gpsState === 'error'
+      ? hasPhone
+        ? 'Send GPS link via SMS'
+        : 'No phone number'
+      : GPS_STATES[gpsState]
 
   const sourceColors = {
     TELECOM_ROUGH: 'var(--location-rough)',
     GPS_PRECISE:   'var(--location-precise)',
     MANUAL_PIN:    'var(--location-manual)',
   }
+
+  const mapCenter = roughPos ?? RWANDA_CENTER
+  const mapZoom = roughPos ? 12 : 8
 
   return (
     <IntakePanel className="flex flex-col overflow-visible">
@@ -164,17 +179,17 @@ export default function TriageLocationMap({ caller, onLocationChange }) {
         </div>
       </div>
 
-      {/* GPS SMS button + pin drop */}
+      {/* SMS + pin controls */}
       <div className="px-4 py-2.5 border-b border-(--border-subtle) flex flex-wrap items-center gap-2">
         <button
           type="button"
-          disabled={!canSendGps && gpsState === 'idle'}
-          onClick={canSendGps ? runGpsStateMachine : undefined}
+          disabled={!canSendSms}
+          onClick={canSendSms ? handleSendSms : undefined}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12px] font-semibold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           style={{
             fontFamily: 'var(--font-display)',
-            borderColor: gpsState === 'received' ? 'var(--location-precise)' : 'var(--border)',
-            color: gpsState === 'received' ? 'var(--location-precise)' : 'var(--text-primary)',
+            borderColor: gpsState === 'received' ? 'var(--location-precise)' : gpsState === 'error' ? 'var(--status-critical)' : 'var(--border)',
+            color: gpsState === 'received' ? 'var(--location-precise)' : gpsState === 'error' ? 'var(--status-critical)' : 'var(--text-primary)',
             background: gpsState === 'received' ? 'color-mix(in srgb, var(--location-precise) 10%, transparent)' : 'var(--bg-input)',
           }}
         >
@@ -214,31 +229,30 @@ export default function TriageLocationMap({ caller, onLocationChange }) {
         </div>
       </div>
 
-      {/* Map */}
+      {/* Map — always visible, defaults to Rwanda center if no caller location */}
       <div
         className="relative map-natural"
         style={{ height: '300px', width: '100%', minHeight: '300px', cursor: isPinDropMode ? 'crosshair' : 'grab' }}
       >
-        {roughPos && (
-          <MapContainer
-            center={roughPos}
-            zoom={12}
-            minZoom={RWANDA_MIN_ZOOM}
-            maxZoom={RWANDA_MAX_ZOOM}
-            maxBounds={RWANDA_BOUNDS}
-            maxBoundsViscosity={1.0}
-            style={{ height: '300px', width: '100%', background: '#E8EAED' }}
-            zoomControl={false}
-          >
-            <TileLayer
-              url={MAP_TILES}
-              attribution='&copy; <a href="https://carto.com/">CARTO</a>'
-            />
-            <RwandaBoundsEnforcer />
-            <MapAutoFit roughPos={roughPos} precisePos={precisePos} manualPos={manualPos} />
-            <MapClickHandler onPinDrop={handlePinDrop} />
+        <MapContainer
+          center={mapCenter}
+          zoom={mapZoom}
+          minZoom={RWANDA_MIN_ZOOM}
+          maxZoom={RWANDA_MAX_ZOOM}
+          maxBounds={RWANDA_BOUNDS}
+          maxBoundsViscosity={1.0}
+          style={{ height: '300px', width: '100%', background: '#E8EAED' }}
+          zoomControl={false}
+        >
+          <TileLayer
+            url={MAP_TILES}
+            attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+          />
+          <RwandaBoundsEnforcer />
+          <MapAutoFit roughPos={roughPos} precisePos={precisePos} manualPos={manualPos} />
+          <MapClickHandler onPinDrop={handlePinDrop} />
 
-            {/* Telecom rough circle — always visible */}
+          {roughPos && (
             <Circle
               center={roughPos}
               radius={1000}
@@ -250,39 +264,31 @@ export default function TriageLocationMap({ caller, onLocationChange }) {
                 opacity: 0.5,
               }}
             />
+          )}
 
-            {/* GPS precise marker + tight circle */}
-            {precisePos && (
-              <>
-                <Circle
-                  center={precisePos}
-                  radius={15}
-                  pathOptions={{
-                    fillColor: 'var(--location-precise)',
-                    fillOpacity: 0.25,
-                    color: 'var(--location-precise)',
-                    weight: 2,
-                    opacity: 0.8,
-                  }}
-                />
-                <Marker position={precisePos} icon={gpsIcon} />
-              </>
-            )}
+          {precisePos && (
+            <>
+              <Circle
+                center={precisePos}
+                radius={15}
+                pathOptions={{
+                  fillColor: 'var(--location-precise)',
+                  fillOpacity: 0.25,
+                  color: 'var(--location-precise)',
+                  weight: 2,
+                  opacity: 0.8,
+                }}
+              />
+              <Marker position={precisePos} icon={gpsIcon} />
+            </>
+          )}
 
-            {/* Manual pin */}
-            {manualPos && <Marker position={manualPos} icon={manualIcon} />}
-          </MapContainer>
-        )}
-
-        {!roughPos && (
-          <div className="flex items-center justify-center h-full text-(--text-muted) text-[13px]">
-            No caller location available
-          </div>
-        )}
+          {manualPos && <Marker position={manualPos} icon={manualIcon} />}
+        </MapContainer>
 
         {/* Coord readout */}
         {(precisePos || manualPos || roughPos) && (
-          <div className="absolute bottom-3 left-3 right-3 flex justify-center pointer-events-none">
+          <div className="absolute bottom-3 left-3 right-3 flex justify-center pointer-events-none" style={{ zIndex: 1000 }}>
             <div
               className="px-3 py-1.5 rounded-md border border-(--border) bg-(--bg-surface) text-[11px] font-medium text-(--accent)"
               style={{ fontFamily: 'var(--font-mono)' }}
@@ -291,6 +297,20 @@ export default function TriageLocationMap({ caller, onLocationChange }) {
                 const pos = precisePos || manualPos || roughPos
                 return `${pos[0].toFixed(4)}, ${pos[1].toFixed(4)}`
               })()}
+            </div>
+          </div>
+        )}
+
+        {!roughPos && !precisePos && !manualPos && (
+          <div
+            className="absolute bottom-3 left-3 right-3 flex justify-center pointer-events-none"
+            style={{ zIndex: 1000 }}
+          >
+            <div
+              className="px-3 py-1.5 rounded-md border border-(--border) bg-(--bg-surface) text-[11px] text-(--text-muted)"
+              style={{ fontFamily: 'var(--font-display)' }}
+            >
+              Click map to drop a pin, or send GPS link to caller
             </div>
           </div>
         )}
