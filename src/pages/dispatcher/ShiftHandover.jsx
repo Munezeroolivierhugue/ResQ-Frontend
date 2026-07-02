@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Globe, FileText, Rocket, BadgeCheck, ChevronLeft, ChevronRight, Siren, Clock, CheckCircle, AlertTriangle } from 'lucide-react'
+import { Globe, FileText, Rocket, BadgeCheck, Siren, Clock, CheckCircle, AlertTriangle } from 'lucide-react'
 import PageHeader from '../../components/dispatcher/PageHeader'
 import SurfaceCard from '../../components/dispatcher/SurfaceCard'
 import MetricCard from '../../components/dispatcher/MetricCard'
@@ -8,7 +8,7 @@ import SectionTitle from '../../components/dispatcher/SectionTitle'
 import DataTable from '../../components/dispatcher/DataTable'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import { FormTextarea } from '../../components/dispatcher/FormControls'
-import { getMyShifts } from '../../api/shifts'
+import { getMyShifts, saveShiftNotes } from '../../api/shifts'
 import { listIncidents } from '../../api/incidents'
 import { getCurrentUser } from '../../utils/authSession'
 
@@ -21,6 +21,20 @@ export default function ShiftHandover() {
   const navigate = useNavigate()
   const [sort, setSort] = useState('recent')
   const [officerNote, setOfficerNote] = useState('')
+  // 'idle' | 'saving' | 'saved' | 'error'
+  const [noteState, setNoteState] = useState('idle')
+
+  const handleSaveNotes = async () => {
+    if (!shift?.shift_id || noteState === 'saving') return
+    setNoteState('saving')
+    try {
+      await saveShiftNotes(shift.shift_id, officerNote)
+      setNoteState('saved')
+      setTimeout(() => setNoteState('idle'), 2500)
+    } catch {
+      setNoteState('error')
+    }
+  }
   const [shift, setShift] = useState(null)
   const [incidents, setIncidents] = useState([])
   const [loading, setLoading] = useState(true)
@@ -28,23 +42,27 @@ export default function ShiftHandover() {
 
   useEffect(() => {
     setLoading(true)
-    Promise.all([getMyShifts(), listIncidents()]).then(([shifts, incs]) => {
+    Promise.allSettled([getMyShifts(), listIncidents()]).then(([shiftsResult, incsResult]) => {
+      const shifts = shiftsResult.status === 'fulfilled' ? shiftsResult.value : []
+      const incs   = incsResult.status === 'fulfilled'  ? incsResult.value  : []
       const latest = shifts.sort((a, b) => new Date(b.shift_start) - new Date(a.shift_start))[0] ?? null
       setShift(latest)
-      if (latest) {
+      if (latest?.handover_notes) setOfficerNote(latest.handover_notes)
+      if (latest?.shift_start) {
         const start = new Date(latest.shift_start)
         const end = latest.shift_end ? new Date(latest.shift_end) : new Date()
-        setIncidents(incs.filter(i => {
-          const t = new Date(i.call_time)
-          return t >= start && t <= end
-        }))
+        const shiftIncs = incs.filter(i => { const t = new Date(i.call_time); return t >= start && t <= end })
+        setIncidents(shiftIncs)
       } else {
-        setIncidents(incs)
+        // No shift record — default to today (midnight → now)
+        const startOfDay = new Date()
+        startOfDay.setHours(0, 0, 0, 0)
+        setIncidents(incs.filter(i => i.call_time && new Date(i.call_time) >= startOfDay))
       }
-    }).catch(() => {}).finally(() => setLoading(false))
+    }).finally(() => setLoading(false))
   }, [])
 
-  const resolved = incidents.filter(i => i.status === 'RESOLVED' || i.status === 'resolved').length
+  const resolved = incidents.filter(i => ['RESOLVED', 'resolved', 'CLOSED', 'closed'].includes(i.status)).length
   const critical = incidents.filter(i => i.severity === 'critical').length
   const avgResp = (() => {
     const ms = incidents.filter(i => i.response_time_minutes != null)
@@ -174,7 +192,23 @@ export default function ShiftHandover() {
                 {shift ? `Shift: ${shift.shift_id}` : 'No shift data'}
               </div>
             </div>
-            <BadgeCheck size={18} className="text-(--status-low) ml-auto shrink-0" />
+            <div className="ml-auto flex items-center gap-2 shrink-0">
+              {noteState === 'error' && (
+                <span className="text-[11px] font-semibold" style={{ color: 'var(--status-critical)' }}>
+                  Save failed — retry
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleSaveNotes}
+                disabled={!shift || noteState === 'saving'}
+                className="dispatcher-btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                title={!shift ? 'No shift record to attach notes to' : undefined}
+              >
+                {noteState === 'saving' ? 'Saving…' : noteState === 'saved' ? 'Saved ✓' : 'Save notes'}
+              </button>
+              <BadgeCheck size={18} className="text-(--status-low) shrink-0" />
+            </div>
           </div>
         </SurfaceCard>
 

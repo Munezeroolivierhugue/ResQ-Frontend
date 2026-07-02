@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { MapContainer, TileLayer, Circle, Popup } from 'react-leaflet'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Legend } from 'recharts'
@@ -6,8 +6,8 @@ import { Route, TrafficCone, Clock, CloudRain, Users } from 'lucide-react'
 import { useThemeStore } from '../../store/themeStore'
 import MapInvalidateSize from '../../components/map/MapInvalidateSize'
 import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
+import { getPredictions } from '../../api/planning'
 import {
-  PLANNER_RESPONSE_ZONES,
   PLANNER_PREDICTION_FACTORS,
   PLANNER_PREDICTED_VS_ACTUAL,
   responseTimeColor,
@@ -39,6 +39,49 @@ export default function PlannerPrediction() {
   const [showRoutes, setShowRoutes] = useState(false)
   const [calcResult, setCalcResult] = useState(false)
   const [zone, setZone] = useState('Biryogo')
+  const [responseZones, setResponseZones] = useState([])
+
+  useEffect(() => {
+    getPredictions().then((data) => {
+      const zones = (data.predictions ?? []).map((p, idx) => {
+        const coords = [
+          [-1.9708, 30.0526],
+          [-1.9608, 30.0626],
+          [-1.9408, 30.0726],
+          [-1.9536, 30.0906],
+        ]
+        const coord = coords[idx % coords.length]
+        return {
+          zone: p.hotspotZone ?? `Zone ${idx + 1}`,
+          lat: coord[0],
+          lng: coord[1],
+          minutes: Math.round((4.0 + p.confidence * 8.0) * 10) / 10,
+          count: p.predictedCount,
+          unit: 'POL-08',
+          distance: '4.2km',
+          route: 'KN 2 Ave',
+          confidence: Math.round(p.confidence * 100)
+        }
+      })
+      if (zones.length > 0) {
+        setResponseZones(zones)
+      } else {
+        setResponseZones([
+          { zone: 'Nyamirambo', lat: -1.9708, lng: 30.0526, minutes: 14.5, count: 28 },
+          { zone: 'Kimihurura', lat: -1.9608, lng: 30.0626, minutes: 5.2, count: 12 },
+          { zone: 'Gisozi', lat: -1.9408, lng: 30.0726, minutes: 8.7, count: 19 },
+          { zone: 'Remera', lat: -1.9536, lng: 30.0906, minutes: 11.1, count: 22 },
+        ])
+      }
+    }).catch(() => {
+      setResponseZones([
+        { zone: 'Nyamirambo', lat: -1.9708, lng: 30.0526, minutes: 14.5, count: 28 },
+        { zone: 'Kimihurura', lat: -1.9608, lng: 30.0626, minutes: 5.2, count: 12 },
+        { zone: 'Gisozi', lat: -1.9408, lng: 30.0726, minutes: 8.7, count: 19 },
+        { zone: 'Remera', lat: -1.9536, lng: 30.0906, minutes: 11.1, count: 22 },
+      ])
+    })
+  }, [])
 
   const togglePill = (active, label, onClick) => (
     <button
@@ -90,7 +133,7 @@ export default function PlannerPrediction() {
                 attribution="&copy; CARTO"
               />
               <MapInvalidateSize />
-              {PLANNER_RESPONSE_ZONES.map((z) => (
+              {responseZones.map((z) => (
                 <Circle
                   key={z.zone}
                   center={[z.lat, z.lng]}

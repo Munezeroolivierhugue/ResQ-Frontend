@@ -9,7 +9,7 @@ function transform(m) {
     last_dispatcher_id: m.lastDispatcherId,
     last_dispatcher_name: m.lastDispatcherName,
     cascade_count: m.cascadeCount,
-    status: m.status,
+    status: (m.status ?? '').toLowerCase(),
     called_back_by_id: m.calledBackById,
     callback_time: m.callbackTime,
   }

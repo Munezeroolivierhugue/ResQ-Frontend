@@ -1,20 +1,30 @@
-import { useState } from 'react'
-import { X, ShieldCheck, Ambulance, Truck, AlertTriangle } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { X, ShieldCheck, Ambulance, Truck, AlertTriangle, Zap } from 'lucide-react'
 import MutualAidRequestModal from './MutualAidRequestModal'
 import RequestAdditionalUnitModal from './RequestAdditionalUnitModal'
 import { useNotificationsStore } from '../../store/notificationsStore'
+import { listVehicles } from '../../api/vehicles'
 
-const allUnits = [
-  { unit: 'POL-08', type: 'Police Unit', location: 'Gisenyi', eta: '18 min', score: 71, icon: ShieldCheck, color: '#D4A017' },
-  { unit: 'AMB-11', type: 'Ambulance', location: 'Nyagatare', eta: '24 min', score: 58, icon: Ambulance, color: '#2196C8' },
-  { unit: 'FTK-02', type: 'Fire Truck', location: 'Nyarugenge', eta: '28 min', score: 45, icon: Truck, color: '#E8354A' },
-  { unit: 'POL-15', type: 'Police Unit', location: 'Kicukiro', eta: '32 min', score: 40, icon: ShieldCheck, color: '#D4A017' },
-]
+function unitIcon(vehicleType) {
+  const t = (vehicleType ?? '').toUpperCase()
+  if (t.includes('AMBULANCE'))                        return { icon: Ambulance,   color: '#2196C8' }
+  if (t.includes('FIRE') || t.includes('DISASTER'))  return { icon: Truck,       color: '#E8354A' }
+  if (t.includes('TACTICAL'))                         return { icon: Zap,         color: '#9B59B6' }
+  return                                                     { icon: ShieldCheck, color: '#D4A017' }
+}
 
 export default function AvailableUnitsModal({ isOpen, onClose }) {
   const [isMutualAidModalOpen, setIsMutualAidModalOpen] = useState(false)
   const [isAdditionalUnitModalOpen, setIsAdditionalUnitModalOpen] = useState(false)
+  const [units, setUnits] = useState([])
   const addNotification = useNotificationsStore((state) => state.addNotification)
+
+  useEffect(() => {
+    if (!isOpen) return
+    listVehicles({ status: 'AVAILABLE' })
+      .then((data) => setUnits(data))
+      .catch(() => {})
+  }, [isOpen])
 
   if (!isOpen && !isMutualAidModalOpen && !isAdditionalUnitModalOpen) return null
 
@@ -65,24 +75,24 @@ export default function AvailableUnitsModal({ isOpen, onClose }) {
             </div>
             <div className="p-5 flex-1 overflow-y-auto">
               <div className="space-y-3 mb-6">
-                {allUnits.map(alt => {
-                  const Icon = alt.icon
+                {units.length === 0 && (
+                  <div className="text-[13px] text-(--text-muted) text-center py-6">Loading available units…</div>
+                )}
+                {units.map((v) => {
+                  const { icon: Icon, color } = unitIcon(v.vehicle_type)
                   return (
-                    <div key={alt.unit} className="bg-(--bg-elevated) border border-(--border) rounded-xl px-3.5 py-3 flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border" style={{ background: `color-mix(in srgb, ${alt.color} 12%, transparent)`, borderColor: `color-mix(in srgb, ${alt.color} 30%, transparent)` }}>
-                        <Icon size={16} strokeWidth={1.8} color={alt.color} />
+                    <div key={v.vehicle_id} className="bg-(--bg-elevated) border border-(--border) rounded-xl px-3.5 py-3 flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border" style={{ background: `color-mix(in srgb, ${color} 12%, transparent)`, borderColor: `color-mix(in srgb, ${color} 30%, transparent)` }}>
+                        <Icon size={16} strokeWidth={1.8} color={color} />
                       </div>
                       <div className="flex-1">
-                        <div className="text-[13px] font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>{alt.unit}</div>
-                        <div className="text-[11px] text-(--text-secondary) mt-0.5">{alt.type} · {alt.location}</div>
+                        <div className="text-[13px] font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>{v.plate_number}</div>
+                        <div className="text-[11px] text-(--text-secondary) mt-0.5">{v.vehicle_type} · {v.location}</div>
                       </div>
-                      <div className="w-24 text-right">
-                        <div className="text-sm font-bold">{alt.eta}</div>
-                        <div className="text-[11px] text-(--text-muted)">Score: {alt.score}%</div>
+                      <div className="w-28 text-right">
+                        <div className="text-[11px] font-bold uppercase tracking-wide" style={{ color }}>{v.status}</div>
+                        <div className="text-[11px] text-(--text-muted) mt-0.5">{v.capability ?? '—'}</div>
                       </div>
-                      <button className="px-2.5 py-1 text-[11px] bg-transparent border border-(--border) text-(--text-primary) font-semibold rounded-lg cursor-pointer hover:bg-(--bg-elevated) hover:border-(--accent) transition-colors ml-2" style={{ fontFamily: 'var(--font-body)' }}>
-                        Select
-                      </button>
                     </div>
                   )
                 })}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Lock, Save, Upload, FileText, CheckCircle } from 'lucide-react'
 import PageHeader from '../../components/dispatcher/PageHeader'
 import SurfaceCard from '../../components/dispatcher/SurfaceCard'
@@ -11,7 +11,8 @@ import {
   FormTextarea,
   FormInput,
 } from '../../components/dispatcher/FormControls'
-import { listIncidents, updateIncidentStatus } from '../../api/incidents'
+import { listIncidents, createIncidentClosure } from '../../api/incidents'
+import { submitFieldReport, uploadAttachment } from '../../api/fieldReports'
 
 const DISPOSITION_OPTIONS = [
   { value: 'arrests', label: 'Arrest(s) made' },
@@ -23,16 +24,21 @@ const DISPOSITION_OPTIONS = [
 
 export default function IncidentClosure() {
   const navigate = useNavigate()
-  const [incident, setIncident] = useState(null)
+  const { state: navState } = useLocation()
+  const [incident, setIncident] = useState(navState?.incident ?? null)
 
   useEffect(() => {
+    // If an incident was passed from PendingReports, use it directly
+    if (navState?.incident) return
+    // Otherwise fall back to fetching the first PENDING_REPORT incident
     listIncidents({ status: 'PENDING_REPORT' })
       .then((incs) => setIncident(incs[0] ?? null))
       .catch(() => {})
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [mode, setMode] = useState('structured') // 'structured' | 'manual_upload'
   const [submitted, setSubmitted] = useState(false)
+  const [submitError, setSubmitError] = useState(null)
 
   // Structured mode fields
   const [personsInvolved, setPersonsInvolved] = useState('')
@@ -45,10 +51,33 @@ export default function IncidentClosure() {
   const [uploadedFile, setUploadedFile] = useState(null)
   const [uploadError, setUploadError] = useState('')
 
-  const handleStructuredClose = () => {
-    if (incident) {
-      updateIncidentStatus(incident.incident_id, 'RESOLVED').catch(() => {})
+  async function submitClosure(dataSource, notesOverride) {
+    setSubmitError(null)
+    if (!incident?.incident_id) {
+      setSubmitError('No incident loaded. Open this page from Pending Reports to select an incident.')
+      return false
     }
+    try {
+      await createIncidentClosure({
+        incidentId:       incident.incident_id,
+        personsInvolved:  personsInvolved || null,
+        casualties,
+        arrests,
+        finalDisposition,
+        closureNotes:     notesOverride !== undefined ? notesOverride : closureNotes,
+        dataSource,
+      })
+    } catch (err) {
+      const msg = err?.response?.data?.message ?? err?.response?.data?.error ?? 'Failed to save report. Please retry.'
+      setSubmitError(msg)
+      return false
+    }
+    return true
+  }
+
+  const handleStructuredClose = async () => {
+    const ok = await submitClosure('dispatcher_portal')
+    if (!ok) return
     setSubmitted(true)
     setTimeout(() => navigate('/dispatcher/shift-handover'), 1800)
   }
@@ -65,14 +94,42 @@ export default function IncidentClosure() {
     setUploadedFile(file)
   }
 
-  const handleManualClose = () => {
+  const [uploading, setUploading] = useState(false)
+
+  const handleManualClose = async () => {
     if (!uploadedFile) {
       setUploadError('Please attach a field report file before closing.')
       return
     }
-    if (incident) {
-      updateIncidentStatus(incident.incident_id, 'RESOLVED').catch(() => {})
+    setUploadError('')
+    setSubmitError(null)
+    if (!incident?.incident_id) {
+      setSubmitError('No incident loaded. Navigate here from Pending Reports to select an incident.')
+      return
     }
+    setUploading(true)
+    let fileNote
+    try {
+      const report = await submitFieldReport({
+        incident_id: incident.incident_id,
+        description: `Manually uploaded closure report: ${uploadedFile.name}`,
+        entry_method: 'MANUAL_UPLOAD',
+      })
+      try {
+        await uploadAttachment(report.report_id, uploadedFile, 'Closure report upload')
+      } catch {
+        // Attachment endpoint not yet available — record file name in notes instead
+        fileNote = `Attached file: ${uploadedFile.name} (${(uploadedFile.size / 1024).toFixed(1)} KB)`
+      }
+    } catch (err) {
+      const msg = err?.response?.data?.message ?? 'Failed to create field report. Please retry.'
+      setSubmitError(msg)
+      setUploading(false)
+      return
+    }
+    const ok = await submitClosure('manual_upload', fileNote ?? closureNotes)
+    setUploading(false)
+    if (!ok) return
     setSubmitted(true)
     setTimeout(() => navigate('/dispatcher/shift-handover'), 1800)
   }
@@ -85,6 +142,21 @@ export default function IncidentClosure() {
         subtitle={incident ? `${incident.incident_ref} · ${incident.incident_type} · ${incident.address ?? incident.district ?? ''}` : 'Loading incident…'}
         badges={<span className="dispatcher-eyebrow">Incident closure</span>}
       />
+
+      {/* Error banner */}
+      {submitError && (
+        <div
+          className="flex items-center gap-2 px-4 py-3 rounded-xl border mb-5 text-[13px] font-semibold"
+          style={{
+            background: 'var(--status-critical-bg)',
+            color: 'var(--status-critical)',
+            borderColor: 'var(--status-critical)',
+            fontFamily: 'var(--font-display)',
+          }}
+        >
+          {submitError}
+        </div>
+      )}
 
       {/* Success toast */}
       {submitted && (
@@ -265,11 +337,11 @@ export default function IncidentClosure() {
             <button
               type="button"
               onClick={handleManualClose}
-              disabled={submitted}
+              disabled={submitted || uploading}
               className="dispatcher-btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Lock size={16} />
-              Close with uploaded report
+              {uploading ? 'Uploading report…' : 'Close with uploaded report'}
             </button>
             <button
               type="button"

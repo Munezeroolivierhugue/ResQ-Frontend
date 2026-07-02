@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { connect, connectMock, disconnectMock, emit } from '../utils/callChannel'
-import { randomRwandanPhone, mockCallerProfiles, mockCallRecords } from '../data/mockCallData'
-import { claimCall, passCall } from '../api/calls'
+import { randomRwandanPhone } from '../data/mockCallData'
+import { claimCall, passCall, recordOutcome as recordCallOutcome } from '../api/calls'
 import { getCallerByPhone } from '../api/callers'
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -14,15 +14,6 @@ export const useCallChannelStore = create((set, get) => {
       set({ incomingCall: payload, showIncomingBanner: true })
     },
     onCallEnded: (payload) => {
-      // Update matching call record with recording_url
-      const { call_id, recording_url } = payload ?? {}
-      if (call_id && recording_url) {
-        const rec = mockCallRecords.find((r) => r.call_id === call_id)
-        if (rec) {
-          rec.recording_url = recording_url
-          rec.ended_at = new Date().toISOString()
-        }
-      }
       set({
         currentCall: null,
         incomingCall: null,
@@ -80,32 +71,42 @@ export const useCallChannelStore = create((set, get) => {
       set({ incomingCall: null, showIncomingBanner: false })
     },
 
+    recordOutcome: async (outcome) => {
+      const { currentCall } = get()
+      if (!currentCall) return
+      const sessionId = currentCall.session_id ?? currentCall.call_id
+      if (sessionId && !sessionId.startsWith('CALL-MOCK-') && !sessionId.startsWith('CALL-SIM-')) {
+        await recordCallOutcome(sessionId, outcome)
+      }
+    },
+
     endCall: () => {
       set({ currentCall: null, endedCallPayload: null })
     },
 
     clearEndedPayload: () => set({ endedCallPayload: null }),
 
-    /** Called by the dev "Simulate" button on LiveDispatchMap. */
+    /** Called by the "Simulate" button on LiveDispatchMap. */
     simulateCall: () => {
+      // Clear any stale call state so the banner always fires
+      set({ currentCall: null, incomingCall: null, showIncomingBanner: false })
+      const payload = {
+        call_id: `CALL-SIM-${Date.now()}`,
+        phone_number: randomRwandanPhone(),
+        started_at: new Date().toISOString(),
+      }
       if (_mockRef?.fireMock) {
         _mockRef.fireMock()
       } else {
-        // If real WS mode, manually inject a fake call
-        handlers.onIncomingCall({
-          call_id: `CALL-SIM-${Date.now()}`,
-          phone_number: randomRwandanPhone(),
-          started_at: new Date().toISOString(),
-        })
+        set({ incomingCall: payload, showIncomingBanner: true })
       }
     },
 
-    /** Look up caller profile by phone number — tries API first, falls back to mock */
     getCallerProfile: async (phone_number) => {
       try {
         return await getCallerByPhone(phone_number)
       } catch {
-        return mockCallerProfiles.find((p) => p.phone_number === phone_number) ?? null
+        return null
       }
     },
 

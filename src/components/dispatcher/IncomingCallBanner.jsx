@@ -62,7 +62,7 @@ export default function IncomingCallBanner() {
       className="animate-slide-in-right"
       style={{
         position: 'fixed',
-        top: '1rem',
+        top: '4.75rem',
         right: '1rem',
         zIndex: 300,
         width: 'min(400px, calc(100vw - 2rem))',

@@ -37,6 +37,6 @@ export async function createMutualAidRequest(body) {
 }
 
 export async function updateMutualAidStatus(id, status) {
-  const { data } = await api.patch(`/api/mutual-aid/${id}/status`, { status })
+  const { data } = await api.patch(`/api/mutual-aid/${id}/status`, null, { params: { status } })
   return transform(data.data ?? data)
 }

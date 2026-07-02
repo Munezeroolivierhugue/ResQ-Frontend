@@ -48,10 +48,10 @@ function transformSimulation(s) {
 function transformGap(g) {
   return {
     gap_id: g.gapId,
-    district_id: g.districtId,
-    district_name: g.districtName,
-    severity: g.severity,
-    description: g.description,
+    zone: g.zone,
+    coverage: g.currentCoverage != null ? Math.round(g.currentCoverage) : 0,
+    target_coverage: g.targetCoverage,
+    recommendation: g.recommendation,
     detected_at: g.detectedAt,
   }
 }
@@ -140,4 +140,14 @@ export async function createEvent(body) {
   }
   const { data } = await api.post('/api/planning/events', payload)
   return transformEvent(data.data ?? data)
+}
+
+export async function getPredictions(params = {}) {
+  const { data } = await api.get('/api/planning/predictions', { params })
+  return data.data ?? data
+}
+
+export async function getHotspots() {
+  const { data } = await api.get('/api/planning/hotspots')
+  return data.data ?? data
 }

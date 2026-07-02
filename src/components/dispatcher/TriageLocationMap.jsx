@@ -16,19 +16,19 @@ const MAP_TILES = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}
 const RWANDA_CENTER = [-1.9441, 30.0619]
 
 /** Auto-zoom/pan to the most precise available location */
-function MapAutoFit({ roughPos, precisePos, manualPos }) {
+function MapAutoFit({ roughPos, precisePos, manualPos, districtCenter }) {
   const map = useMap()
   const prev = useRef(null)
 
   useEffect(() => {
-    const target = precisePos || manualPos || roughPos
+    const target = precisePos || manualPos || roughPos || districtCenter
     if (!target) return
     const key = target.join(',')
     if (key === prev.current) return
     prev.current = key
-    const zoom = precisePos ? 16 : manualPos ? 15 : 12
+    const zoom = precisePos ? 16 : manualPos ? 15 : roughPos ? 12 : 11
     map.flyTo(target, zoom, { duration: 0.8 })
-  }, [map, roughPos, precisePos, manualPos])
+  }, [map, roughPos, precisePos, manualPos, districtCenter])
 
   useEffect(() => {
     const t = setTimeout(() => map.invalidateSize(), 0)
@@ -64,6 +64,19 @@ function makeIcon(color, label) {
   })
 }
 
+function makeDistrictIcon() {
+  return L.divIcon({
+    html: `<div style="
+      width:32px;height:32px;display:flex;align-items:center;justify-content:center;
+      background:#879D1F;border:2px solid #fff;border-radius:6px;
+      box-shadow:0 2px 8px rgba(0,0,0,0.35);
+      font-size:8px;font-weight:800;color:#fff;font-family:monospace;letter-spacing:0.04em;
+    ">DIST</div>`,
+    className: '',
+    iconAnchor: [16, 16],
+  })
+}
+
 const GPS_STATES = {
   idle: null,
   sending: 'Sending...',
@@ -72,10 +85,10 @@ const GPS_STATES = {
   error: 'SMS failed — retry?',
 }
 
-export default function TriageLocationMap({ caller, onLocationChange }) {
+export default function TriageLocationMap({ caller, onLocationChange, districtCenter }) {
   const roughPos = useMemo(
     () => (caller?.rough_lat && caller?.rough_lng ? [caller.rough_lat, caller.rough_lng] : null),
-    [caller?.rough_lat, caller?.rough_lng], // eslint-disable-line react-hooks/exhaustive-deps
+    [caller],
   )
 
   const [precisePos, setPrecisePos] = useState(null)
@@ -91,8 +104,9 @@ export default function TriageLocationMap({ caller, onLocationChange }) {
     ? 'TELECOM_ROUGH'
     : null
 
-  const gpsIcon = useMemo(() => makeIcon('var(--location-precise)', 'GPS'), [])
-  const manualIcon = useMemo(() => makeIcon('var(--location-manual)', 'PIN'), [])
+  const gpsIcon      = useMemo(() => makeIcon('var(--location-precise)', 'GPS'), [])
+  const manualIcon   = useMemo(() => makeIcon('var(--location-manual)', 'PIN'), [])
+  const districtIcon = useMemo(() => makeDistrictIcon(), [])
 
   useEffect(() => {
     const pos = precisePos || manualPos || roughPos
@@ -249,7 +263,7 @@ export default function TriageLocationMap({ caller, onLocationChange }) {
             attribution='&copy; <a href="https://carto.com/">CARTO</a>'
           />
           <RwandaBoundsEnforcer />
-          <MapAutoFit roughPos={roughPos} precisePos={precisePos} manualPos={manualPos} />
+          <MapAutoFit roughPos={roughPos} precisePos={precisePos} manualPos={manualPos} districtCenter={districtCenter} />
           <MapClickHandler onPinDrop={handlePinDrop} />
 
           {roughPos && (
@@ -284,6 +298,11 @@ export default function TriageLocationMap({ caller, onLocationChange }) {
           )}
 
           {manualPos && <Marker position={manualPos} icon={manualIcon} />}
+
+          {/* District center pin — shown when dispatcher selects a district */}
+          {districtCenter && !precisePos && !manualPos && (
+            <Marker position={districtCenter} icon={districtIcon} />
+          )}
         </MapContainer>
 
         {/* Coord readout */}

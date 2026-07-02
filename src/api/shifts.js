@@ -11,6 +11,7 @@ function transform(s) {
     shift_end: s.shiftEnd,
     status: s.status,
     role_on_shift: s.roleOnShift,
+    handover_notes: s.handoverNotes ?? null,
   }
 }
 
@@ -38,4 +39,14 @@ export async function startShift(body) {
 export async function endShift(id) {
   const { data } = await api.patch(`/api/shifts/${id}/end`)
   return transform(data.data ?? data)
+}
+
+export async function saveShiftNotes(id, notes) {
+  const { data } = await api.patch(`/api/shifts/${id}/notes`, { notes })
+  return transform(data.data ?? data)
+}
+
+export async function listAllActiveShifts() {
+  const { data } = await api.get('/api/shifts/active')
+  return (data.data ?? data).map(transform)
 }

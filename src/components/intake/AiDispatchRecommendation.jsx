@@ -2,7 +2,15 @@ import { Bot } from 'lucide-react'
 import { IntakePanel, PanelHeader, StatusPill } from './IntakeUi'
 import FieldLabel from '../ui/FieldLabel'
 
+const THREAT_COLOR = {
+  CRITICAL: 'var(--status-critical)',
+  HIGH:     'var(--status-high)',
+  MEDIUM:   'var(--status-medium)',
+  LOW:      'var(--status-low)',
+}
+
 export default function AiDispatchRecommendation({ data }) {
+  const threatColor = THREAT_COLOR[(data.threat ?? '').toUpperCase()] ?? 'var(--status-medium)'
   return (
     <IntakePanel className="p-4 md:p-5">
       <PanelHeader
@@ -14,7 +22,7 @@ export default function AiDispatchRecommendation({ data }) {
       <div className="rounded-lg border border-(--border-subtle) bg-(--bg-input) p-3.5 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <FieldLabel>Threat assessment</FieldLabel>
-          <StatusPill label={data.threat} color="var(--status-medium)" />
+          <StatusPill label={data.threat} color={threatColor} />
         </div>
 
         <div>

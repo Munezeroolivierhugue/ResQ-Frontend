@@ -39,3 +39,8 @@ export async function linkIncident(sessionId, incidentId) {
   const { data } = await api.patch(`/api/calls/${sessionId}/link-incident`, { incidentId })
   return transform(data.data ?? data)
 }
+
+export async function recordOutcome(sessionId, outcome) {
+  const { data } = await api.patch(`/api/calls/${sessionId}/outcome`, { outcome })
+  return transform(data.data ?? data)
+}

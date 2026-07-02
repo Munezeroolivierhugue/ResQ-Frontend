@@ -14,7 +14,9 @@ import {
 } from 'lucide-react'
 import SidebarToggle from './SidebarToggle'
 import { useSidebarClasses } from '../../hooks/useSidebarClasses'
-import { logout } from '../../utils/authSession'
+import { logout, getRefreshToken } from '../../utils/authSession'
+import { logoutApi } from '../../api/auth'
+import { disconnect } from '../../lib/wsClient'
 import { listUsers } from '../../api/users'
 import { listSecurityEvents } from '../../api/admin'
 
@@ -122,8 +124,11 @@ export default function AdminSidebar({ mobileOpen, onClose }) {
   }, [])
 
   const handleLogout = () => {
+    const refreshToken = getRefreshToken()
     logout()
+    disconnect()
     navigate('/login', { replace: true })
+    if (refreshToken) logoutApi(refreshToken).catch(() => {})
   }
 
   return (

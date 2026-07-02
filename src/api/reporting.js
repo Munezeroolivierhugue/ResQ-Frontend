@@ -122,3 +122,13 @@ export async function createResourceRequest(body) {
   const { data } = await api.post('/api/reporting/resource-requests', payload)
   return transformResourceRequest(data.data ?? data)
 }
+
+export async function listPatterns() {
+  const { data } = await api.get('/api/reporting/patterns')
+  return data.data ?? data
+}
+
+export async function listModels() {
+  const { data } = await api.get('/api/reporting/models')
+  return data.data ?? data
+}

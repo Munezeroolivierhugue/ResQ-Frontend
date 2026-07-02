@@ -24,6 +24,8 @@ import OpsManagerMissedCallsPanel from '../../components/ops-manager/OpsManagerM
 import DispatchUnitsModal from '../../components/ops-manager/DispatchUnitsModal'
 import { getOpsManagerDistrict } from '../../utils/opsManagerDistrict'
 import { mockBackupRequests } from '../../data/mockBackupRequests'
+import { listVehicles } from '../../api/vehicles'
+import { listIncidents } from '../../api/incidents'
 import { mockVehicles } from '../../data/mockVehicles'
 import { mockIncidents } from '../../data/mockIncidents'
 import { mockAuditLogs } from '../../data/mockAuditLogs'
@@ -38,7 +40,7 @@ function timeAgo(isoString) {
   return `${Math.floor(diffMin / 60)}h ago`
 }
 
-function BackupRequestsPanel() {
+function BackupRequestsPanel({ vehicles, incidents }) {
   const [requests, setRequests] = useState(() => [...mockBackupRequests])
   const [dispatchTarget, setDispatchTarget] = useState(null)
   const [dispatchToast, setDispatchToast] = useState(null)
@@ -64,8 +66,8 @@ function BackupRequestsPanel() {
   }
 
   const openDispatch = (backup) => {
-    const reqVehicle = mockVehicles.find((v) => v.vehicle_id === backup.requesting_unit_id || v.id === backup.requesting_unit_id)
-    const incData = mockIncidents.find((i) => i.incident_id === backup.incident_id)
+    const reqVehicle = vehicles.find((v) => v.vehicle_id === backup.requesting_unit_id || v.id === backup.requesting_unit_id)
+    const incData = incidents.find((i) => i.incident_id === backup.incident_id)
     setDispatchTarget({ backup, vehicle: reqVehicle, incData })
   }
 
@@ -112,8 +114,8 @@ function BackupRequestsPanel() {
       ) : (
         <div>
           {requests.map((req) => {
-            const reqVehicle = mockVehicles.find((v) => v.vehicle_id === req.requesting_unit_id || v.id === req.requesting_unit_id)
-            const incData = mockIncidents.find((i) => i.incident_id === req.incident_id)
+            const reqVehicle = vehicles.find((v) => v.vehicle_id === req.requesting_unit_id || v.id === req.requesting_unit_id)
+            const incData = incidents.find((i) => i.incident_id === req.incident_id)
             return (
               <div
                 key={req.backup_id}
@@ -181,6 +183,14 @@ export default function OpsManagerDashboard() {
   // Mutual Aid Modals state
   const [reviewingEscalation, setReviewingEscalation] = useState(null)
   const [reviewingOffer, setReviewingOffer] = useState(null)
+
+  const [vehicles, setVehicles] = useState(() => [...mockVehicles])
+  const [incidents, setIncidents] = useState(() => [...mockIncidents])
+
+  useEffect(() => {
+    listVehicles().then(setVehicles).catch(() => {})
+    listIncidents().then(setIncidents).catch(() => {})
+  }, [])
 
   useEffect(() => {
     setShowBanner(!handoverBannerDismissed && !handoverRead)
@@ -389,7 +399,7 @@ export default function OpsManagerDashboard() {
             </Link>
           </div>
           <OpsManagerMissedCallsPanel />
-          <BackupRequestsPanel />
+          <BackupRequestsPanel vehicles={vehicles} incidents={incidents} />
         </div>
       </div>
 

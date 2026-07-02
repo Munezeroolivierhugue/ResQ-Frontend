@@ -30,7 +30,11 @@ api.interceptors.response.use(
     const original = error.config
     const status = error.response?.status
 
-    if (status === 401 && !original._retry) {
+    // MFA endpoints use 401 for wrong codes (not JWT expiry) — never retry them
+    const url = original?.url ?? ''
+    const isMfaEndpoint = url.includes('/api/auth/mfa/')
+
+    if (status === 401 && !original._retry && !isMfaEndpoint) {
       original._retry = true
 
       if (_refreshing) {

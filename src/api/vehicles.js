@@ -34,13 +34,13 @@ export async function getVehicle(id) {
 }
 
 export async function updateVehicleStatus(id, status, lat, lng) {
-  const body = { status }
-  if (lat != null) body.lat = lat
-  if (lng != null) body.lng = lng
-  const { data } = await api.patch(`/api/vehicles/${id}/status`, body)
+  const params = { status }
+  if (lat != null) params.lat = lat
+  if (lng != null) params.lng = lng
+  const { data } = await api.patch(`/api/vehicles/${id}/status`, null, { params })
   return transform(data.data ?? data)
 }
 
 export async function recordGpsPing(vehicleId, lat, lng) {
-  await api.post(`/api/vehicles/${vehicleId}/gps`, { lat, lng })
+  await api.post(`/api/vehicles/${vehicleId}/gps`, null, { params: { lat, lng } })
 }

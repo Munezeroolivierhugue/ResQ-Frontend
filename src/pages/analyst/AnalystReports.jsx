@@ -50,6 +50,7 @@ const QUICK_RANGES = ['Today', '7 Days', '30 Days', 'Quarter', 'Year', 'Custom']
 
 export default function AnalystReports() {
   const [range, setRange] = useState('30 Days')
+  const [reportType, setReportType] = useState('Response Time Performance')
   const [chartType, setChartType] = useState('line')
   const [geo, setGeo] = useState('All Rwanda')
   const [metrics, setMetrics] = useState(() =>
@@ -72,6 +73,292 @@ export default function AnalystReports() {
   function showToast(msg) {
     setToast(msg)
     setTimeout(() => setToast(''), 3000)
+  }
+
+  function exportCSV() {
+    const reportName = reportNameRef.current?.value || 'Report'
+    const selectedMetrics = ANALYST_REPORT_METRICS.filter((m) => metrics[m.id]).map((m) => m.label)
+
+    const escape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const rows = [
+      ['RESQ Analytics Report', reportName],
+      ['Period', range],
+      ['Scope', geo],
+      ['Metrics', selectedMetrics.join('; ')],
+      ['Generated', new Date().toLocaleString()],
+      [],
+      ['SUMMARY KPIs'],
+      ['Metric', 'Value'],
+      ['Avg Response Time', '7.4m'],
+      ['Within Target', '88%'],
+      ['Dispatch Accuracy', '91%'],
+      ['Total Incidents', '247'],
+      [],
+      ['DISTRICT BREAKDOWN'],
+      ['District', 'Avg Response', 'Within Target', 'Incident Count', 'vs Last Month'],
+      ...ANALYST_DISTRICT_BREAKDOWN.map((r) => [r.district, r.avg, r.target, r.count, r.vs]),
+      [],
+      ['RESPONSE TIME TREND (LAST 30 DAYS)'],
+      ['Day', 'Nyarugenge (min)', 'Kicukiro (min)', 'Gasabo (min)'],
+      ...ANALYST_RESPONSE_TREND.map((r) => [r.day, r.nyarugenge.toFixed(1), r.kicukiro.toFixed(1), r.gasabo.toFixed(1)]),
+    ]
+
+    const csv = rows.map((row) => row.map(escape).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${reportName.replace(/\s+/g, '_')}_${range.replace(/\s+/g, '_')}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    showToast('CSV exported successfully.')
+  }
+
+  function exportPDF() {
+    const currentUser = getCurrentUser()
+    const reportName = reportNameRef.current?.value || 'RESQ Analytics Report'
+    const selectedMetrics = ANALYST_REPORT_METRICS.filter((m) => metrics[m.id]).map((m) => m.label)
+    const generatorName = currentUser?.full_name || currentUser?.email || 'RESQ Analyst'
+    const generatorRole = currentUser?.role ? currentUser.role.replace(/_/g, ' ') : 'Analyst'
+    const reportId = 'RPT-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2, 6).toUpperCase()
+    const now = new Date()
+    // RNP logo from public folder — absolute URL so the print window can load it
+    const rnpLogoUrl = window.location.origin + '/Rwanda_National_Police.png'
+
+    // Compute actual date range from selected period
+    const fmtDate = (d) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    let dateRangeLabel = range
+    if (range === 'Today') {
+      dateRangeLabel = fmtDate(now)
+    } else {
+      const days = range === '7 Days' ? 7 : range === '30 Days' ? 30 : range === 'Quarter' ? 91 : range === 'Year' ? 365 : null
+      if (days) {
+        const from = new Date(now)
+        from.setDate(from.getDate() - days)
+        dateRangeLabel = `${fmtDate(from)} – ${fmtDate(now)}`
+      }
+    }
+
+    const tableRows = ANALYST_DISTRICT_BREAKDOWN.map((r, i) => `
+      <tr style="background:${i % 2 === 1 ? '#f8fafc' : '#ffffff'}">
+        <td style="padding:10px 14px;font-weight:600;color:#1a202c;border-bottom:1px solid #e2e8f0">${r.district}</td>
+        <td style="padding:10px 14px;font-family:monospace;color:#2563eb;border-bottom:1px solid #e2e8f0">${r.avg}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0">${r.target}</td>
+        <td style="padding:10px 14px;font-family:monospace;border-bottom:1px solid #e2e8f0">${r.count}</td>
+        <td style="padding:10px 14px;font-family:monospace;font-weight:700;color:${r.improved === true ? '#059669' : r.improved === false ? '#dc2626' : '#6b7280'};border-bottom:1px solid #e2e8f0">${r.vs}</td>
+      </tr>`).join('')
+
+    // Compute start date for trend based on selected range
+    const trendDayCount = range === 'Today' ? 0 : range === '7 Days' ? 7 : range === 'Quarter' ? 91 : range === 'Year' ? 365 : 30
+    const trendStart = new Date(now)
+    trendStart.setDate(trendStart.getDate() - trendDayCount)
+    const fmtDay = (d) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+
+    const trendRows = ANALYST_RESPONSE_TREND.slice(0, 10).map((r, i) => {
+      const date = new Date(trendStart)
+      date.setDate(date.getDate() + i)
+      return `
+      <tr>
+        <td style="padding:7px 12px;border-bottom:1px solid #f1f5f9;color:#374151;font-weight:500">${fmtDay(date)}</td>
+        <td style="padding:7px 12px;font-family:monospace;color:#2196C8;text-align:center;border-bottom:1px solid #f1f5f9">${r.nyarugenge.toFixed(1)}m</td>
+        <td style="padding:7px 12px;font-family:monospace;color:#879D1F;text-align:center;border-bottom:1px solid #f1f5f9">${r.kicukiro.toFixed(1)}m</td>
+        <td style="padding:7px 12px;font-family:monospace;color:#3DAA6A;text-align:center;border-bottom:1px solid #f1f5f9">${r.gasabo.toFixed(1)}m</td>
+      </tr>`
+    }).join('')
+
+    // Incident-type breakdown rows for the PDF table
+    const INCIDENT_ROWS = [
+      { type: 'Medical Emergency',      avg: '6.8m', target: '< 8 min',  status: 'CLEARED' },
+      { type: 'Road Traffic (RTA)',      avg: '7.4m', target: '< 8 min',  status: 'CLEARED' },
+      { type: 'Fire Outbreak',           avg: '5.2m', target: '< 6 min',  status: 'CLEARED' },
+      { type: 'Security / Disturbance',  avg: '8.6m', target: '< 8 min',  status: 'MISSED'  },
+      { type: 'Medical Emergency',       avg: '7.9m', target: '< 8 min',  status: 'PENDING' },
+      { type: 'Road Traffic (RTA)',       avg: '8.1m', target: '< 8 min',  status: 'MISSED'  },
+      { type: 'Fire Outbreak',            avg: '5.8m', target: '< 6 min',  status: 'CLEARED' },
+      { type: 'Security / Disturbance',   avg: '7.2m', target: '< 8 min',  status: 'CLEARED' },
+      { type: 'Disaster Response',        avg: '11.4m', target: '< 10 min', status: 'MISSED' },
+      { type: 'Medical Emergency',        avg: '6.3m', target: '< 8 min',  status: 'CLEARED' },
+    ]
+
+    const STATUS_STYLES = {
+      CLEARED: { bg: 'rgba(61,170,106,0.15)',  color: '#3DAA6A', dot: '#3DAA6A' },
+      PENDING: { bg: 'rgba(212,160,23,0.15)',  color: '#D4A017', dot: '#D4A017' },
+      MISSED:  { bg: 'rgba(185,56,47,0.15)',   color: '#B9382F', dot: '#B9382F' },
+    }
+
+    const incidentTableRows = INCIDENT_ROWS.map((r, i) => {
+      const s = STATUS_STYLES[r.status] || STATUS_STYLES.PENDING
+      return `
+      <tr style="background:${i % 2 === 1 ? '#f8fafc' : '#ffffff'}">
+        <td style="padding:10px 14px;font-family:monospace;color:#6b7280;font-weight:600;border-bottom:1px solid #e2e8f0;text-align:center">${String(i + 1).padStart(2, '0')}</td>
+        <td style="padding:10px 14px;font-weight:600;color:#1a202c;border-bottom:1px solid #e2e8f0">${r.type}</td>
+        <td style="padding:10px 14px;font-family:monospace;color:#2196C8;font-weight:700;border-bottom:1px solid #e2e8f0">${r.avg}</td>
+        <td style="padding:10px 14px;color:#374151;border-bottom:1px solid #e2e8f0">${r.target}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #e2e8f0">
+          <span style="display:inline-flex;align-items:center;gap:5px;background:${s.bg};color:${s.color};font-size:10px;font-weight:700;padding:3px 10px;border-radius:999px;letter-spacing:0.05em">
+            <span style="width:6px;height:6px;border-radius:50%;background:${s.dot};display:inline-block"></span>
+            ${r.status}
+          </span>
+        </td>
+      </tr>`
+    }).join('')
+
+    const html = `<!DOCTYPE html>
+<html lang="en"><head>
+  <meta charset="UTF-8">
+  <title>${reportName} — RNP RESQ</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',Arial,sans-serif;color:#1a202c;background:#fff;font-size:13px}
+    @media print{
+      body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      @page{margin:8mm 10mm}
+      .no-break{page-break-inside:avoid}
+    }
+  </style>
+</head><body>
+
+<!-- ═══ RNP HEADER ═══ -->
+<div style="background:linear-gradient(135deg,#031632 0%,#010c1f 100%);color:#fff;padding:22px 32px;display:flex;align-items:center;gap:20px">
+  <img src="${rnpLogoUrl}" style="width:68px;height:68px;object-fit:contain;flex-shrink:0" alt="Rwanda National Police Logo">
+  <div style="flex:1">
+    <div style="font-size:10px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:#b8c74e;margin-bottom:5px">Rwanda National Police · Emergency Response Division</div>
+    <div style="font-size:22px;font-weight:800;letter-spacing:0.01em;margin-bottom:3px">RESQ Analytics Report</div>
+    <div style="font-size:12px;color:rgba(183,199,78,0.75)">Intelligence &amp; Performance Monitoring System — Official Document</div>
+  </div>
+  <div style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:8px;padding:10px 16px;text-align:center;min-width:130px">
+    <div style="font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#b8c74e;margin-bottom:4px">Document Status</div>
+    <div style="font-size:13px;font-weight:700;color:#fff">&#10003; Official Report</div>
+    <div style="font-size:9px;color:rgba(183,199,78,0.75);margin-top:3px">${reportId}</div>
+  </div>
+</div>
+
+<!-- ═══ META BAR ═══ -->
+<div style="background:#f0f4f8;border-bottom:3px solid #879D1F;padding:11px 32px;display:flex;align-items:center;flex-wrap:wrap;gap:0">
+  <div style="font-size:11px;color:#374151;padding-right:16px;border-right:1px solid #cbd5e0;margin-right:16px"><strong style="color:#031632">Report:</strong> ${reportName}</div>
+  <div style="font-size:11px;color:#374151;padding-right:16px;border-right:1px solid #cbd5e0;margin-right:16px"><strong style="color:#031632">Period:</strong> ${dateRangeLabel}</div>
+  <div style="font-size:11px;color:#374151;padding-right:16px;border-right:1px solid #cbd5e0;margin-right:16px"><strong style="color:#031632">Scope:</strong> ${geo}</div>
+  <div style="font-size:11px;color:#374151;padding-right:16px;border-right:1px solid #cbd5e0;margin-right:16px"><strong style="color:#031632">Generated:</strong> ${now.toLocaleString('en-GB', { dateStyle: 'long', timeStyle: 'short' })}</div>
+  <div style="font-size:11px;color:#374151"><strong style="color:#031632">Prepared by:</strong> ${generatorName}</div>
+  <div style="margin-left:auto;background:#879D1F;color:#fff;font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;padding:5px 12px;border-radius:4px">${reportType}</div>
+</div>
+
+<!-- ═══ CONTENT ═══ -->
+<div style="padding:26px 32px">
+
+  <!-- KPI Cards -->
+  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#031632;border-bottom:2px solid #879D1F;padding-bottom:6px;margin-bottom:14px" class="no-break">Summary KPIs — ${dateRangeLabel}</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:26px" class="no-break">
+    <div style="background:rgba(33,150,200,0.10);border-left:4px solid #2196C8;border-radius:8px;padding:14px">
+      <div style="font-size:28px;font-weight:800;font-family:monospace;color:#2196C8;line-height:1;margin-bottom:5px">7.4m</div>
+      <div style="font-size:11px;font-weight:600;color:#1a7aa8">Avg Response Time</div>
+      <div style="font-size:10px;color:#2196C8;margin-top:2px">Target: &lt; 8 min</div>
+    </div>
+    <div style="background:rgba(61,170,106,0.12);border-left:4px solid #3DAA6A;border-radius:8px;padding:14px">
+      <div style="font-size:28px;font-weight:800;font-family:monospace;color:#3DAA6A;line-height:1;margin-bottom:5px">88%</div>
+      <div style="font-size:11px;font-weight:600;color:#2d8050">Within Target</div>
+      <div style="font-size:10px;color:#3DAA6A;margin-top:2px">Threshold: 85%</div>
+    </div>
+    <div style="background:rgba(135,157,31,0.12);border-left:4px solid #879D1F;border-radius:8px;padding:14px">
+      <div style="font-size:28px;font-weight:800;font-family:monospace;color:#879D1F;line-height:1;margin-bottom:5px">91%</div>
+      <div style="font-size:11px;font-weight:600;color:#6a7b17">Dispatch Accuracy</div>
+      <div style="font-size:10px;color:#879D1F;margin-top:2px">vs 89% last period</div>
+    </div>
+    <div style="background:rgba(212,160,23,0.12);border-left:4px solid #D4A017;border-radius:8px;padding:14px">
+      <div style="font-size:28px;font-weight:800;font-family:monospace;color:#D4A017;line-height:1;margin-bottom:5px">247</div>
+      <div style="font-size:11px;font-weight:600;color:#a07c12">Total Incidents</div>
+      <div style="font-size:10px;color:#D4A017;margin-top:2px">${geo}</div>
+    </div>
+  </div>
+
+  <!-- Incident Breakdown -->
+  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#031632;border-bottom:2px solid #879D1F;padding-bottom:6px;margin-bottom:12px" class="no-break">Incident Performance Breakdown — ${dateRangeLabel}</div>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:22px;font-size:12px" class="no-break">
+    <thead>
+      <tr style="background:#031632;color:#fff">
+        <th style="padding:10px 14px;text-align:center;font-size:11px;font-weight:600;letter-spacing:0.04em;width:48px">#</th>
+        <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600">Incident Type</th>
+        <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600">Avg Response Time</th>
+        <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600">Target</th>
+        <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600">Status</th>
+      </tr>
+    </thead>
+    <tbody>${incidentTableRows}</tbody>
+  </table>
+
+  <!-- Response Trend (first 10 days) -->
+  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#031632;border-bottom:2px solid #879D1F;padding-bottom:6px;margin-bottom:12px" class="no-break">Response Time Trend — First 10 Days of Period</div>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:22px;font-size:12px" class="no-break">
+    <thead>
+      <tr style="background:#031632;color:#fff">
+        <th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600">Day</th>
+        <th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:600;color:#6fcae8">Nyarugenge</th>
+        <th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:600;color:#c8d865">Kicukiro</th>
+        <th style="padding:8px 12px;text-align:center;font-size:11px;font-weight:600;color:#7dd4a8">Gasabo</th>
+      </tr>
+    </thead>
+    <tbody>${trendRows}</tbody>
+  </table>
+
+  <!-- SIGNATURE / AUTHORIZATION -->
+  <div style="border-top:2px solid #879D1F;padding-top:20px;margin-top:8px" class="no-break">
+    <div style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#031632;margin-bottom:18px">Authorization &amp; Certification</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;margin-bottom:20px">
+      <div>
+        <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:28px">Prepared By (Analyst Name)</div>
+        <div style="border-bottom:1.5px solid #374151;margin-bottom:5px"></div>
+        <div style="font-size:11px;color:#031632;font-weight:600">${generatorName}</div>
+        <div style="font-size:10px;color:#6b7280">${generatorRole}</div>
+      </div>
+      <div>
+        <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:28px">Signature</div>
+        <div style="border-bottom:1.5px solid #374151;margin-bottom:5px"></div>
+        <div style="font-size:10px;color:#9ca3af;font-style:italic">Sign above</div>
+      </div>
+      <div>
+        <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:28px">Date Signed</div>
+        <div style="border-bottom:1.5px solid #374151;margin-bottom:5px"></div>
+        <div style="font-size:11px;color:#374151">${now.toLocaleDateString('en-GB', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:24px;align-items:flex-start">
+      <div>
+        <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:28px">Reviewing Officer / Supervisor</div>
+        <div style="border-bottom:1.5px solid #374151;margin-bottom:5px"></div>
+        <div style="font-size:10px;color:#9ca3af;font-style:italic">Print name and sign</div>
+      </div>
+      <div>
+        <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:28px">Reviewer Signature &amp; Date</div>
+        <div style="border-bottom:1.5px solid #374151;margin-bottom:5px"></div>
+        <div style="font-size:10px;color:#9ca3af;font-style:italic">Sign and date above</div>
+      </div>
+      <div style="text-align:center;min-width:110px">
+        <div style="font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Official Stamp / Seal</div>
+        <div style="border:2px dashed #cbd5e0;border-radius:8px;height:72px;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:9px;text-transform:uppercase;letter-spacing:0.1em;font-weight:600;text-align:center;line-height:1.4">Place<br>Official<br>Stamp Here</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div style="margin-top:22px;padding-top:12px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center">
+    <div style="font-size:10px;color:#9ca3af;line-height:1.6">
+      RESQ Analytics System · Rwanda National Police · Emergency Response Division<br>
+      Report ID: ${reportId} · Generated ${now.toISOString()} · Scope: ${geo}
+    </div>
+    <div style="background:rgba(61,170,106,0.12);border:1px solid #3DAA6A;border-radius:4px;padding:4px 10px;color:#3DAA6A;font-size:10px;font-weight:700;white-space:nowrap">
+      &#10003; Valid RNP Document
+    </div>
+  </div>
+
+</div>
+<script>window.onload=function(){window.print();}<\/script>
+</body></html>`
+
+    const win = window.open('', '_blank')
+    if (!win) { showToast('Allow pop-ups to export PDF.'); return }
+    win.document.write(html)
+    win.document.close()
+    showToast('Print dialog opened — save as PDF.')
   }
 
   function generateReport() {
@@ -149,12 +436,12 @@ export default function AnalystReports() {
           </label>
           <label className="dispatcher-field">
             <span className="text-[12px] font-medium">Report type</span>
-            <select className="dispatcher-input h-10" defaultValue="Response Time Performance">
+            <select className="dispatcher-input h-10" value={reportType} onChange={(e) => setReportType(e.target.value)}>
               <option>Incident Analysis</option>
               <option>Resource Utilization</option>
               <option>Response Time Performance</option>
               <option>Coverage Analysis</option>
-              <option>Unit & Officer Performance</option>
+              <option>Unit &amp; Officer Performance</option>
               <option>AI Model Performance</option>
               <option>Cross-District Comparison</option>
               <option>Executive Summary</option>
@@ -346,15 +633,15 @@ export default function AnalystReports() {
         </div>
       </div>
 
-      <aside className="w-[240px] shrink-0 border-l border-(--border) p-4 sticky top-0 self-start">
+      <aside className="w-[240px] shrink-0 border-l border-(--border) p-4 sticky top-0 self-start overflow-y-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
         <h3 className="font-semibold text-[13px] m-0 mb-4">Export & Share</h3>
-        <button type="button" className="dispatcher-btn-primary w-full mb-2 inline-flex items-center justify-center gap-2">
+        <button type="button" className="dispatcher-btn-primary w-full mb-2 inline-flex items-center justify-center gap-2" onClick={exportPDF}>
           <Download size={14} />
           Export PDF
         </button>
-        <button type="button" className="dispatcher-btn-ghost w-full mb-2 inline-flex items-center justify-center gap-2">
+        <button type="button" className="dispatcher-btn-ghost w-full mb-2 inline-flex items-center justify-center gap-2" onClick={exportCSV}>
           <Table size={14} />
-          Export Excel
+          Export CSV / Excel
         </button>
         <button type="button" className="dispatcher-btn-ghost w-full mb-2 inline-flex items-center justify-center gap-2">
           <UserPlus size={14} />
