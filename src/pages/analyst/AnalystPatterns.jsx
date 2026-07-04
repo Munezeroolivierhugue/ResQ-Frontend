@@ -79,6 +79,39 @@ export default function AnalystPatterns() {
   const hourMax = Math.max(...ANALYST_HOUR_DATA.map((d) => d.n))
   const dayMax = Math.max(...ANALYST_DAY_DATA.map((d) => d.n))
 
+  function exportSpatialCSV() {
+    const escape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const rows = [
+      ['RESQ — Incident Pattern Analysis Export'],
+      ['Period', period],
+      ['Generated', new Date().toLocaleString()],
+      [],
+      ['TOP HOTSPOTS'],
+      ['Rank', 'Zone', 'Incident Count', 'Trend', 'Change vs Prior Period'],
+      ...ANALYST_TOP_HOTSPOTS.map((h) => [h.rank, h.zone, h.count, h.trend, h.change]),
+      [],
+      ['HEATMAP ZONES'],
+      ['Zone', 'Latitude', 'Longitude', 'Density Level'],
+      ...ANALYST_HEATMAP_ZONES.map((z) => [z.name, z.lat, z.lng, z.level]),
+      [],
+      ['INCIDENTS BY HOUR OF DAY'],
+      ['Hour', 'Incident Count'],
+      ...ANALYST_HOUR_DATA.map((d) => [d.h + ':00', d.n]),
+      [],
+      ['INCIDENTS BY DAY OF WEEK'],
+      ['Day', 'Incident Count'],
+      ...ANALYST_DAY_DATA.map((d) => [d.d, d.n]),
+    ]
+    const csv = rows.map((row) => row.map(escape).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `incident_patterns_${period.replace(/\s+/g, '_')}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="portal-page flex flex-col gap-4 min-w-[1024px]">
       <AnalystPageHeader
@@ -184,9 +217,9 @@ export default function AnalystPatterns() {
                   <Play size={12} />
                   Animate
                 </button>
-                <button type="button" className="dispatcher-btn-ghost text-[11px] h-8 px-2 inline-flex items-center gap-1">
+                <button type="button" className="dispatcher-btn-ghost text-[11px] h-8 px-2 inline-flex items-center gap-1" onClick={exportSpatialCSV}>
                   <Download size={12} />
-                  Export
+                  Export CSV
                 </button>
               </div>
             </div>

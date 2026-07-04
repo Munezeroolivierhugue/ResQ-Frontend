@@ -1,3 +1,6 @@
+// PARTIAL INTEGRATION: getSeverityRules() wired to backend GET /api/triage/severity-rules.
+// severityEngine.js still uses this file as fallback when rules haven't been fetched yet.
+// Components should pre-fetch rules via src/api/triage.js and pass them to the engine.
 export const mockSeverityRules = [
   // RTA Rules
   {

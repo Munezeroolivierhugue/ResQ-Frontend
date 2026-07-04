@@ -55,19 +55,10 @@ export default function PlannerSettingsView() {
     >
       {section === 'profile' && (
         <SettingsProfileSection
-          initials="CU"
-          roleLabel="EMERGENCY PLANNER"
-          badge="PLN-0018"
-          defaultForm={{
-            name: 'Claudine Uwimana',
-            email: 'c.uwimana@resq.rw',
-            phone: '+250 788 334 221',
-            station: `${PLANNER_DISTRICT} Planning Office`,
-          }}
           shiftStats={[
             { label: 'District scope', value: PLANNER_DISTRICT },
-            { label: 'Plans this week', value: '7' },
-            { label: 'Model accuracy', value: '88%' },
+            { label: 'Plans this week', value: '—' },
+            { label: 'Model accuracy', value: '—' },
           ]}
         />
       )}

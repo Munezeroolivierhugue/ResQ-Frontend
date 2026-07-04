@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MapContainer, TileLayer, CircleMarker, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
@@ -60,14 +60,36 @@ function MapReady({ points }) {
   return null
 }
 
-export default function FRNavigation() {
-  const navigate = useNavigate()
-  const markOnScene = useFieldResponderStore((s) => s.markOnScene)
-  const mapRef = useRef(null)
-  const a = FR_ASSIGNMENT
+// Rwanda center as a safe fallback when no GPS available
+const KIGALI_CENTER = [-1.9441, 30.0619]
 
-  const officerPos = useMemo(() => [a.current_lat, a.current_lng], [a.current_lat, a.current_lng])
-  const incidentPos = useMemo(() => [a.lat, a.lng], [a.lat, a.lng])
+export default function FRNavigation() {
+  const navigate    = useNavigate()
+  const markOnScene = useFieldResponderStore((s) => s.markOnScene)
+  const assignment  = useFieldResponderStore((s) => s.assignment)
+  const mapRef = useRef(null)
+
+  // Fallback to mock data only when there is no real assignment yet
+  const a = FR_ASSIGNMENT
+  const inc = assignment?.incident ?? null
+
+  // Officer position — prefer browser geolocation, fallback to Kigali center
+  const [officerCoords, setOfficerCoords] = useState(KIGALI_CENTER)
+  useEffect(() => {
+    if (!navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(
+      pos => setOfficerCoords([pos.coords.latitude, pos.coords.longitude]),
+      () => {},
+      { enableHighAccuracy: true, timeout: 5000 },
+    )
+  }, [])
+
+  // Incident position — use real if available, else mock
+  const incidentLat = inc?.lat ?? a.lat
+  const incidentLng = inc?.lng ?? a.lng
+
+  const officerPos  = useMemo(() => officerCoords, [officerCoords])
+  const incidentPos = useMemo(() => [incidentLat, incidentLng], [incidentLat, incidentLng])
   const routePoints = useMemo(
     () => buildRoutePoints(officerPos, incidentPos),
     [officerPos, incidentPos],
@@ -143,13 +165,17 @@ export default function FRNavigation() {
       <div className="fr-nav-top">
         <div className="fr-nav-incident-bar">
           <div className="fr-nav-incident-head">
-            <span className="fr-nav-incident-id font-mono">{a.id}</span>
-            <span className="fr-nav-severity-badge">{a.severity.toUpperCase()}</span>
+            <span className="fr-nav-incident-id font-mono">
+              {inc?.incident_ref ?? a.id}
+            </span>
+            <span className="fr-nav-severity-badge">
+              {(inc?.severity ?? a.severity).toUpperCase()}
+            </span>
           </div>
-          <p className="fr-nav-incident-type">{a.type}</p>
+          <p className="fr-nav-incident-type">{inc?.incident_type ?? a.type}</p>
           <p className="fr-nav-incident-location">
             <MapPin size={14} aria-hidden />
-            {a.location}
+            {inc ? `${inc.district ?? ''}${inc.sector ? ' / ' + inc.sector : ''}` || inc.address || 'En route' : a.location}
           </p>
         </div>
 
@@ -160,7 +186,9 @@ export default function FRNavigation() {
           </div>
           <p className="fr-nav-turn-sub">{a.turnSub}</p>
           <div className="fr-nav-turn-chips">
-            <span className="fr-nav-turn-chip fr-nav-turn-chip--eta font-mono">{a.eta_minutes} min</span>
+            <span className="fr-nav-turn-chip fr-nav-turn-chip--eta font-mono">
+              {assignment?.dispatch?.eta_minutes ?? a.eta_minutes} min
+            </span>
             <span className="fr-nav-turn-chip fr-nav-turn-chip--dist font-mono">{a.distanceKm} km</span>
           </div>
         </div>

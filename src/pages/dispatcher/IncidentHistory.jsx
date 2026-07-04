@@ -1,6 +1,36 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ChevronRight, ChevronLeft, Download, Search } from 'lucide-react'
-import { mockHistoryIncidents } from '../../data/mockIncidents'
+import { listIncidents } from '../../api/incidents'
+import { listDistricts } from '../../api/districts'
+
+const RANGE_OPTIONS = [
+  { value: 'all',   label: 'All Time' },
+  { value: '7d',    label: 'Last 7 Days' },
+  { value: '30d',   label: 'Last 30 Days' },
+  { value: 'month', label: 'This Month' },
+]
+
+function inRange(callTime, range) {
+  if (range === 'all' || !callTime) return true
+  const t = new Date(callTime)
+  const now = new Date()
+  if (range === '7d')    return t >= new Date(now - 7 * 86400000)
+  if (range === '30d')   return t >= new Date(now - 30 * 86400000)
+  if (range === 'month') return t.getFullYear() === now.getFullYear() && t.getMonth() === now.getMonth()
+  return true
+}
+
+function exportCsv(rows) {
+  const cols = ['incident_ref', 'severity', 'incident_type', 'district', 'sector', 'call_time', 'response_time_minutes', 'resolution_time_minutes', 'status']
+  const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+  const csv = [cols.join(','), ...rows.map((r) => cols.map((c) => esc(r[c])).join(','))].join('\n')
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `incident-history-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 const severityColor = { critical: '#E8354A', high: '#F07820', medium: '#D4A017', low: '#3DAA6A' }
 
@@ -14,17 +44,58 @@ function KpiCard({ label, value, sub }) {
   )
 }
 
+function fmtMinutes(m) {
+  if (m == null) return 'N/A'
+  return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`
+}
+
 export default function IncidentHistory() {
   const [search, setSearch] = useState('')
   const [page,   setPage]   = useState(1)
+  const [incidents, setIncidents] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [range, setRange] = useState('all')
+  const [typeFilter, setTypeFilter] = useState('All')
+  const [districtFilter, setDistrictFilter] = useState('All')
+  const [districts, setDistricts] = useState([])
   const perPage = 5
 
-  const data     = [...mockHistoryIncidents, ...mockHistoryIncidents]
-  const filtered = data.filter(i =>
-    !search || i.id.toLowerCase().includes(search.toLowerCase()) ||
-    i.type.toLowerCase().includes(search.toLowerCase()) || i.district.toLowerCase().includes(search.toLowerCase())
+  useEffect(() => {
+    listDistricts().then(setDistricts).catch(() => {})
+  }, [])
+
+  // District filter is a real backend query param; the rest filter client-side
+  useEffect(() => {
+    setLoading(true)
+    const params = { status: 'CLOSED' }
+    if (districtFilter !== 'All') params.districtId = districtFilter
+    listIncidents(params)
+      .then(setIncidents)
+      .catch(() => listIncidents().then(setIncidents).catch(() => {}))
+      .finally(() => setLoading(false))
+    setPage(1)
+  }, [districtFilter])
+
+  // Type options derived from the actual data so labels always match DB values
+  const typeOptions = ['All', ...Array.from(new Set(incidents.map(i => i.incident_type).filter(Boolean))).sort()]
+
+  const totalCount = incidents.length
+  const avgResponseMs = incidents.filter(i => i.response_time_minutes != null)
+  const avgResponse = avgResponseMs.length
+    ? Math.round(avgResponseMs.reduce((s, i) => s + i.response_time_minutes, 0) / avgResponseMs.length)
+    : null
+  const slaCount = avgResponseMs.filter(i => i.response_time_minutes <= 10).length
+  const slaPct = avgResponseMs.length ? Math.round((slaCount / avgResponseMs.length) * 100) : null
+
+  const filtered = incidents.filter(i =>
+    (!search ||
+      (i.incident_ref ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      (i.incident_type ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      (i.district ?? i.address ?? '').toLowerCase().includes(search.toLowerCase())) &&
+    (typeFilter === 'All' || i.incident_type === typeFilter) &&
+    inRange(i.call_time, range)
   )
-  const totalPages = Math.ceil(filtered.length / perPage)
+  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage))
   const paged      = filtered.slice((page - 1) * perPage, page * perPage)
 
   return (
@@ -35,16 +106,21 @@ export default function IncidentHistory() {
           <span className="dispatcher-eyebrow">Incident log</span>
           <h1 className="text-2xl font-bold m-0" style={{ fontFamily: 'var(--font-display)' }}>Incident History</h1>
         </div>
-        <button className="flex items-center gap-1.5 px-5 py-2.25 bg-transparent border border-(--border) text-(--text-primary) font-semibold text-[13px] rounded-lg cursor-pointer hover:bg-(--bg-elevated) hover:border-(--accent) transition-colors" style={{ fontFamily: 'var(--font-body)' }}>
+        <button
+          onClick={() => exportCsv(filtered)}
+          disabled={loading || filtered.length === 0}
+          className="flex items-center gap-1.5 px-5 py-2.25 bg-transparent border border-(--border) text-(--text-primary) font-semibold text-[13px] rounded-lg cursor-pointer hover:bg-(--bg-elevated) hover:border-(--accent) transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ fontFamily: 'var(--font-body)' }}
+        >
           <Download size={14} /> Export CSV
         </button>
       </div>
 
       <div className="flex gap-3 mb-5">
-        <KpiCard label="Total This Month"    value="247"  sub="↑ 12% vs last month" />
-        <KpiCard label="Avg Response Time"   value="8.4m" sub="Target: 10 min" />
-        <KpiCard label="Within SLA"          value="91%"  sub="↑ 3% vs last month" />
-        <KpiCard label="Avg Resolution Time" value="32m"  sub="All incident types" />
+        <KpiCard label="Total Closed" value={loading ? '…' : totalCount} />
+        <KpiCard label="Avg Response Time" value={loading ? '…' : (avgResponse != null ? `${avgResponse}m` : 'N/A')} sub="Target: 10 min" />
+        <KpiCard label="Within SLA" value={loading ? '…' : (slaPct != null ? `${slaPct}%` : 'N/A')} sub="≤ 10 min response" />
+        <KpiCard label="Incidents Shown" value={loading ? '…' : filtered.length} sub="Filtered results" />
       </div>
 
       <div className="bg-(--bg-surface) border border-(--border) rounded-xl px-4 py-3 mb-4">
@@ -58,16 +134,31 @@ export default function IncidentHistory() {
               style={{ fontFamily: 'var(--font-body)' }}
             />
           </div>
-          {[
-            { w: 'w-40',  opts: ['Last 30 Days', 'Last 7 Days', 'This Month', 'Custom Range'] },
-            { w: 'w-32', opts: ['All Types', 'Medical', 'Fire', 'Traffic', 'Security'] },
-            { w: 'w-32', opts: ['All Districts', 'Gasabo', 'Kicukiro', 'Nyarugenge'] },
-          ].map(({ w, opts }) => (
-            <select key={opts[0]} className={`h-10 ${w} bg-(--bg-input) border border-(--border) rounded-lg px-3 text-[13px] text-(--text-primary) outline-none appearance-none cursor-pointer`}
-              style={{ fontFamily: 'var(--font-body)' }}>
-              {opts.map(o => <option key={o}>{o}</option>)}
-            </select>
-          ))}
+          <select
+            className="h-10 w-40 bg-(--bg-input) border border-(--border) rounded-lg px-3 text-[13px] text-(--text-primary) outline-none appearance-none cursor-pointer"
+            style={{ fontFamily: 'var(--font-body)' }}
+            value={range}
+            onChange={e => { setRange(e.target.value); setPage(1) }}
+          >
+            {RANGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <select
+            className="h-10 w-32 bg-(--bg-input) border border-(--border) rounded-lg px-3 text-[13px] text-(--text-primary) outline-none appearance-none cursor-pointer"
+            style={{ fontFamily: 'var(--font-body)' }}
+            value={typeFilter}
+            onChange={e => { setTypeFilter(e.target.value); setPage(1) }}
+          >
+            {typeOptions.map(o => <option key={o} value={o}>{o === 'All' ? 'All Types' : o}</option>)}
+          </select>
+          <select
+            className="h-10 w-36 bg-(--bg-input) border border-(--border) rounded-lg px-3 text-[13px] text-(--text-primary) outline-none appearance-none cursor-pointer"
+            style={{ fontFamily: 'var(--font-body)' }}
+            value={districtFilter}
+            onChange={e => setDistrictFilter(e.target.value)}
+          >
+            <option value="All">All Districts</option>
+            {districts.map(d => <option key={d.district_id} value={d.district_id}>{d.name}</option>)}
+          </select>
         </div>
       </div>
 
@@ -81,39 +172,54 @@ export default function IncidentHistory() {
             </tr>
           </thead>
           <tbody>
-            {paged.map((inc, idx) => {
-              const c = severityColor[inc.severity] || '#44474D'
-              const withinSla = parseInt(inc.responseTime) <= parseInt(inc.target)
+            {loading ? (
+              <tr><td colSpan={9} className="px-3.5 py-12 text-center text-[13px] text-(--text-muted)">Loading…</td></tr>
+            ) : paged.length === 0 ? (
+              <tr><td colSpan={9} className="px-3.5 py-12 text-center text-[13px] text-(--text-muted)">No incidents found.</td></tr>
+            ) : paged.map((inc, idx) => {
+              const sev = inc.severity ?? 'medium'
+              const c = severityColor[sev] || '#44474D'
+              const respMins = inc.response_time_minutes
+              const withinSla = respMins != null && respMins <= 10
+              const location = inc.district
+                ? `${inc.district}${inc.sector ? ' / ' + inc.sector : ''}`
+                : (inc.address ?? '—')
               return (
-                <tr key={inc.id + idx} className="border-b border-(--border-subtle) cursor-pointer hover:bg-(--bg-elevated) transition-colors">
+                <tr key={inc.incident_id + idx} className="border-b border-(--border-subtle) cursor-pointer hover:bg-(--bg-elevated) transition-colors">
                   <td className="px-3.5 h-12">
-                    <span className="text-[12px] font-semibold text-(--accent)" style={{ fontFamily: 'var(--font-mono)' }}>{inc.id}</span>
+                    <span className="text-[12px] font-semibold text-(--accent)" style={{ fontFamily: 'var(--font-mono)' }}>{inc.incident_ref}</span>
                   </td>
                   <td className="px-3.5">
                     <span className="inline-flex items-center px-2.25 py-0.5 rounded text-[10px] font-bold uppercase tracking-[0.07em] border"
                       style={{ background: c + '25', color: c, borderColor: c + '40', fontFamily: 'var(--font-body)' }}>
-                      {inc.severity?.toUpperCase()}
+                      {sev.toUpperCase()}
                     </span>
                   </td>
-                  <td className="px-3.5 text-[13px]">{inc.type}</td>
-                  <td className="px-3.5 text-[12px] text-(--text-secondary)">{inc.district} / {inc.sector}</td>
-                  <td className="px-3.5 text-[12px] text-(--text-secondary)" style={{ fontFamily: 'var(--font-mono)' }}>{inc.reported}</td>
+                  <td className="px-3.5 text-[13px]">{inc.incident_type}</td>
+                  <td className="px-3.5 text-[12px] text-(--text-secondary)">{location}</td>
+                  <td className="px-3.5 text-[12px] text-(--text-secondary)" style={{ fontFamily: 'var(--font-mono)' }}>
+                    {inc.call_time ? new Date(inc.call_time).toLocaleString() : '—'}
+                  </td>
                   <td className="px-3.5">
-                    <span className="text-[12px] font-semibold" style={{ fontFamily: 'var(--font-mono)', color: withinSla ? 'var(--status-low)' : 'var(--status-critical)' }}>
-                      {inc.responseTime}
+                    <span className="text-[12px] font-semibold" style={{ fontFamily: 'var(--font-mono)', color: respMins != null ? (withinSla ? 'var(--status-low)' : 'var(--status-critical)') : 'var(--text-muted)' }}>
+                      {fmtMinutes(respMins)}
                     </span>
                   </td>
-                  <td className="px-3.5 text-[12px] text-(--text-secondary)" style={{ fontFamily: 'var(--font-mono)' }}>{inc.resolutionTime}</td>
-                  <td className="px-3.5 text-[12px] text-(--status-info)" style={{ fontFamily: 'var(--font-mono)' }}>{inc.units?.join(', ')}</td>
+                  <td className="px-3.5 text-[12px] text-(--text-secondary)" style={{ fontFamily: 'var(--font-mono)' }}>{fmtMinutes(inc.resolution_time_minutes)}</td>
+                  <td className="px-3.5 text-[12px] text-(--status-info)" style={{ fontFamily: 'var(--font-mono)' }}>—</td>
                   <td className="px-3.5">
-                    <span className="inline-flex items-center px-2.25 py-0.5 rounded text-[10px] font-bold uppercase tracking-[0.07em]"
-                      style={{
-                        background: withinSla ? 'var(--status-low-bg)' : 'var(--status-critical-bg)',
-                        color: withinSla ? 'var(--status-low)' : 'var(--status-critical)',
-                        fontFamily: 'var(--font-body)',
-                      }}>
-                      {withinSla ? '✓ MET' : '✗ MISSED'}
-                    </span>
+                    {respMins != null ? (
+                      <span className="inline-flex items-center px-2.25 py-0.5 rounded text-[10px] font-bold uppercase tracking-[0.07em]"
+                        style={{
+                          background: withinSla ? 'var(--status-low-bg)' : 'var(--status-critical-bg)',
+                          color: withinSla ? 'var(--status-low)' : 'var(--status-critical)',
+                          fontFamily: 'var(--font-body)',
+                        }}>
+                        {withinSla ? '✓ MET' : '✗ MISSED'}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-(--text-muted)">N/A</span>
+                    )}
                   </td>
                 </tr>
               )

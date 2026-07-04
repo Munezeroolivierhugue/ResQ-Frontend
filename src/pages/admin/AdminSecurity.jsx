@@ -1,13 +1,30 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Shield, Mail, Lock } from 'lucide-react'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import ConfirmDangerModal from '../../components/admin/ConfirmDangerModal'
 import { ADMIN_MFA_ROLES, ADMIN_ACTIVE_SESSIONS, ADMIN_IP_RANGES, adminRoleBadge } from '../../data/mockAdminData'
+import { listSecurityEvents } from '../../api/admin'
+
+// Mock security events as fallback
+const MOCK_SECURITY_EVENTS = [
+  { event_id: 'evt-001', event_type: 'LOGIN_FAILURE', source: 'Web Portal', ip_address: '196.49.3.21', occurred_at: 'Today 08:14', severity: 'HIGH', status: 'OPEN' },
+  { event_id: 'evt-002', event_type: 'SUSPICIOUS_ACCESS', source: 'API Gateway', ip_address: '196.12.0.45', occurred_at: 'Today 09:02', severity: 'CRITICAL', status: 'OPEN' },
+]
 
 export default function AdminSecurity() {
   const [sessions, setSessions] = useState(() => ADMIN_ACTIVE_SESSIONS.map((s) => ({ ...s })))
   const [revokeId, setRevokeId] = useState(null)
   const [toast, setToast] = useState(null)
+  const [securityEvents, setSecurityEvents] = useState(MOCK_SECURITY_EVENTS)
+  const [eventsError, setEventsError] = useState(null)
+
+  useEffect(() => {
+    listSecurityEvents()
+      .then((events) => {
+        if (events && events.length > 0) setSecurityEvents(events)
+      })
+      .catch(() => setEventsError('Could not load live security events — showing cached data.'))
+  }, [])
 
   function showToast(msg) {
     setToast(msg)
@@ -34,6 +51,66 @@ export default function AdminSecurity() {
       )}
 
       <AdminPageHeader title="Security Management" subtitle="MFA compliance, sessions, and security policies." eyebrow="Super Admin Portal" badge="2 Open Alerts" />
+
+      {eventsError && (
+        <div className="text-[12px] px-3 py-2 rounded" style={{ background: 'var(--status-medium-bg)', color: 'var(--status-medium)' }}>
+          {eventsError}
+        </div>
+      )}
+
+      {securityEvents.length > 0 && (
+        <div className="dispatcher-surface p-4">
+          <div className="font-semibold text-[13px] mb-3">Recent Security Events</div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px] min-w-[640px]">
+              <thead>
+                <tr className="text-(--text-muted) border-b border-(--border)">
+                  <th className="text-left p-2">Event ID</th>
+                  <th className="text-left p-2">Type</th>
+                  <th className="text-left p-2">Source</th>
+                  <th className="p-2">IP Address</th>
+                  <th className="p-2">Occurred At</th>
+                  <th className="p-2">Severity</th>
+                  <th className="p-2">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {securityEvents.map((ev) => (
+                  <tr key={ev.event_id} className="border-b border-(--border-subtle)">
+                    <td className="p-2 font-mono text-(--text-muted)">{ev.event_id}</td>
+                    <td className="p-2 font-medium">{ev.event_type}</td>
+                    <td className="p-2 text-(--text-secondary)">{ev.source}</td>
+                    <td className="p-2 font-mono text-center">{ev.ip_address}</td>
+                    <td className="p-2 font-mono text-center text-(--text-muted)">{ev.occurred_at}</td>
+                    <td className="p-2 text-center">
+                      <span
+                        className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                        style={{
+                          background: ev.severity === 'CRITICAL' ? 'var(--status-critical-bg)' : 'var(--status-medium-bg)',
+                          color: ev.severity === 'CRITICAL' ? 'var(--status-critical)' : 'var(--status-medium)',
+                        }}
+                      >
+                        {ev.severity}
+                      </span>
+                    </td>
+                    <td className="p-2 text-center">
+                      <span
+                        className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                        style={{
+                          background: ev.status === 'OPEN' ? 'var(--status-critical-bg)' : 'var(--bg-elevated)',
+                          color: ev.status === 'OPEN' ? 'var(--status-critical)' : 'var(--text-muted)',
+                        }}
+                      >
+                        {ev.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="dispatcher-surface p-4">
         <div className="flex flex-wrap justify-between gap-3 mb-4">

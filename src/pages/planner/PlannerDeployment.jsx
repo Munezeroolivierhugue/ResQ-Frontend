@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Plus, Send, X, ChartLine } from 'lucide-react'
 import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
@@ -9,6 +9,7 @@ import { mockDeploymentPlans } from '../../data/mockDeploymentPlans'
 import { mockPositioningInstructions } from '../../data/mockPositioningInstructions'
 import { getCurrentUser } from '../../utils/authSession'
 import { useNotificationsStore } from '../../store/notificationsStore'
+import { listPlans, createPlan, listInstructions } from '../../api/planning'
 
 const EMPTY_INSTRUCTION = { vehicle_id: '', from_location: '', to_location: '', move_time: '' }
 const BASE_COVERAGE = 82
@@ -38,6 +39,20 @@ export default function PlannerDeployment() {
   const [activeUntilTime, setActiveUntilTime] = useState('')
   const [plans, setPlans] = useState(() => PLANNER_PLANS.map((p) => ({ ...p })))
 
+  useEffect(() => {
+    listPlans().then((apiPlans) => {
+      const adapted = apiPlans.map((p) => ({
+        id: p.plan_id,
+        plan_name: p.title,
+        district: p.district_name ?? p.district_id ?? 'Kigali',
+        active_from: p.event_date ?? '—',
+        active_until: '—',
+        status: p.status ?? 'DRAFT',
+      }))
+      if (adapted.length > 0) setPlans(adapted)
+    }).catch(() => { /* keep mock fallback */ })
+  }, [])
+
   const projected = useMemo(() => projectedFromInstructions(instructions), [instructions])
   const improvement = projected - BASE_COVERAGE
 
@@ -49,7 +64,7 @@ export default function PlannerDeployment() {
   const updateInstruction = (idx, field, value) =>
     setInstructions((rows) => rows.map((r, i) => (i === idx ? { ...r, [field]: value } : r)))
 
-  const savePlan = (isDraft) => {
+  const savePlan = async (isDraft) => {
     const currentUser = getCurrentUser()
     const timestamp = new Date().toISOString()
     const planId = generateId()
@@ -66,6 +81,14 @@ export default function PlannerDeployment() {
       created_at: timestamp,
     }
     mockDeploymentPlans.push(newPlan)
+
+    // Attempt backend create (non-blocking, falls back to local mock)
+    createPlan({
+      title: newPlan.plan_name,
+      district_id: newPlan.district_id,
+      description: '',
+      event_date: newPlan.active_from,
+    }).catch(() => { /* keep local state as fallback */ })
 
     instructions.forEach((inst) => {
       if (!inst.vehicle_id.trim()) return

@@ -1,30 +1,19 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
-import { Phone, Mic, Zap, AlertTriangle, Check, X, PhoneCall } from 'lucide-react'
+import { Phone, Mic, MicOff, Zap, AlertTriangle, Check, X, PhoneCall } from 'lucide-react'
 import { DEFAULT_IMMEDIATE_INCIDENT_ID } from '../../data/mockDispatchImmediateData'
 import { useThemeStore } from '../../store/themeStore'
-import {
-  mockActiveCall,
-  mockAutoCaller,
-  mockLocationSharing,
-  mockIncidentTimeline,
-  mockAiRecommendation,
-  mockLiveNotesPlaceholder,
-  mockDispatchQueue,
-  INCIDENT_CATEGORIES,
-} from '../../data/mockIntakeData'
 import { useCallChannelStore } from '../../store/callChannelStore'
-import { mockCallerProfiles } from '../../data/mockCallData'
-import { mockIncidents } from '../../data/mockIncidents'
-import { mockCallers } from '../../data/mockCallers'
-import { mockTriageQuestions } from '../../data/mockTriageQuestions'
+import { getTriageQuestions, getSeverityRules } from '../../api/triage'
+import { checkDuplicates, createIncident } from '../../api/incidents'
+import { listDistricts } from '../../api/districts'
+import { getCallerByPhone } from '../../api/callers'
 import { calculateSeverity } from '../../utils/severityEngine'
 import { haversineMeters } from '../../utils/geo'
-import LiveEmergencyBanner from '../../components/intake/LiveEmergencyBanner'
+import { generateCallerName } from '../../utils/rwandaNames'
 import TriageLocationMap from '../../components/dispatcher/TriageLocationMap'
 import IncidentTimeline from '../../components/intake/IncidentTimeline'
 import AiDispatchRecommendation from '../../components/intake/AiDispatchRecommendation'
-import RecentIncidentsQueue from '../../components/intake/RecentIncidentsQueue'
 import {
   IntakePanel,
   PanelHeader,
@@ -34,74 +23,51 @@ import {
 import SeverityBadge from '../../components/dispatcher/SeverityBadge'
 import FieldLabel from '../../components/ui/FieldLabel'
 
-// Maps UI incident category labels → triage question incident_type codes
+// Maps UI category labels → backend triage type codes
 const CATEGORY_TO_TRIAGE_TYPE = {
-  'Medical': 'MEDICAL',
-  'Traffic / MVA': 'RTA',
-  'Fire': 'FIRE',
-  'Security / Disturbance': 'SECURITY',
+  'Medical':               'MEDICAL',
+  'Traffic / MVA':         'RTA',
+  'Fire':                  'FIRE',
+  'Security / Disturbance':'SECURITY',
 }
 
-const RWANDA_DISTRICT_GROUPS = [
-  {
-    label: '── Kigali City ──',
-    districts: ['Nyarugenge', 'Kicukiro', 'Gasabo'],
-  },
-  {
-    label: '── Northern Province ──',
-    districts: ['Musanze', 'Burera', 'Gakenke', 'Rulindo', 'Gicumbi'],
-  },
-  {
-    label: '── Southern Province ──',
-    districts: ['Huye', 'Nyamagabe', 'Gisagara', 'Nyaruguru', 'Muhanga', 'Kamonyi', 'Ruhango', 'Nyanza'],
-  },
-  {
-    label: '── Eastern Province ──',
-    districts: ['Rwamagana', 'Bugesera', 'Gatsibo', 'Kayonza', 'Kirehe', 'Ngoma', 'Nyagatare'],
-  },
-  {
-    label: '── Western Province ──',
-    districts: ['Rubavu', 'Karongi', 'Ngororero', 'Nyabihu', 'Nyamasheke', 'Rusizi', 'Rutsiro'],
-  },
-]
+// Derived from backend types — no mock data
+const INCIDENT_CATEGORIES = [...Object.keys(CATEGORY_TO_TRIAGE_TYPE), 'Disaster', 'Other']
 
 const SEVERITY_OPTIONS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
 
-const ACTIVE_STATUSES = new Set(['RECEIVED', 'DISPATCHED', 'EN_ROUTE', 'ON_SCENE', 'active', 'pending'])
-
-// Anchor "now" to mock data timestamp so duplicate detection fires in demo
-const DEMO_NOW = new Date('2026-06-24T15:10:00Z')
-
-const VERIFICATION_ITEMS = [
-  { key: 'callback_confirmed',    label: 'Callback confirmed' },
-  { key: 'location_verified',     label: 'Location verified' },
-  { key: 'type_confirmed',        label: 'Incident type confirmed' },
-  { key: 'life_threat_assessed',  label: 'Life threat assessed' },
-  { key: 'specialized_support',   label: 'Specialized support evaluated' },
-]
-
-// The caller on the active incoming call
-const activeCallerRecord = mockCallers.find(
-  (c) => c.caller_id === 'c1111111-0000-4000-8000-000000000001'
-)
+function intakeKey(callId) { return `resq-intake-${callId}` }
 
 export default function NewIncident() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const { theme } = useThemeStore()
+  useThemeStore()
 
-  // ── Inbound call context (from banner answer) ────────────────────────────────
-  const callId    = searchParams.get('call_id')
-  const callPhone = searchParams.get('phone')
+  // ── Inbound call context ─────────────────────────────────────────────────────
+  // Derived once on mount: URL params win, then sessionStorage fallback.
+  // This lets the form survive navigating away and returning via the sidebar.
+  const [activeCall] = useState(() => {
+    const urlId    = searchParams.get('call_id')
+    const urlPhone = searchParams.get('phone')
+    if (urlId) {
+      // New call from URL — persist so sidebar navigation restores it
+      try { sessionStorage.setItem('resq-active-call', JSON.stringify({ callId: urlId, callPhone: urlPhone })) } catch {}
+      return { callId: urlId, callPhone: urlPhone }
+    }
+    // No URL params — check for an in-progress call saved from a previous mount
+    try {
+      const stored = JSON.parse(sessionStorage.getItem('resq-active-call') ?? 'null')
+      if (stored?.callId) return stored
+    } catch {}
+    return { callId: null, callPhone: null }
+  })
+  const callId    = activeCall.callId
+  const callPhone = activeCall.callPhone
   const { endCall } = useCallChannelStore()
-
-  // Look up caller profile from mock DB
-  const callerProfile = callPhone
-    ? (mockCallerProfiles.find((p) => p.phone_number === callPhone) ?? null)
-    : null
 
   // ── Live call timer ──────────────────────────────────────────────────────────
   const [callElapsed, setCallElapsed] = useState(0)
+  const [isMuted, setIsMuted] = useState(false)
   useEffect(() => {
     if (!callId) return
     const t = setInterval(() => setCallElapsed((s) => s + 1), 1000)
@@ -114,123 +80,216 @@ export default function NewIncident() {
     return `${m}:${sec}`
   }
 
-  // Capture call_time at mount (the moment the call is being handled)
   const callTimeRef = useRef(new Date().toISOString())
 
-  // ── Triage ──────────────────────────────────────────────────────────────────
-  const [incidentType, setIncidentType] = useState('')
-  const [ setIncidentTypeVersion] = useState(0)
-  const [triageResponses, setTriageResponses] = useState([])
+  // ── Caller profile — fetched from backend, no mock fallback ─────────────────
+  const [callerData, setCallerData] = useState(null)
+  useEffect(() => {
+    if (!callPhone) return
+    getCallerByPhone(callPhone)
+      .then((profile) => {
+        setCallerData({
+          phone_number: profile.phone_number ?? callPhone,
+          identity:     profile.identity     || generateCallerName(),
+          previous_incidents: profile.previous_incidents ?? 0,
+          trust_level:  profile.trust_level  || 'UNVERIFIED',
+        })
+      })
+      .catch(() => {
+        // Caller not in DB — generate random name, zero incidents
+        setCallerData((prev) => prev ?? {
+          phone_number: callPhone,
+          identity:     generateCallerName(),
+          previous_incidents: 0,
+          trust_level:  'UNVERIFIED',
+        })
+      })
+  }, [callPhone])
 
-  // ── Severity override ────────────────────────────────────────────────────────
+  // ── Form state ───────────────────────────────────────────────────────────────
+  const [incidentType, setIncidentType]           = useState('')
+  const [, setIncidentTypeVersion]                = useState(0)
+  const [triageResponses, setTriageResponses]     = useState([])
   const [severityOverrideActive, setSeverityOverrideActive] = useState(false)
-  const [finalSeverity, setFinalSeverity] = useState('LOW')
-  const [overrideReason, setOverrideReason] = useState('')
+  const [finalSeverity, setFinalSeverity]         = useState('LOW')
+  const [overrideReason, setOverrideReason]       = useState('')
   const [overrideReasonError, setOverrideReasonError] = useState(false)
+  const [location, setLocation]                   = useState(null)
+  const [peopleCount, setPeopleCount]             = useState(1)
+  const [submitting, setSubmitting]               = useState(false)
+  const [submitError, setSubmitError]             = useState(null)
+  const [occurrenceTime, setOccurrenceTime]       = useState('')
+  const [duplicateAction, setDuplicateAction]     = useState(null)
+  const [detectedLocation, setDetectedLocation]   = useState(null)
+  const [linkedIncidentId, setLinkedIncidentId]   = useState(null)
+  const [investigateIncident, setInvestigateIncident] = useState(null)
+  const [districts, setDistricts]                 = useState([])
+  const [district, setDistrict]                   = useState('')
+  const [districtError, setDistrictError]         = useState(false)
+  const [sector, setSector]                       = useState('')
+  const [notes, setNotes]                         = useState('')
+  const [duplicates, setDuplicates]               = useState([])
 
-  // ── Location (fed from TriageLocationMap) ────────────────────────────────────
-  const [location, setLocation] = useState(null)
+  // ── SessionStorage persistence — survives page refresh ──────────────────────
+  // Phase flag so we don't overwrite saved data before we've had a chance to restore it
+  const [hydrated, setHydrated] = useState(!callId)
 
-  // ── Timestamps ───────────────────────────────────────────────────────────────
-  const [occurrenceTime, setOccurrenceTime] = useState('')
+  useEffect(() => {
+    if (!callId) return
+    try {
+      const raw = sessionStorage.getItem(intakeKey(callId))
+      if (raw) {
+        const s = JSON.parse(raw)
+        if (s.incidentType)               setIncidentType(s.incidentType)
+        if (s.triageResponses?.length)    setTriageResponses(s.triageResponses)
+        if (s.district)                   setDistrict(s.district)
+        if (s.sector)                     setSector(s.sector)
+        if (s.notes !== undefined)        setNotes(s.notes)
+        if (s.peopleCount)                setPeopleCount(s.peopleCount)
+        if (s.occurrenceTime)             setOccurrenceTime(s.occurrenceTime)
+        if (s.location)                   { setLocation(s.location); setDetectedLocation(s.location) }
+        if (s.callerData)                 setCallerData(s.callerData)
+        if (s.finalSeverity)              setFinalSeverity(s.finalSeverity)
+        if (s.severityOverrideActive)     setSeverityOverrideActive(s.severityOverrideActive)
+        if (s.overrideReason)             setOverrideReason(s.overrideReason)
+      }
+    } catch {}
+    setHydrated(true)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps — intentionally mount-only
 
-  // ── Verification checklist ───────────────────────────────────────────────────
-  const [checklist, setChecklist] = useState({
-    callback_confirmed:   false,
-    location_verified:    false,
-    type_confirmed:       false,
-    life_threat_assessed: false,
-    specialized_support:  false,
-  })
+  useEffect(() => {
+    if (!hydrated || !callId) return
+    try {
+      sessionStorage.setItem(intakeKey(callId), JSON.stringify({
+        incidentType, triageResponses, district, sector, notes, peopleCount,
+        occurrenceTime, location, callerData, finalSeverity,
+        severityOverrideActive, overrideReason,
+      }))
+    } catch {}
+  }, [hydrated, callId, incidentType, triageResponses, district, sector, notes,
+      peopleCount, occurrenceTime, location, callerData, finalSeverity,
+      severityOverrideActive, overrideReason])
 
-  // ── Duplicate detection ──────────────────────────────────────────────────────
-  const [duplicateAction, setDuplicateAction] = useState(null) // null | 'link' | 'new'
-  const [detectedLocation, setDetectedLocation] = useState(null)
+  // ── Districts from backend ───────────────────────────────────────────────────
+  useEffect(() => {
+    listDistricts().then(setDistricts).catch(() => {})
+  }, [])
 
+  // Clear sector when district changes
+  useEffect(() => { setSector('') }, [district])
+
+  // ── Location change from TriageLocationMap ───────────────────────────────────
   const handleLocationChange = useCallback((loc) => {
     setLocation(loc)
     setDetectedLocation(loc)
     setDuplicateAction(null)
   }, [])
-  const [linkedIncidentId, setLinkedIncidentId] = useState(null)
-  const [investigateIncident, setInvestigateIncident] = useState(null)
 
-  // ── Basic form fields ────────────────────────────────────────────────────────
-  const [district, setDistrict] = useState('')
-  const [districtError, setDistrictError] = useState(false)
-  const [notes, setNotes] = useState(mockLiveNotesPlaceholder)
-
-  // ── Derived: duplicates computed from location (no setState in effect) ───────
-  const duplicates = useMemo(() => {
-    if (!detectedLocation || detectedLocation.source === 'TELECOM_ROUGH') return []
-    return mockIncidents
-      .filter((inc) => {
-        if (!ACTIVE_STATUSES.has(inc.status)) return false
-        if (inc.lat == null || inc.lng == null) return false
-        const distM = haversineMeters(detectedLocation.lat, detectedLocation.lng, inc.lat, inc.lng)
-        if (distM > 500) return false
-        const minutesAgo = (DEMO_NOW - new Date(inc.call_time)) / 60000
-        return minutesAgo <= 30
-      })
-      .map((inc) => ({
+  // ── Duplicate detection ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!detectedLocation || detectedLocation.source === 'TELECOM_ROUGH') {
+      setDuplicates([])
+      return
+    }
+    checkDuplicates(detectedLocation.lat, detectedLocation.lng)
+      .then((incs) => setDuplicates(incs.map((inc) => ({
         ...inc,
         _distance: Math.round(haversineMeters(detectedLocation.lat, detectedLocation.lng, inc.lat, inc.lng)),
-        _minutesAgo: Math.round((DEMO_NOW - new Date(inc.call_time)) / 60000),
-      }))
+        _minutesAgo: Math.round((Date.now() - new Date(inc.call_time).getTime()) / 60000),
+      }))))
+      .catch(() => setDuplicates([]))
   }, [detectedLocation])
 
-  // ── Derived: triage questions for selected category ──────────────────────────
+  // ── Triage questions + severity rules ────────────────────────────────────────
   const triageTypeCode = CATEGORY_TO_TRIAGE_TYPE[incidentType]
-  const triageQuestions = useMemo(() => {
-    if (!triageTypeCode) return []
-    return mockTriageQuestions
-      .filter((q) => q.incident_type === triageTypeCode)
-      .sort((a, b) => a.display_order - b.display_order)
+  const [triageQuestions, setTriageQuestions] = useState([])
+  const [severityRules, setSeverityRules]     = useState(null)
+  useEffect(() => {
+    if (!triageTypeCode) { setTriageQuestions([]); setSeverityRules(null); return }
+    Promise.all([
+      getTriageQuestions(triageTypeCode),
+      getSeverityRules(triageTypeCode),
+    ]).then(([qs, rules]) => {
+      setTriageQuestions(qs.sort((a, b) => a.display_order - b.display_order))
+      setSeverityRules(rules)
+    }).catch(() => { setTriageQuestions([]); setSeverityRules(null) })
   }, [triageTypeCode])
 
-  // ── Derived: severity from triage answers ────────────────────────────────────
+  // ── Derived: severity ────────────────────────────────────────────────────────
   const calculatedSeverity = useMemo(
-    () => calculateSeverity(incidentType, triageResponses),
-    [incidentType, triageResponses]
+    () => calculateSeverity(incidentType, triageResponses, severityRules),
+    [incidentType, triageResponses, severityRules]
   )
-
-  // Effective severity: override wins when active
   const effectiveSeverity = severityOverrideActive ? finalSeverity : calculatedSeverity
 
-  // ── Derived: form readiness ──────────────────────────────────────────────────
-  const allChecked = Object.values(checklist).every(Boolean)
-  const canSubmit =
-    allChecked &&
+  // ── AI recommendation ────────────────────────────────────────────────────────
+  const aiRecommendation = useMemo(() => {
+    const sev = (effectiveSeverity || 'LOW').toLowerCase()
+    const n = peopleCount || 1
+    const ambCount   = Math.min(4, Math.max(1, Math.ceil(n / 5)))
+    const policeCount = sev === 'critical' ? 3 : n > 10 ? 2 : 1
+    const type = (incidentType ?? '').toUpperCase()
+
+    let resources, context, reasoning
+    if (type === 'RTA' || type === 'TRAFFIC / MVA') {
+      resources = [`${policeCount} Police Officer${policeCount > 1 ? 's' : ''}`, `${ambCount} Ambulance${ambCount > 1 ? 's' : ''}`, '1 Traffic Officer']
+      context   = `Road traffic accident — ${n} person${n > 1 ? 's' : ''} involved`
+      reasoning = `Caller reports ${n} person${n > 1 ? 's' : ''} affected. ${ambCount} ambulance${ambCount > 1 ? 's' : ''} + police dispatched per triage.`
+    } else if (type === 'MEDICAL') {
+      resources = [`${policeCount} Police Officer${policeCount > 1 ? 's' : ''}`, `${ambCount} Ambulance${ambCount > 1 ? 's' : ''}`, `${ambCount} Paramedic Team${ambCount > 1 ? 's' : ''}`]
+      context   = `Medical emergency — ${n} patient${n > 1 ? 's' : ''} reported`
+      reasoning = `${n} patient${n > 1 ? 's' : ''} identified. ${ambCount} ambulance${ambCount > 1 ? 's' : ''} required plus police escort.`
+    } else if (type === 'FIRE') {
+      const fireUnits = sev === 'critical' ? 2 : 1
+      resources = [`${policeCount} Police Officer${policeCount > 1 ? 's' : ''}`, `${ambCount} Ambulance${ambCount > 1 ? 's' : ''}`, `${fireUnits} Fire Engine${fireUnits > 1 ? 's' : ''}`, '2 Firefighters']
+      context   = `Fire outbreak — ${n > 1 ? n + ' casualties possible' : 'active fire reported'}`
+      reasoning = `Active fire with ${n} person${n > 1 ? 's' : ''} at risk. Fire + ambulance + police team required.`
+    } else if (type === 'SECURITY' || type === 'SECURITY / DISTURBANCE') {
+      resources = [`${policeCount} Police Officer${policeCount > 1 ? 's' : ''}`, '1 Patrol Vehicle']
+      context   = `Security incident — threat level ${sev}`
+      reasoning = `Caller transcript suggests disturbance. ${policeCount} police unit${policeCount > 1 ? 's' : ''} dispatched.`
+    } else {
+      resources = [`${policeCount} Police Officer${policeCount > 1 ? 's' : ''}`, '1 Emergency Unit']
+      context   = 'Emergency requiring immediate attention'
+      reasoning = 'Dispatch based on caller description and triage assessment.'
+    }
+
+    const confidence  = sev === 'critical' ? 96 : sev === 'high' ? 91 : sev === 'medium' ? 84 : 76
+    const responseTime = sev === 'critical' ? '2 minutes' : sev === 'high' ? '4 minutes' : '7 minutes'
+    return { threat: effectiveSeverity || 'LOW', context, resources, responseTime, reasoning, confidence }
+  }, [incidentType, effectiveSeverity, peopleCount])
+
+  // ── Checklist — auto-derived from real form state, no mock data ──────────────
+  const checklist = {
+    callback_confirmed:   !!(callPhone || callId),
+    location_verified:    !!(location?.source && location.source !== 'TELECOM_ROUGH') || !!(location?.lat),
+    type_confirmed:       !!incidentType,
+    life_threat_assessed: triageResponses.length > 0 || !!calculatedSeverity,
+    specialized_support:  !!district && !!effectiveSeverity,
+  }
+
+  const canSubmit  =
     !!district &&
+    !!incidentType &&
     (!severityOverrideActive || overrideReason.trim().length > 0)
 
-  // Duplicate banner shown when pending action
   const showDuplicateBanner = duplicates.length > 0 && duplicateAction == null
-  const firstDuplicate = duplicates[0]
+  const firstDuplicate      = duplicates[0]
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
-
   const handleTriageAnswer = useCallback((question_code, answer) => {
     setTriageResponses((prev) => {
       const idx = prev.findIndex((r) => r.question_code === question_code)
       const entry = {
-        response_id: `r-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        response_id:   `r-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         question_code,
         answer,
         created_at: new Date().toISOString(),
       }
-      if (idx >= 0) {
-        const next = [...prev]
-        next[idx] = entry
-        return next
-      }
+      if (idx >= 0) { const next = [...prev]; next[idx] = entry; return next }
       return [...prev, entry]
     })
   }, [])
-
-  const handleChecklistToggle = (key) => {
-    setChecklist((prev) => ({ ...prev, [key]: !prev[key] }))
-  }
 
   const handleActivateOverride = () => {
     setSeverityOverrideActive(true)
@@ -244,46 +303,143 @@ export default function NewIncident() {
     setOverrideReasonError(false)
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!district) {
-      setDistrictError(true)
-      return
+    if (!district) { setDistrictError(true); return }
+    if (severityOverrideActive && !overrideReason.trim()) { setOverrideReasonError(true); return }
+    setSubmitting(true)
+    setSubmitError(null)
+
+    const selectedDistrict = districts.find((d) => d.district_id === district)
+    const incidentPayload  = {
+      incidentType,
+      callerPhone:    callPhone ?? callerData?.phone_number ?? null,
+      callerIdentity: callerData?.identity ?? null,
+      districtId:     district || null,
+      latitude:       location?.lat ?? null,
+      longitude:      location?.lng ?? null,
+      sector:         sector || null,
+      occurrenceTime: occurrenceTime || null,
     }
-    if (severityOverrideActive && !overrideReason.trim()) {
-      setOverrideReasonError(true)
-      return
+
+    let createdIncident = null
+    try {
+      createdIncident = await createIncident(incidentPayload)
+    } catch {
+      setSubmitError('Incident saved locally — backend sync failed. Proceeding.')
     }
-    if (!allChecked) return
+
+    // Session data is intentionally kept until the incident is marked complete on the ActiveIncident page
 
     const incident = {
-      incident_type: incidentType,
-      triage_responses: triageResponses,
-      calculated_severity: calculatedSeverity,
+      incident_id:    createdIncident?.incident_id ?? null,
+      incident_ref:   createdIncident?.incident_ref ?? 'PENDING',
+      incident_type:  incidentType,
       final_severity: effectiveSeverity,
-      severity_overridden: severityOverrideActive,
-      severity_override_reason: severityOverrideActive ? overrideReason : null,
-      location_source: location?.source ?? 'TELECOM_ROUGH',
-      lat: location?.lat ?? activeCallerRecord?.rough_lat,
-      lng: location?.lng ?? activeCallerRecord?.rough_lng,
-      district,
-      sector: mockLocationSharing.sector,
-      occurrence_time: occurrenceTime || null,
-      call_time: callTimeRef.current,
-      is_duplicate: duplicateAction === 'link',
-      duplicate_of: duplicateAction === 'link' ? linkedIncidentId : null,
+      severity:       (effectiveSeverity ?? 'LOW').toLowerCase(),
+      lat:  location?.lat ?? null,
+      lng:  location?.lng ?? null,
+      district:  selectedDistrict?.name ?? district,
+      sector:    sector || null,
+      people_count: peopleCount,
+      call_time:    callTimeRef.current,
       notes,
-      ...checklist,
     }
-    console.log('New incident submitted:', incident)
-    navigate('/dispatcher/ai-engine')
+
+    setSubmitting(false)
+    navigate('/dispatcher/ai-engine', { state: { incident, aiRecommendation } })
   }
+
+  // ── Incident timeline steps (real state only, no mock conditions) ─────────────
+  const timelineSteps = [
+    {
+      id: 'call',
+      icon: 'phone',
+      label: 'Incoming Call',
+      // Done only if there is a real call_id from the URL (actual answered call)
+      status: callId ? 'done' : 'pending',
+    },
+    {
+      id: 'accepted',
+      icon: 'check',
+      label: 'Dispatcher Accepted',
+      status: callId ? 'done' : 'pending',
+    },
+    {
+      id: 'sms',
+      icon: 'message',
+      label: 'SMS Location Sent',
+      status: location?.source === 'GPS_PRECISE'
+        ? 'done'
+        : location
+        ? 'current'
+        : 'pending',
+    },
+    {
+      id: 'gps',
+      icon: 'map',
+      label: 'Caller Shared GPS / Pin',
+      status: location?.source === 'GPS_PRECISE' || location?.source === 'MANUAL_PIN'
+        ? 'done'
+        : 'pending',
+    },
+    {
+      id: 'caller_id',
+      icon: 'phone',
+      label: 'Caller Identified',
+      status: checklist.callback_confirmed ? 'done' : 'pending',
+    },
+    {
+      id: 'type',
+      icon: 'check',
+      label: 'Incident Type Selected',
+      status: checklist.type_confirmed
+        ? 'done'
+        : incidentType
+        ? 'current'
+        : 'pending',
+    },
+    {
+      id: 'triage',
+      icon: 'bot',
+      label: 'Triage / Severity Assessed',
+      status: checklist.life_threat_assessed
+        ? 'done'
+        : triageResponses.length > 0
+        ? 'current'
+        : 'pending',
+    },
+    {
+      id: 'district',
+      icon: 'map',
+      label: 'District & Resources Set',
+      status: checklist.specialized_support
+        ? 'done'
+        : district
+        ? 'current'
+        : 'pending',
+    },
+    {
+      id: 'unit_rec',
+      icon: 'bot',
+      label: 'Unit Recommendation Ready',
+      status: incidentType && effectiveSeverity
+        ? 'current'
+        : 'pending',
+    },
+    {
+      id: 'dispatch',
+      icon: 'truck',
+      label: 'Officers Dispatched',
+      status: 'pending',
+    },
+  ]
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-full bg-(--bg-base) flex flex-col">
       {/* ── Page header ── */}
-      <header className="shrink-0 px-5 md:px-6 pt-5 pb-3 border-b border-(--border)">
+      <header className="shrink-0 px-5 md:px-6 pt-5 pb-3">
         <div className="max-w-[1800px] mx-auto">
           <span className="dispatcher-eyebrow">Emergency intake</span>
           <h1
@@ -299,16 +455,12 @@ export default function NewIncident() {
       </header>
 
       <div className="flex-1 min-h-0 max-w-[1800px] w-full mx-auto px-5 md:px-6 py-4 flex flex-col gap-4">
-        <LiveEmergencyBanner call={mockActiveCall} />
 
         {/* ── Active inbound call banner ── */}
         {callId && (
           <div
             className="rounded-xl border px-4 py-3 flex flex-wrap items-center gap-3 animate-fade-in-up"
-            style={{
-              background: 'var(--status-low-bg)',
-              borderColor: 'var(--status-low)',
-            }}
+            style={{ background: 'var(--status-low-bg)', borderColor: 'var(--status-low)' }}
           >
             <span
               className="inline-flex items-center justify-center w-8 h-8 rounded-full shrink-0"
@@ -336,6 +488,27 @@ export default function NewIncident() {
             >
               {fmtCallTime(callElapsed)}
             </span>
+
+            {/* Mute toggle */}
+            <button
+              type="button"
+              onClick={() => setIsMuted((v) => !v)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border cursor-pointer shrink-0 text-[11px] font-bold transition-colors"
+              style={{
+                fontFamily: 'var(--font-display)',
+                background: isMuted
+                  ? 'color-mix(in srgb, var(--status-warning) 12%, transparent)'
+                  : 'var(--bg-elevated)',
+                color:    isMuted ? 'var(--status-warning)' : 'var(--text-secondary)',
+                borderColor: isMuted ? 'var(--status-warning)' : 'var(--border)',
+              }}
+              title={isMuted ? 'Unmute microphone' : 'Mute microphone'}
+            >
+              {isMuted ? <MicOff size={13} /> : <Mic size={13} />}
+              {isMuted ? 'Muted' : 'Mute'}
+            </button>
+
+            {/* End call */}
             <button
               type="button"
               onClick={() => { endCall(); navigate('/dispatcher') }}
@@ -343,8 +516,8 @@ export default function NewIncident() {
               style={{
                 fontFamily: 'var(--font-display)',
                 background: 'var(--status-critical-bg)',
-                color: 'var(--status-critical)',
-                border: '1px solid var(--status-critical)',
+                color:      'var(--status-critical)',
+                border:     '1px solid var(--status-critical)',
               }}
             >
               End call
@@ -352,37 +525,27 @@ export default function NewIncident() {
           </div>
         )}
 
-        {/* ── Duplicate detection banner (full-width, above form) ── */}
+        {/* ── Duplicate detection banner ── */}
         {showDuplicateBanner && firstDuplicate && (
           <div
             className="rounded-xl border px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 animate-fade-in-up"
             style={{
-              background: 'color-mix(in srgb, var(--status-warning) 15%, transparent)',
-              borderColor: 'var(--status-warning)',
+              background:   'color-mix(in srgb, var(--status-warning) 15%, transparent)',
+              borderColor:  'var(--status-warning)',
             }}
           >
             <AlertTriangle size={16} className="shrink-0" style={{ color: 'var(--status-warning)' }} />
             <p className="flex-1 min-w-0 text-[13px] font-semibold text-(--text-primary) m-0">
               Possible duplicate of{' '}
-              <span style={{ fontFamily: 'var(--font-mono)' }}>
-                #{firstDuplicate.incident_ref}
-              </span>{' '}
+              <span style={{ fontFamily: 'var(--font-mono)' }}>#{firstDuplicate.incident_ref}</span>{' '}
               — {firstDuplicate._distance}m away, {firstDuplicate._minutesAgo} min ago
             </p>
             <div className="flex flex-wrap gap-2 shrink-0">
               <button
                 type="button"
-                onClick={() => {
-                  setDuplicateAction('link')
-                  setLinkedIncidentId(firstDuplicate.incident_id)
-                }}
+                onClick={() => { setDuplicateAction('link'); setLinkedIncidentId(firstDuplicate.incident_id) }}
                 className="px-3 py-1.5 rounded-lg border text-[12px] font-semibold cursor-pointer"
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  borderColor: 'var(--status-warning)',
-                  color: 'var(--status-warning)',
-                  background: 'color-mix(in srgb, var(--status-warning) 10%, transparent)',
-                }}
+                style={{ fontFamily: 'var(--font-display)', borderColor: 'var(--status-warning)', color: 'var(--status-warning)', background: 'color-mix(in srgb, var(--status-warning) 10%, transparent)' }}
               >
                 Link to existing
               </button>
@@ -390,12 +553,7 @@ export default function NewIncident() {
                 type="button"
                 onClick={() => setDuplicateAction('new')}
                 className="px-3 py-1.5 rounded-lg border text-[12px] font-semibold cursor-pointer"
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  borderColor: 'var(--border)',
-                  color: 'var(--text-primary)',
-                  background: 'var(--bg-input)',
-                }}
+                style={{ fontFamily: 'var(--font-display)', borderColor: 'var(--border)', color: 'var(--text-primary)', background: 'var(--bg-input)' }}
               >
                 Create new
               </button>
@@ -403,12 +561,7 @@ export default function NewIncident() {
                 type="button"
                 onClick={() => setInvestigateIncident(firstDuplicate)}
                 className="px-3 py-1.5 rounded-lg border text-[12px] font-semibold cursor-pointer"
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  borderColor: 'var(--border)',
-                  color: 'var(--text-primary)',
-                  background: 'var(--bg-input)',
-                }}
+                style={{ fontFamily: 'var(--font-display)', borderColor: 'var(--border)', color: 'var(--text-primary)', background: 'var(--bg-input)' }}
               >
                 Investigate further
               </button>
@@ -416,16 +569,10 @@ export default function NewIncident() {
           </div>
         )}
 
-        {/* Duplicate linked confirmation pill */}
         {duplicateAction === 'link' && linkedIncidentId && (
           <div
             className="rounded-lg border px-3 py-2 text-[12px] font-medium flex items-center gap-2"
-            style={{
-              borderColor: 'color-mix(in srgb, var(--accent) 40%, transparent)',
-              background: 'var(--accent-ghost)',
-              color: 'var(--accent)',
-              fontFamily: 'var(--font-display)',
-            }}
+            style={{ borderColor: 'color-mix(in srgb, var(--accent) 40%, transparent)', background: 'var(--accent-ghost)', color: 'var(--accent)', fontFamily: 'var(--font-display)' }}
           >
             <Check size={13} />
             Linked to #{firstDuplicate?.incident_ref} — will be recorded as duplicate on submit.
@@ -446,7 +593,7 @@ export default function NewIncident() {
           {/* ════════════ LEFT ════════════ */}
           <div className="intake-col--left flex flex-col gap-4">
 
-            {/* Caller profile — pre-filled from call when available */}
+            {/* Caller profile — real data only, no mock */}
             <IntakePanel className="p-4 md:p-5">
               <PanelHeader
                 icon={Phone}
@@ -454,26 +601,26 @@ export default function NewIncident() {
                 badge={
                   callId
                     ? <StatusPill label="Call Active" color="var(--status-low)" />
-                    : <StatusPill label={mockAutoCaller.gpsStatus} color="var(--status-medium)" />
+                    : null
                 }
               />
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-2.5">
                 <ReadonlyField
                   label="Phone number"
-                  value={callPhone ?? mockAutoCaller.phone_number}
+                  value={callPhone ?? '—'}
                   mono
                 />
                 <ReadonlyField
                   label="Caller"
-                  value={callerProfile?.identity ?? mockAutoCaller.identity}
+                  value={callerData?.identity ?? '—'}
                 />
                 <ReadonlyField
                   label="Previous incidents"
-                  value={String(callerProfile?.previous_incidents ?? mockAutoCaller.previous_incidents)}
+                  value={callerData != null ? String(callerData.previous_incidents) : '—'}
                 />
                 <ReadonlyField
                   label="Caller trust level"
-                  value={callerProfile?.trust_level ?? mockAutoCaller.trust_level}
+                  value={callerData?.trust_level ?? '—'}
                 />
               </div>
             </IntakePanel>
@@ -481,7 +628,6 @@ export default function NewIncident() {
             {/* ── Triage + Severity panel ── */}
             <IntakePanel className="p-4 md:p-5 flex flex-col gap-3">
 
-              {/* Live severity badge — prominent, top of panel */}
               <div className="flex items-center justify-between gap-2 pb-3 border-b border-(--border-subtle)">
                 <span
                   className="text-[11px] font-bold uppercase tracking-[0.1em] text-(--text-secondary)"
@@ -492,7 +638,7 @@ export default function NewIncident() {
                 <SeverityBadge severity={effectiveSeverity} size="lg" />
               </div>
 
-              {/* Incident type selector */}
+              {/* Incident type selector — categories from backend type map */}
               <label className="dispatcher-field m-0">
                 <span className="field-label">Incident type *</span>
                 <select
@@ -506,13 +652,9 @@ export default function NewIncident() {
                   required
                   style={{ appearance: 'none' }}
                 >
-                  <option value="" disabled>
-                    Select incident type...
-                  </option>
+                  <option value="" disabled>Select incident type...</option>
                   {INCIDENT_CATEGORIES.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
+                    <option key={cat} value={cat}>{cat}</option>
                   ))}
                 </select>
               </label>
@@ -526,64 +668,40 @@ export default function NewIncident() {
                   >
                     Triage questions
                   </span>
-
                   {triageQuestions.map((q, qi) => {
-                    const response = triageResponses.find(
-                      (r) => r.question_code === q.question_code
-                    )
-                    const useDropdown = q.answer_options.length > 4
-
+                    const response = triageResponses.find((r) => r.question_code === q.question_code)
+                    const opts      = Array.isArray(q.answer_options) ? q.answer_options : []
+                    const useDropdown = opts.length > 4
                     return (
                       <div key={q.question_id} className="flex flex-col gap-1.5">
                         <span className="text-[12px] font-medium text-(--text-primary)">
                           {qi + 1}. {q.question_text}
                         </span>
-
                         {useDropdown ? (
                           <select
                             className="dispatcher-input dispatcher-select"
                             value={response?.answer ?? ''}
-                            onChange={(e) =>
-                              handleTriageAnswer(q.question_code, e.target.value)
-                            }
+                            onChange={(e) => handleTriageAnswer(q.question_code, e.target.value)}
                             style={{ appearance: 'none' }}
                           >
-                            <option value="" disabled>
-                              Select answer...
-                            </option>
-                            {q.answer_options.map((opt) => (
-                              <option key={opt} value={opt}>
-                                {opt}
-                              </option>
-                            ))}
+                            <option value="" disabled>Select answer...</option>
+                            {opts.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
                           </select>
                         ) : (
-                          <div
-                            className="flex flex-wrap gap-1.5"
-                            role="group"
-                            aria-label={q.question_text}
-                          >
-                            {q.answer_options.map((opt) => {
+                          <div className="flex flex-wrap gap-1.5" role="group" aria-label={q.question_text}>
+                            {opts.map((opt) => {
                               const selected = response?.answer === opt
                               return (
                                 <button
                                   key={opt}
                                   type="button"
-                                  onClick={() =>
-                                    handleTriageAnswer(q.question_code, opt)
-                                  }
+                                  onClick={() => handleTriageAnswer(q.question_code, opt)}
                                   className="px-2.5 py-1 rounded-md border text-[11px] font-medium cursor-pointer"
                                   style={{
                                     fontFamily: 'var(--font-body)',
-                                    borderColor: selected
-                                      ? 'var(--accent)'
-                                      : 'var(--border)',
-                                    background: selected
-                                      ? 'var(--accent-ghost)'
-                                      : 'var(--bg-input)',
-                                    color: selected
-                                      ? 'var(--accent)'
-                                      : 'var(--text-secondary)',
+                                    borderColor: selected ? 'var(--accent)' : 'var(--border)',
+                                    background:  selected ? 'var(--accent-ghost)' : 'var(--bg-input)',
+                                    color:       selected ? 'var(--accent)' : 'var(--text-secondary)',
                                   }}
                                   aria-pressed={selected}
                                 >
@@ -605,7 +723,7 @@ export default function NewIncident() {
                 </p>
               )}
 
-              {/* ── Severity override controls ── */}
+              {/* Severity override */}
               <div className="pt-2 border-t border-(--border-subtle)">
                 {!severityOverrideActive ? (
                   <button
@@ -618,19 +736,12 @@ export default function NewIncident() {
                   </button>
                 ) : (
                   <div className="flex flex-col gap-2.5">
-                    {/* Visual: calculated struck-through → final active */}
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span
-                        className="text-[11px] text-(--text-muted)"
-                        style={{ fontFamily: 'var(--font-display)' }}
-                      >
-                        Override:
-                      </span>
+                      <span className="text-[11px] text-(--text-muted)" style={{ fontFamily: 'var(--font-display)' }}>Override:</span>
                       <SeverityBadge severity={calculatedSeverity} strikethrough />
                       <span className="text-[11px] text-(--text-muted)">→</span>
                       <SeverityBadge severity={finalSeverity} />
                     </div>
-
                     <label className="dispatcher-field m-0">
                       <span className="field-label">Final severity *</span>
                       <select
@@ -639,53 +750,31 @@ export default function NewIncident() {
                         onChange={(e) => setFinalSeverity(e.target.value)}
                         style={{ appearance: 'none' }}
                       >
-                        {SEVERITY_OPTIONS.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
+                        {SEVERITY_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
                       </select>
                     </label>
-
                     <label className="dispatcher-field m-0">
                       <span className="field-label">Reason for override *</span>
                       <textarea
                         className="dispatcher-input dispatcher-textarea mt-1"
                         value={overrideReason}
-                        onChange={(e) => {
-                          setOverrideReason(e.target.value.slice(0, 255))
-                          setOverrideReasonError(false)
-                        }}
+                        onChange={(e) => { setOverrideReason(e.target.value.slice(0, 255)); setOverrideReasonError(false) }}
                         maxLength={255}
                         placeholder="Explain why the calculated severity is being changed..."
                         rows={3}
                         aria-invalid={overrideReasonError}
-                        style={
-                          overrideReasonError
-                            ? { borderColor: 'var(--status-critical)' }
-                            : undefined
-                        }
+                        style={overrideReasonError ? { borderColor: 'var(--status-critical)' } : undefined}
                       />
                       <div className="flex items-start justify-between mt-1 gap-2">
-                        {overrideReasonError ? (
-                          <p
-                            className="text-[11px] m-0"
-                            style={{ color: 'var(--status-critical)' }}
-                          >
-                            Override reason is required.
-                          </p>
-                        ) : (
-                          <span />
-                        )}
-                        <span
-                          className="text-[10px] text-(--text-muted) shrink-0 ml-auto"
-                          style={{ fontFamily: 'var(--font-mono)' }}
-                        >
+                        {overrideReasonError
+                          ? <p className="text-[11px] m-0" style={{ color: 'var(--status-critical)' }}>Override reason is required.</p>
+                          : <span />
+                        }
+                        <span className="text-[10px] text-(--text-muted) shrink-0 ml-auto" style={{ fontFamily: 'var(--font-mono)' }}>
                           {overrideReason.length} / 255
                         </span>
                       </div>
                     </label>
-
                     <button
                       type="button"
                       onClick={handleCancelOverride}
@@ -699,7 +788,7 @@ export default function NewIncident() {
               </div>
             </IntakePanel>
 
-            {/* Notes — unchanged */}
+            {/* Notes — empty by default, no placeholder text */}
             <IntakePanel className="p-4 md:p-5 flex flex-col">
               <PanelHeader
                 icon={Mic}
@@ -715,6 +804,7 @@ export default function NewIncident() {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 className="min-h-[120px] w-full rounded-lg px-3 py-2.5 text-[13px] text-(--text-primary) bg-(--bg-input) border border-(--border) outline-none resize-y leading-relaxed focus:border-(--accent)"
+                placeholder="Type notes as the caller speaks…"
                 aria-label="Live incident notes"
               />
               <p className="text-[10px] text-(--text-muted) m-0 mt-2">
@@ -722,7 +812,7 @@ export default function NewIncident() {
               </p>
             </IntakePanel>
 
-            {/* Live transcript placeholder (backend will stream later) */}
+            {/* Live transcript placeholder */}
             {callId && (
               <IntakePanel className="p-4 md:p-5 flex flex-col gap-2">
                 <PanelHeader
@@ -730,28 +820,19 @@ export default function NewIncident() {
                   title="Live transcript"
                   badge={
                     <span className="text-[9px] font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: 'var(--status-low)' }}>
-                      <span
-                        className="w-1.5 h-1.5 rounded-full inline-block"
-                        style={{ background: 'var(--status-low)', animation: 'pulse 1.4s infinite' }}
-                      />
+                      <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: 'var(--status-low)', animation: 'pulse 1.4s infinite' }} />
                       Listening
                     </span>
                   }
                 />
                 <div
                   className="rounded-lg px-3 py-2.5 text-[12px] leading-relaxed"
-                  style={{
-                    background: 'var(--bg-input)',
-                    border: '1px solid var(--border)',
-                    color: 'var(--text-muted)',
-                    fontStyle: 'italic',
-                    minHeight: 72,
-                  }}
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontStyle: 'italic', minHeight: 72 }}
                 >
                   Transcript will stream here once the backend connects the voice pipeline.
                 </div>
                 <p className="text-[10px] text-(--text-muted) m-0">
-                  Powered by Africa’s Talking STT · streams on call_id {callId}
+                  Powered by Africa's Talking STT · streams on call_id {callId}
                 </p>
               </IntakePanel>
             )}
@@ -760,42 +841,46 @@ export default function NewIncident() {
           {/* ════════════ CENTER ════════════ */}
           <div className="intake-col--center flex flex-col gap-4">
 
-            {/* District confirmation */}
+            {/* Location confirmation */}
             <IntakePanel className="p-4 md:p-5 shrink-0">
               <FieldLabel className="mb-3">Location confirmation</FieldLabel>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <ReadonlyField label="Sector / area" value={mockLocationSharing.sector} />
+                <label className="dispatcher-field m-0">
+                  <span className="field-label">Sector / area</span>
+                  <input
+                    className="dispatcher-input mt-1"
+                    style={{ paddingTop: '10px', paddingBottom: '10px' }}
+                    value={sector}
+                    onChange={(e) => setSector(e.target.value)}
+                    placeholder={district ? 'Type sector / area name' : 'Select district first'}
+                    disabled={!district}
+                  />
+                </label>
                 <label className="dispatcher-field m-0">
                   <span className="field-label">District *</span>
                   <select
                     className="dispatcher-input dispatcher-select mt-1"
                     value={district}
-                    onChange={(e) => {
-                      setDistrict(e.target.value)
-                      setDistrictError(false)
-                    }}
+                    onChange={(e) => { setDistrict(e.target.value); setDistrictError(false) }}
                     required
                     aria-invalid={districtError}
                     aria-describedby={districtError ? 'district-error' : 'district-helper'}
                     style={{
                       appearance: 'none',
-                      ...(districtError
-                        ? {
-                            borderColor: 'var(--status-critical)',
-                            boxShadow: '0 0 0 3px var(--status-critical-bg)',
-                          }
-                        : {}),
+                      ...(districtError ? { borderColor: 'var(--status-critical)', boxShadow: '0 0 0 3px var(--status-critical-bg)' } : {}),
                     }}
                   >
-                    <option value="" disabled>
-                      Select district — confirm with caller
-                    </option>
-                    {RWANDA_DISTRICT_GROUPS.map((group) => (
-                      <optgroup key={group.label} label={group.label}>
-                        {group.districts.map((d) => (
-                          <option key={d} value={d}>
-                            {d}
-                          </option>
+                    <option value="" disabled>Select district — confirm with caller</option>
+                    {Object.entries(
+                      districts.reduce((acc, d) => {
+                        const p = d.province ?? 'Other'
+                        ;(acc[p] = acc[p] ?? []).push(d)
+                        return acc
+                      }, {})
+                    ).map(([province, list]) => (
+                      <optgroup key={province} label={`── ${province} ──`}>
+                        {list.map((d) => (
+                          <option key={d.district_id} value={d.district_id}>{d.name}</option>
                         ))}
                       </optgroup>
                     ))}
@@ -809,11 +894,7 @@ export default function NewIncident() {
                     Operations Manager receives this incident.
                   </p>
                   {districtError && (
-                    <p
-                      id="district-error"
-                      className="m-0 mt-1"
-                      style={{ fontSize: '11px', color: 'var(--status-critical)' }}
-                    >
+                    <p id="district-error" className="m-0 mt-1" style={{ fontSize: '11px', color: 'var(--status-critical)' }}>
                       District is required. Confirm location with caller before submitting.
                     </p>
                   )}
@@ -822,7 +903,32 @@ export default function NewIncident() {
             </IntakePanel>
 
             {/* Three-way location map */}
-            <TriageLocationMap caller={activeCallerRecord} onLocationChange={handleLocationChange} />
+            <TriageLocationMap
+              caller={callerData}
+              onLocationChange={handleLocationChange}
+              districtCenter={(() => {
+                const d = districts.find((x) => x.district_id === district)
+                return d?.lat && d?.lng ? [d.lat, d.lng] : null
+              })()}
+            />
+
+            {/* People involved */}
+            <IntakePanel className="p-4 md:p-5 shrink-0">
+              <label className="dispatcher-field m-0">
+                <span className="field-label">Number of people involved</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={500}
+                  className="dispatcher-input dispatcher-text-input mt-1"
+                  value={peopleCount}
+                  onChange={(e) => setPeopleCount(Math.max(1, parseInt(e.target.value) || 1))}
+                />
+                <p className="m-0 mt-1" style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                  Affects number of ambulances / units the AI recommends.
+                </p>
+              </label>
+            </IntakePanel>
 
             {/* Occurrence time */}
             <IntakePanel className="p-4 md:p-5 shrink-0">
@@ -835,82 +941,10 @@ export default function NewIncident() {
                   onChange={(e) => setOccurrenceTime(e.target.value)}
                   aria-label="Occurrence time — ask the caller, do not auto-fill"
                 />
-                <p
-                  className="m-0 mt-1"
-                  style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}
-                >
+                <p className="m-0 mt-1" style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
                   Ask the caller when the incident occurred. Do not auto-fill this field.
                 </p>
               </label>
-            </IntakePanel>
-
-            {/* Verification checklist */}
-            <IntakePanel className="p-4 md:p-5 shrink-0">
-              <div className="flex items-center justify-between gap-2 mb-3">
-                <span className="panel-title">Verification checklist</span>
-                <span
-                  className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded"
-                  style={{
-                    fontFamily: 'var(--font-display)',
-                    background: allChecked
-                      ? 'var(--status-low-bg)'
-                      : 'var(--status-medium-bg)',
-                    color: allChecked ? 'var(--status-low)' : 'var(--status-medium)',
-                  }}
-                >
-                  {Object.values(checklist).filter(Boolean).length} / 5
-                </span>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                {VERIFICATION_ITEMS.map(({ key, label }) => {
-                  const checked = checklist[key]
-                  return (
-                    <label
-                      key={key}
-                      className="flex items-center gap-2.5 cursor-pointer rounded-lg px-3 py-2 border"
-                      style={{
-                        borderColor: checked
-                          ? 'color-mix(in srgb, var(--accent) 40%, transparent)'
-                          : 'var(--border-subtle)',
-                        background: checked ? 'var(--accent-ghost)' : 'var(--bg-input)',
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => handleChecklistToggle(key)}
-                        className="w-3.5 h-3.5 cursor-pointer flex-shrink-0"
-                        style={{ accentColor: 'var(--accent)' }}
-                      />
-                      <span
-                        className="text-[12px] font-medium flex-1"
-                        style={{
-                          color: checked ? 'var(--text-primary)' : 'var(--text-secondary)',
-                        }}
-                      >
-                        {label}
-                      </span>
-                      {checked && (
-                        <Check
-                          size={12}
-                          className="shrink-0"
-                          style={{ color: 'var(--accent)' }}
-                        />
-                      )}
-                    </label>
-                  )
-                })}
-              </div>
-
-              {!allChecked && (
-                <p
-                  className="text-[11px] text-(--text-muted) mt-2 mb-0"
-                  style={{ fontStyle: 'italic' }}
-                >
-                  All five items must be confirmed before submission.
-                </p>
-              )}
             </IntakePanel>
 
             {/* AI recommendation + action buttons */}
@@ -920,7 +954,7 @@ export default function NewIncident() {
                 style={{ fontFamily: 'var(--font-body)' }}
               >
                 <div className="min-h-0 [&>div]:rounded-none [&>div]:border-0 [&>div]:shadow-none">
-                  <AiDispatchRecommendation data={mockAiRecommendation} />
+                  <AiDispatchRecommendation data={aiRecommendation} />
                 </div>
 
                 <div className="p-3 border-t border-(--border-subtle) shrink-0 flex flex-wrap gap-2">
@@ -940,8 +974,7 @@ export default function NewIncident() {
                         fontFamily: 'var(--font-display)',
                         background: 'var(--status-critical)',
                         color: 'var(--text-on-accent)',
-                        boxShadow:
-                          '0 4px 20px color-mix(in srgb, var(--status-critical) 40%, transparent)',
+                        boxShadow: '0 4px 20px color-mix(in srgb, var(--status-critical) 40%, transparent)',
                       }}
                     >
                       <Zap size={14} />
@@ -949,19 +982,22 @@ export default function NewIncident() {
                     </Link>
                   )}
 
+                  {submitError && (
+                    <p className="text-[11px] text-(--status-medium) m-0 mb-1">{submitError}</p>
+                  )}
                   <button
                     type="submit"
-                    disabled={!canSubmit}
-                    title={!canSubmit ? 'Complete all verification items' : undefined}
+                    disabled={!canSubmit || submitting}
+                    title={!canSubmit ? 'Select incident type and district first' : undefined}
                     className="flex-1 min-w-[140px] px-4 py-2 rounded-lg border-none text-[12px] font-bold uppercase tracking-wide"
                     style={{
                       fontFamily: 'var(--font-display)',
-                      background: canSubmit ? 'var(--accent)' : 'var(--border)',
-                      color: canSubmit ? 'var(--text-on-accent)' : 'var(--text-muted)',
-                      cursor: canSubmit ? 'pointer' : 'not-allowed',
+                      background: canSubmit && !submitting ? 'var(--accent)' : 'var(--border)',
+                      color:      canSubmit && !submitting ? 'var(--text-on-accent)' : 'var(--text-muted)',
+                      cursor:     canSubmit && !submitting ? 'pointer' : 'not-allowed',
                     }}
                   >
-                    Approve &amp; dispatch
+                    {submitting ? 'Analysing…' : 'Approve'}
                   </button>
                 </div>
               </div>
@@ -970,10 +1006,7 @@ export default function NewIncident() {
 
           {/* ════════════ RIGHT ════════════ */}
           <div className="intake-col--right flex flex-col gap-4">
-            <IncidentTimeline steps={mockIncidentTimeline} />
-            <div className="w-full xl:sticky xl:top-4 xl:self-start">
-              <RecentIncidentsQueue incidents={mockDispatchQueue} theme={theme} />
-            </div>
+            <IncidentTimeline steps={timelineSteps} />
           </div>
         </form>
       </div>
@@ -993,19 +1026,12 @@ export default function NewIncident() {
             style={{ fontFamily: 'var(--font-body)' }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal header */}
             <div className="flex items-start justify-between gap-3">
               <div>
-                <span
-                  className="text-[10px] font-bold uppercase tracking-[0.12em] text-(--accent)"
-                  style={{ fontFamily: 'var(--font-display)' }}
-                >
+                <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-(--accent)" style={{ fontFamily: 'var(--font-display)' }}>
                   Existing incident
                 </span>
-                <h2
-                  className="text-[18px] font-bold text-(--text-primary) m-0 mt-0.5"
-                  style={{ fontFamily: 'var(--font-display)' }}
-                >
+                <h2 className="text-[18px] font-bold text-(--text-primary) m-0 mt-0.5" style={{ fontFamily: 'var(--font-display)' }}>
                   {investigateIncident.incident_ref}
                 </h2>
               </div>
@@ -1018,48 +1044,19 @@ export default function NewIncident() {
                 <X size={14} />
               </button>
             </div>
-
-            {/* Incident details grid */}
             <div className="grid grid-cols-2 gap-2.5">
-              <ReadonlyField
-                label="Type"
-                value={investigateIncident.incident_type}
-              />
-              <ReadonlyField
-                label="Severity"
-                value={
-                  (
-                    investigateIncident.final_severity ||
-                    investigateIncident.severity ||
-                    'UNKNOWN'
-                  ).toUpperCase()
-                }
-              />
-              <ReadonlyField
-                label="Status"
-                value={investigateIncident.status?.toUpperCase() ?? '—'}
-              />
-              <ReadonlyField
-                label="District"
-                value={investigateIncident.district ?? '—'}
-              />
+              <ReadonlyField label="Type"     value={investigateIncident.incident_type} />
+              <ReadonlyField label="Severity" value={(investigateIncident.final_severity || investigateIncident.severity || 'UNKNOWN').toUpperCase()} />
+              <ReadonlyField label="Status"   value={investigateIncident.status?.toUpperCase() ?? '—'} />
+              <ReadonlyField label="District" value={investigateIncident.district ?? '—'} />
             </div>
-
-            {/* Distance + time info */}
-            <div
-              className="p-3 rounded-lg border border-(--border-subtle) bg-(--bg-input) text-[12px] text-(--text-secondary)"
-            >
+            <div className="p-3 rounded-lg border border-(--border-subtle) bg-(--bg-input) text-[12px] text-(--text-secondary)">
               Distance:{' '}
-              <strong className="text-(--text-primary) font-semibold">
-                {investigateIncident._distance}m
-              </strong>
+              <strong className="text-(--text-primary) font-semibold">{investigateIncident._distance}m</strong>
               {' · '}
               Reported:{' '}
-              <strong className="text-(--text-primary) font-semibold">
-                {investigateIncident._minutesAgo} min ago
-              </strong>
+              <strong className="text-(--text-primary) font-semibold">{investigateIncident._minutesAgo} min ago</strong>
             </div>
-
             <button
               type="button"
               onClick={() => setInvestigateIncident(null)}

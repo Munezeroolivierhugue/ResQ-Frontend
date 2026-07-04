@@ -42,15 +42,22 @@ function evaluateCondition(condition, triage_responses) {
   return false
 }
 
-export function calculateSeverity(incident_type, triage_responses) {
+/**
+ * @param {string} incident_type
+ * @param {Array}  triage_responses - [{ question_code, answer }, ...]
+ * @param {Array|null} liveRules - real backend severity rules (from getSeverityRules).
+ *   When provided, mock rules are ignored.
+ */
+export function calculateSeverity(incident_type, triage_responses, liveRules = null) {
   const typeKey = TYPE_MAP[incident_type] || incident_type
-  const rules = mockSeverityRules
-    .filter((r) => r.incident_type === typeKey && r.active)
-    .sort((a, b) => a.rule_order - b.rule_order)
+  const source = liveRules ?? mockSeverityRules
+  const rules = source
+    .filter((r) => r.incident_type === typeKey && r.active !== false)
+    .sort((a, b) => (a.rule_order ?? 0) - (b.rule_order ?? 0))
 
   for (const rule of rules) {
     if (evaluateCondition(rule.condition_json, triage_responses)) {
-      return rule.severity.toUpperCase()
+      return (rule.severity ?? 'LOW').toUpperCase()
     }
   }
 

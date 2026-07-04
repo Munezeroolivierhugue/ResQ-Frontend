@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Download, ShieldAlert } from 'lucide-react'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
-import { ADMIN_AUDIT_ROWS, ADMIN_SECURITY_EVENTS, adminRoleBadge } from '../../data/mockAdminData'
+import { ADMIN_SECURITY_EVENTS, adminRoleBadge } from '../../data/mockAdminData'
+import { listAuditLogs } from '../../api/admin'
 
 const STATUS_FILTERS = ['All', 'SUCCESS', 'DENIED', 'ERROR']
 
@@ -24,11 +25,21 @@ export default function AdminAudit() {
   const [dateTo,        setDateTo]        = useState('2026-05-28')
   const [statusFilter,  setStatusFilter]  = useState('All')
   const [appliedStatus, setAppliedStatus] = useState('All')
+  const [auditRows,     setAuditRows]     = useState([])
+  const [auditLoading,  setAuditLoading]  = useState(true)
+  const [auditError,    setAuditError]    = useState(null)
+
+  useEffect(() => {
+    listAuditLogs()
+      .then((rows) => setAuditRows(rows.map(r => ({ ...r, user: r.user_name, role: r.userRole ?? r.module ?? 'DISPATCHER' }))))
+      .catch(() => setAuditError('Failed to load audit logs'))
+      .finally(() => setAuditLoading(false))
+  }, [])
 
   const displayedRows = useMemo(() => {
-    if (appliedStatus === 'All') return ADMIN_AUDIT_ROWS
-    return ADMIN_AUDIT_ROWS.filter((r) => r.status === appliedStatus)
-  }, [appliedStatus])
+    if (appliedStatus === 'All') return auditRows
+    return auditRows.filter((r) => r.status === appliedStatus)
+  }, [appliedStatus, auditRows])
 
   function handleApply() {
     setAppliedStatus(statusFilter)
@@ -124,8 +135,14 @@ export default function AdminAudit() {
               </tr>
             </thead>
             <tbody>
-              {displayedRows.map((row, i) => {
-                const rb = adminRoleBadge(row.role.toLowerCase().includes('dispatcher') ? 'dispatcher' : 'ops_manager')
+              {auditLoading && (
+                <tr><td colSpan={7} className="p-6 text-center text-[13px] text-(--text-muted)">Loading audit logs…</td></tr>
+              )}
+              {auditError && !auditLoading && (
+                <tr><td colSpan={7} className="p-6 text-center text-[13px]" style={{ color: 'var(--status-critical)' }}>{auditError}</td></tr>
+              )}
+              {!auditLoading && !auditError && displayedRows.map((row, i) => {
+                const rb = adminRoleBadge((row.role ?? '').toLowerCase().includes('dispatcher') ? 'dispatcher' : 'ops_manager')
                 return (
                   <tr key={i} className="border-b border-(--border-subtle)" style={{ background: rowBg(row.status) }}>
                     <td className="p-3 font-mono text-(--text-muted)">{row.timestamp}</td>

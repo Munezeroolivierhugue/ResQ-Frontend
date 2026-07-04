@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Lock, Save, Upload, FileText, CheckCircle } from 'lucide-react'
 import PageHeader from '../../components/dispatcher/PageHeader'
 import SurfaceCard from '../../components/dispatcher/SurfaceCard'
@@ -11,8 +11,8 @@ import {
   FormTextarea,
   FormInput,
 } from '../../components/dispatcher/FormControls'
-import { mockIncidentClosure } from '../../data/mockIncidentClosureData'
-import { mockIncidentClosures } from '../../data/mockIncidentClosures'
+import { listIncidents, createIncidentClosure } from '../../api/incidents'
+import { submitFieldReport, uploadAttachment } from '../../api/fieldReports'
 
 const DISPOSITION_OPTIONS = [
   { value: 'arrests', label: 'Arrest(s) made' },
@@ -24,37 +24,60 @@ const DISPOSITION_OPTIONS = [
 
 export default function IncidentClosure() {
   const navigate = useNavigate()
-  const data = mockIncidentClosure
+  const { state: navState } = useLocation()
+  const [incident, setIncident] = useState(navState?.incident ?? null)
+
+  useEffect(() => {
+    // If an incident was passed from PendingReports, use it directly
+    if (navState?.incident) return
+    // Otherwise fall back to fetching the first PENDING_REPORT incident
+    listIncidents({ status: 'PENDING_REPORT' })
+      .then((incs) => setIncident(incs[0] ?? null))
+      .catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [mode, setMode] = useState('structured') // 'structured' | 'manual_upload'
   const [submitted, setSubmitted] = useState(false)
+  const [submitError, setSubmitError] = useState(null)
 
   // Structured mode fields
-  const [personsInvolved, setPersonsInvolved] = useState(String(data.persons_involved ?? ''))
-  const [casualties, setCasualties] = useState(String(data.casualties ?? '0'))
-  const [arrests, setArrests] = useState(String(data.arrests ?? '0'))
-  const [finalDisposition, setFinalDisposition] = useState(data.final_disposition ?? 'scene_cleared')
-  const [closureNotes, setClosureNotes] = useState(data.closure_notes ?? '')
+  const [personsInvolved, setPersonsInvolved] = useState('')
+  const [casualties, setCasualties] = useState('0')
+  const [arrests, setArrests] = useState('0')
+  const [finalDisposition, setFinalDisposition] = useState('scene_cleared')
+  const [closureNotes, setClosureNotes] = useState('')
 
   // Manual upload state
   const [uploadedFile, setUploadedFile] = useState(null)
   const [uploadError, setUploadError] = useState('')
 
-  const handleStructuredClose = () => {
-    const entry = {
-      closure_id: `cl-new-${Date.now()}`,
-      incident_id: data.incident_id,
-      field_report_id: null,
-      closed_by: 'u1111111-0000-4000-8000-000000000001',
-      persons_involved: parseInt(personsInvolved) || 0,
-      casualties: parseInt(casualties) || 0,
-      arrests: parseInt(arrests) || 0,
-      final_disposition: finalDisposition,
-      closure_notes: closureNotes,
-      data_source: 'dispatcher_portal',
-      closed_at: new Date().toISOString(),
+  async function submitClosure(dataSource, notesOverride) {
+    setSubmitError(null)
+    if (!incident?.incident_id) {
+      setSubmitError('No incident loaded. Open this page from Pending Reports to select an incident.')
+      return false
     }
-    mockIncidentClosures.unshift(entry)
+    try {
+      await createIncidentClosure({
+        incidentId:       incident.incident_id,
+        personsInvolved:  personsInvolved || null,
+        casualties,
+        arrests,
+        finalDisposition,
+        closureNotes:     notesOverride !== undefined ? notesOverride : closureNotes,
+        dataSource,
+      })
+    } catch (err) {
+      const msg = err?.response?.data?.message ?? err?.response?.data?.error ?? 'Failed to save report. Please retry.'
+      setSubmitError(msg)
+      return false
+    }
+    return true
+  }
+
+  const handleStructuredClose = async () => {
+    const ok = await submitClosure('dispatcher_portal')
+    if (!ok) return
     setSubmitted(true)
     setTimeout(() => navigate('/dispatcher/shift-handover'), 1800)
   }
@@ -71,25 +94,42 @@ export default function IncidentClosure() {
     setUploadedFile(file)
   }
 
-  const handleManualClose = () => {
+  const [uploading, setUploading] = useState(false)
+
+  const handleManualClose = async () => {
     if (!uploadedFile) {
       setUploadError('Please attach a field report file before closing.')
       return
     }
-    const entry = {
-      closure_id: `cl-new-${Date.now()}`,
-      incident_id: data.incident_id,
-      field_report_id: null,
-      closed_by: 'u1111111-0000-4000-8000-000000000001',
-      persons_involved: null,
-      casualties: null,
-      arrests: null,
-      final_disposition: null,
-      closure_notes: `Manual upload: ${uploadedFile.name}`,
-      data_source: 'field_upload',
-      closed_at: new Date().toISOString(),
+    setUploadError('')
+    setSubmitError(null)
+    if (!incident?.incident_id) {
+      setSubmitError('No incident loaded. Navigate here from Pending Reports to select an incident.')
+      return
     }
-    mockIncidentClosures.unshift(entry)
+    setUploading(true)
+    let fileNote
+    try {
+      const report = await submitFieldReport({
+        incident_id: incident.incident_id,
+        description: `Manually uploaded closure report: ${uploadedFile.name}`,
+        entry_method: 'MANUAL_UPLOAD',
+      })
+      try {
+        await uploadAttachment(report.report_id, uploadedFile, 'Closure report upload')
+      } catch {
+        // Attachment endpoint not yet available — record file name in notes instead
+        fileNote = `Attached file: ${uploadedFile.name} (${(uploadedFile.size / 1024).toFixed(1)} KB)`
+      }
+    } catch (err) {
+      const msg = err?.response?.data?.message ?? 'Failed to create field report. Please retry.'
+      setSubmitError(msg)
+      setUploading(false)
+      return
+    }
+    const ok = await submitClosure('manual_upload', fileNote ?? closureNotes)
+    setUploading(false)
+    if (!ok) return
     setSubmitted(true)
     setTimeout(() => navigate('/dispatcher/shift-handover'), 1800)
   }
@@ -99,9 +139,24 @@ export default function IncidentClosure() {
       <PageHeader
         breadcrumbCurrent="Incident report"
         title="Incident outcome & closure"
-        subtitle={data.subtitle}
+        subtitle={incident ? `${incident.incident_ref} · ${incident.incident_type} · ${incident.address ?? incident.district ?? ''}` : 'Loading incident…'}
         badges={<span className="dispatcher-eyebrow">Incident closure</span>}
       />
+
+      {/* Error banner */}
+      {submitError && (
+        <div
+          className="flex items-center gap-2 px-4 py-3 rounded-xl border mb-5 text-[13px] font-semibold"
+          style={{
+            background: 'var(--status-critical-bg)',
+            color: 'var(--status-critical)',
+            borderColor: 'var(--status-critical)',
+            fontFamily: 'var(--font-display)',
+          }}
+        >
+          {submitError}
+        </div>
+      )}
 
       {/* Success toast */}
       {submitted && (
@@ -282,11 +337,11 @@ export default function IncidentClosure() {
             <button
               type="button"
               onClick={handleManualClose}
-              disabled={submitted}
+              disabled={submitted || uploading}
               className="dispatcher-btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Lock size={16} />
-              Close with uploaded report
+              {uploading ? 'Uploading report…' : 'Close with uploaded report'}
             </button>
             <button
               type="button"
@@ -309,15 +364,15 @@ export default function IncidentClosure() {
                 className="text-[12px] font-semibold text-(--status-medium)"
                 style={{ fontFamily: 'var(--font-mono)' }}
               >
-                Total elapsed: {data.timelineElapsed}
+                {incident?.call_time ? `Started: ${new Date(incident.call_time).toLocaleString()}` : ''}
               </span>
             }
             className="mb-4"
           />
-          <VerticalTimeline events={data.timeline} />
+          <VerticalTimeline events={[]} />
         </SurfaceCard>
         <SurfaceCard padding="p-5 md:p-6">
-          <MediaAttachmentGrid items={data.media} />
+          <MediaAttachmentGrid items={[]} />
         </SurfaceCard>
       </div>
     </div>

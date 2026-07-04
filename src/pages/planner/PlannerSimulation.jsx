@@ -1,11 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Play, ArrowRight, FileDown, Plus, Loader2 } from 'lucide-react'
 import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
-import { PLANNER_SAVED_SCENARIOS } from '../../data/mockPlannerData'
-import { mockSimulations } from '../../data/mockSimulations'
 import { getCurrentUser } from '../../utils/authSession'
+import { listSimulations, runSimulation as apiRunSimulation } from '../../api/planning'
 
 const SCENARIOS = [
   'Flash Flood — Kigali',
@@ -23,35 +22,49 @@ export default function PlannerSimulation() {
   const [showResults, setShowResults] = useState(true)
   const [savedScenarios, setSavedScenarios] = useState(() => PLANNER_SAVED_SCENARIOS.map((s) => ({ ...s })))
 
-  const runSimulation = () => {
+  useEffect(() => {
+    listSimulations().then((sims) => {
+      const adapted = sims.map((s) => ({
+        name: s.name ?? `${s.scenario_type} simulation`,
+        scenario_type: s.scenario_type,
+        created_at: s.ran_at ? new Date(s.ran_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—',
+        result_summary: s.coverage_score != null ? `${s.coverage_score}% coverage` : '—',
+      }))
+      setSavedScenarios(adapted)
+    }).catch(() => {
+      setSavedScenarios([])
+    })
+  }, [])
+
+  const runSimulation = async () => {
     setLoading(true)
     setShowResults(false)
-    setTimeout(() => {
+    try {
       const currentUser = getCurrentUser()
-      const timestamp = new Date().toISOString()
-      const sim = {
-        simulation_id: Math.random().toString(36).slice(2, 10),
-        created_by: currentUser?.user_id ?? null,
-        scenario_type: resourceMode === 'ai' ? 'AI_OPTIMIZED' : 'CURRENT_RESOURCES',
-        multiplier,
-        duration: null,
-        focus_area: null,
-        projected_response_time: null,
-        projected_coverage: null,
-        created_at: timestamp,
-      }
-      mockSimulations.push(sim)
+      const name = `${resourceMode === 'ai' ? 'AI Optimized' : 'Current'} · ${multiplier}× baseline`
+      const scenario_type = resourceMode === 'ai' ? 'AI_OPTIMIZED' : 'CURRENT_RESOURCES'
+      
+      const newSim = await apiRunSimulation({
+        name,
+        scenario_type,
+        district_id: currentUser?.district_id ?? null,
+        notes: null,
+      })
+
       const scenarioEntry = {
-        name: `${resourceMode === 'ai' ? 'AI Optimized' : 'Current'} · ${multiplier}× baseline`,
-        scenario_type: sim.scenario_type,
-        created_at: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
-        result_summary: resourceMode === 'ai' ? 'Sufficient' : 'Insufficient',
+        name: newSim.name ?? name,
+        scenario_type: newSim.scenario_type ?? scenario_type,
+        created_at: newSim.ran_at ? new Date(newSim.ran_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+        result_summary: newSim.coverage_score != null ? `${newSim.coverage_score}% coverage` : 'Sufficient',
       }
-      PLANNER_SAVED_SCENARIOS.unshift(scenarioEntry)
+
       setSavedScenarios((prev) => [scenarioEntry, ...prev])
       setLoading(false)
       setShowResults(true)
-    }, 1500)
+    } catch (err) {
+      console.error(err)
+      setLoading(false)
+    }
   }
 
   return (

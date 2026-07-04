@@ -1,6 +1,22 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Phone, PhoneCall, PhoneMissed, Clock, X, CheckCircle } from 'lucide-react'
-import { mockMissedCalls } from '../../data/mockMissedCalls'
+import { listMissedCalls, markCalledBack } from '../../api/missedCalls'
+
+function maskPhone(num) {
+  if (!num) return '—'
+  const s = String(num)
+  return s.slice(0, 7) + 'x xxx x' + s.slice(-2)
+}
+
+function adaptCall(m) {
+  return {
+    ...m,
+    id: m.missed_call_id?.slice(0, 6).toUpperCase() ?? '—',
+    phoneMasked: maskPhone(m.phone_number),
+    calledAt: m.call_time ? new Date(m.call_time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—',
+    waited: m.wait_duration != null ? `${Math.floor(m.wait_duration / 60)}m ${m.wait_duration % 60}s` : '—',
+  }
+}
 
 function WaitChip({ seconds }) {
   const over90 = seconds > 90
@@ -108,30 +124,34 @@ function CallbackModal({ call, onConfirm, onCancel }) {
 }
 
 export default function MissedCalls() {
-  const [calls, setCalls] = useState(mockMissedCalls.map((c) => ({ ...c })))
+  const [calls, setCalls] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [tab, setTab] = useState('pending')
   const [callbackModal, setCallbackModal] = useState(null)
   const [justCallbacked, setJustCallbacked] = useState(new Set())
 
+  useEffect(() => {
+    listMissedCalls()
+      .then((data) => setCalls(data.map(adaptCall)))
+      .catch(() => setError('Failed to load missed calls'))
+      .finally(() => setLoading(false))
+  }, [])
+
   const pendingCount = calls.filter((c) => c.status === 'pending').length
   const displayed = tab === 'pending' ? calls.filter((c) => c.status === 'pending') : calls
 
-  const confirmCallback = () => {
-    const id = callbackModal.missed_call_id
-    setCalls((prev) =>
-      prev.map((c) =>
-        c.missed_call_id === id
-          ? {
-              ...c,
-              status: 'called_back',
-              called_back_by: 'u1111111-0000-4000-8000-000000000001',
-              callback_time: new Date().toISOString(),
-            }
-          : c,
-      ),
-    )
-    setJustCallbacked((prev) => new Set([...prev, id]))
+  const handleCallback = async (id) => {
+    try {
+      const updated = await markCalledBack(id)
+      setCalls((prev) => prev.map((c) => c.missed_call_id === id ? adaptCall(updated) : c))
+      setJustCallbacked((prev) => new Set([...prev, id]))
+    } catch { /* silent */ }
     setCallbackModal(null)
+  }
+
+  const confirmCallback = () => {
+    handleCallback(callbackModal.missed_call_id)
   }
 
   return (
@@ -187,7 +207,15 @@ export default function MissedCalls() {
 
       {/* Table */}
       <div className="bg-(--bg-surface) border border-(--border) rounded-xl overflow-hidden">
-        {displayed.length === 0 ? (
+        {loading ? (
+          <div className="py-16 flex flex-col items-center gap-3 text-(--text-muted)">
+            <span className="text-[13px]">Loading missed calls…</span>
+          </div>
+        ) : error ? (
+          <div className="py-16 flex flex-col items-center gap-3 text-(--text-muted)">
+            <span className="text-[13px]" style={{ color: 'var(--status-critical)' }}>{error}</span>
+          </div>
+        ) : displayed.length === 0 ? (
           <div className="py-16 flex flex-col items-center gap-3 text-(--text-muted)">
             <Phone size={28} style={{ color: 'var(--status-low)' }} />
             <span className="text-[13px]">No pending missed calls — all returned.</span>

@@ -1,3 +1,6 @@
+// PARTIAL INTEGRATION: listNotifications(), markRead(), markAllRead() wired to backend.
+// Used as initial/fallback state before first API fetch.
+// TODO: backend gap — notification href (deep link) and details fields not in backend schema.
 export const mockNotifications = [
   {
     id: 'n_ma1',

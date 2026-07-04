@@ -1,4 +1,4 @@
-import { useState, Fragment } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell } from 'recharts'
 import AnalystPageHeader from '../../components/analyst/AnalystPageHeader'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
@@ -12,6 +12,21 @@ import {
   barFillByPct,
   sourceStatusVariant,
 } from '../../data/mockAnalystData'
+import { listDataQuality } from '../../api/reporting'
+
+// Adapt API records to the shape the table expects
+function adaptApiDq(d) {
+  return {
+    source: d.source,
+    completeness_pct: Math.round((d.completeness ?? 0) * 100),
+    accuracy_pct: Math.round((d.accuracy ?? 0) * 100),
+    last_updated_at: d.checked_at ? new Date(d.checked_at).toLocaleString() : '—',
+    gap_count_30d: d.issues_found ?? 0,
+    status: d.overall_score >= 0.9 ? 'OK' : d.overall_score >= 0.7 ? 'DEGRADED' : 'ERROR',
+    degraded: (d.overall_score ?? 1) < 0.8,
+    detail: null,
+  }
+}
 
 function PctBar({ value }) {
   return (
@@ -33,6 +48,8 @@ const LINEAGE = {
 
 export default function AnalystDataQuality() {
   const [expanded, setExpanded] = useState('Rwanda Meteo Weather')
+  const [dqTable, setDqTable] = useState(ANALYST_DQ_TABLE)
+  const [dqError, setDqError] = useState(null)
   const [thresholds, setThresholds] = useState({
     gps: 5,
     completeness: 80,
@@ -42,6 +59,14 @@ export default function AnalystDataQuality() {
     coverage: 75,
   })
   const [toast, setToast] = useState(false)
+
+  useEffect(() => {
+    listDataQuality()
+      .then((records) => {
+        if (records && records.length > 0) setDqTable(records.map(adaptApiDq))
+      })
+      .catch(() => setDqError('Live data quality feed unavailable — showing cached data.'))
+  }, [])
 
   function saveThresholds() {
     const currentUser = getCurrentUser()
@@ -65,6 +90,12 @@ export default function AnalystDataQuality() {
         badge="Data Quality"
       />
 
+      {dqError && (
+        <div className="text-[12px] px-3 py-2 rounded" style={{ background: 'var(--status-medium-bg)', color: 'var(--status-medium)' }}>
+          {dqError}
+        </div>
+      )}
+
       <div className="dispatcher-surface overflow-x-auto">
         <table className="w-full text-[12px] min-w-[720px]">
           <thead>
@@ -78,7 +109,7 @@ export default function AnalystDataQuality() {
             </tr>
           </thead>
           <tbody>
-            {ANALYST_DQ_TABLE.map((row) => (
+            {dqTable.map((row) => (
               <Fragment key={row.source}>
                 <tr
                   className="border-b border-(--border-subtle) cursor-pointer"

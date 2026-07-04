@@ -1,8 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Search, ChevronDown, User, LogOut, Settings, Menu } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
-import { logout } from '../../utils/authSession'
+import { logout, getRefreshToken } from '../../utils/authSession'
+import { logoutApi } from '../../api/auth'
+import { disconnect } from '../../lib/wsClient'
 import NotificationsDropdown from '../dispatcher/NotificationsDropdown'
+import { useNotificationsStore } from '../../store/notificationsStore'
 
 export default function Navbar({
   user = { name: 'User', role: '' },
@@ -13,7 +16,15 @@ export default function Navbar({
   avatarVariant = 'default',
 }) {
   const navigate = useNavigate()
+  const fetchNotifications = useNotificationsStore((s) => s.fetchNotifications)
+  const subscribeToWs = useNotificationsStore((s) => s.subscribeToWs)
   const isSuperAdmin = avatarVariant === 'superAdmin'
+
+  useEffect(() => {
+    fetchNotifications()
+    const unsub = subscribeToWs()
+    return () => { if (typeof unsub === 'function') unsub() }
+  }, [])
   const initials = isSuperAdmin
     ? 'SA'
     : user.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
@@ -21,8 +32,11 @@ export default function Navbar({
   const [showUser, setShowUser] = useState(false)
 
   const handleLogout = () => {
+    const refreshToken = getRefreshToken()
     logout()
+    disconnect()
     navigate('/login', { replace: true })
+    if (refreshToken) logoutApi(refreshToken).catch(() => {})
   }
 
   return (

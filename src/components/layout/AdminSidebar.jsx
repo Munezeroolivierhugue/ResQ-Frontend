@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { useLocation, Link, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -13,13 +14,11 @@ import {
 } from 'lucide-react'
 import SidebarToggle from './SidebarToggle'
 import { useSidebarClasses } from '../../hooks/useSidebarClasses'
-import { logout } from '../../utils/authSession'
-import {
-  ADMIN_HEALTH_ALERTS,
-  ADMIN_PENDING_INVITES,
-  ADMIN_INTEGRATION_DOWN,
-  ADMIN_SECURITY_ALERTS,
-} from '../../data/mockAdminData'
+import { logout, getRefreshToken } from '../../utils/authSession'
+import { logoutApi } from '../../api/auth'
+import { disconnect } from '../../lib/wsClient'
+import { listUsers } from '../../api/users'
+import { listSecurityEvents } from '../../api/admin'
 
 const USER_SETTINGS_PATHS = [
   '/admin/settings/profile',
@@ -42,20 +41,14 @@ function isSettingsActive(item, pathname) {
 }
 
 const SYSTEM = [
-  { icon: LayoutDashboard, label: 'Dashboard',      href: '/admin/dashboard',   badge: 'critical', count: ADMIN_HEALTH_ALERTS },
-  { icon: Users,           label: 'User Management', href: '/admin/users',       badge: 'accent',   count: ADMIN_PENDING_INVITES },
-  {
-    icon: Plug,
-    label: 'Integrations',
-    href: '/admin/integrations',
-    badge: 'critical',
-    countLabel: ADMIN_INTEGRATION_DOWN ? 'DOWN' : null,
-  },
+  { icon: LayoutDashboard, label: 'Dashboard',      href: '/admin/dashboard' },
+  { icon: Users,           label: 'User Management', href: '/admin/users',       badge: 'accent',   countKey: 'pendingInvites' },
+  { icon: Plug,            label: 'Integrations',    href: '/admin/integrations' },
 ]
 
 const SECURITY = [
-  { icon: ShieldCheck, label: 'Audit Trail',    href: '/admin/audit' },
-  { icon: Lock,        label: 'Security',       href: '/admin/security',          badge: 'critical', count: ADMIN_SECURITY_ALERTS },
+  { icon: ShieldCheck, label: 'Audit Trail',     href: '/admin/audit' },
+  { icon: Lock,        label: 'Security',        href: '/admin/security', badge: 'critical', countKey: 'securityAlerts' },
   { icon: Settings,    label: 'System Settings', href: '/admin/settings/general' },
 ]
 
@@ -64,7 +57,7 @@ const ACCOUNT = [
   { icon: HelpCircle, label: 'Help',     href: '/admin/help' },
 ]
 
-function NavItem({ item, isActive, onClose }) {
+function NavItem({ item, isActive, onClose, count }) {
   const Icon = item.icon
   const badgeStyle =
     item.badge === 'accent'
@@ -86,14 +79,9 @@ function NavItem({ item, isActive, onClose }) {
       >
         <span className="sidebar-icon"><Icon size={18} /></span>
         <span className="sidebar-label">{item.label}</span>
-        {item.count > 0 && (
+        {count > 0 && item.badge && (
           <span className="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={badgeStyle}>
-            {item.count}
-          </span>
-        )}
-        {item.countLabel && (
-          <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded-full tracking-wide" style={badgeStyle}>
-            {item.countLabel}
+            {count}
           </span>
         )}
       </Link>
@@ -101,13 +89,14 @@ function NavItem({ item, isActive, onClose }) {
   )
 }
 
-function NavSection({ label, items, location, onClose }) {
+function NavSection({ label, items, location, onClose, counts }) {
   return (
     <>
       <div className="sidebar-section-label">{label}</div>
       {items.map((item) => {
         const isActive = isSettingsActive(item, location.pathname)
-        return <NavItem key={item.href} item={item} isActive={isActive} onClose={onClose} />
+        const count = item.countKey ? (counts[item.countKey] ?? 0) : 0
+        return <NavItem key={item.href} item={item} isActive={isActive} onClose={onClose} count={count} />
       })}
     </>
   )
@@ -117,10 +106,29 @@ export default function AdminSidebar({ mobileOpen, onClose }) {
   const location = useLocation()
   const navigate = useNavigate()
   const sidebarClasses = useSidebarClasses(mobileOpen)
+  const [counts, setCounts] = useState({ pendingInvites: 0, securityAlerts: 0 })
+
+  useEffect(() => {
+    listUsers()
+      .then((users) => setCounts((c) => ({
+        ...c,
+        pendingInvites: users.filter((u) => u.status === 'PENDING' || u.status === 'INVITED').length,
+      })))
+      .catch(() => {})
+    listSecurityEvents()
+      .then((events) => setCounts((c) => ({
+        ...c,
+        securityAlerts: events.filter((e) => e.status !== 'resolved').length,
+      })))
+      .catch(() => {})
+  }, [])
 
   const handleLogout = () => {
+    const refreshToken = getRefreshToken()
     logout()
+    disconnect()
     navigate('/login', { replace: true })
+    if (refreshToken) logoutApi(refreshToken).catch(() => {})
   }
 
   return (
@@ -137,8 +145,8 @@ export default function AdminSidebar({ mobileOpen, onClose }) {
         </button>
       </div>
       <nav className="sidebar-nav">
-        <NavSection label="System"   items={SYSTEM}   location={location} onClose={onClose} />
-        <NavSection label="Security" items={SECURITY} location={location} onClose={onClose} />
+        <NavSection label="System"   items={SYSTEM}   location={location} onClose={onClose} counts={counts} />
+        <NavSection label="Security" items={SECURITY} location={location} onClose={onClose} counts={counts} />
       </nav>
       <div className="sidebar-bottom">
         <div className="sidebar-section-label">Account</div>
