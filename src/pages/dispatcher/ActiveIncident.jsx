@@ -1,5 +1,5 @@
 import { useMemo, useState, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { MapContainer, TileLayer, CircleMarker, Circle, Marker, Tooltip } from 'react-leaflet'
 import L from 'leaflet'
 import {
@@ -19,25 +19,104 @@ import FieldLabel from '../../components/ui/FieldLabel'
 import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
 import MapFitBounds from '../../components/map/MapFitBounds'
 import { RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../components/map/rwandaConstants'
-import {
-  activeIncident,
-  activeIncidentUnits,
-  UNIT_COLORS,
-} from '../../data/mockActiveIncidentData'
-import { fmtDuration } from '../../data/mockAudioCommsData'
-import { mockUnifiedComms } from '../../data/mockUnifiedComms'
 import { useNotificationsStore } from '../../store/notificationsStore'
+import { listIncidents, getIncident, updateIncidentStatus } from '../../api/incidents'
+import { listDispatchesForIncident } from '../../api/dispatches'
+import { listVehicles } from '../../api/vehicles'
+import { requestBackup } from '../../api/backup-requests'
 import 'leaflet/dist/leaflet.css'
 
 const MAP_TILES =
   'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
 
-/** Hex colors for Leaflet HTML markers (CSS vars unreliable in divIcon). */
+/** Persists the active incident_id across navigation so data survives sidebar clicks */
+const ACTIVE_INCIDENT_KEY = 'resq-active-incident-id'
+/** Persists the dispatched units so they survive navigation even when not in DB (mock vehicle IDs) */
+const ACTIVE_UNITS_KEY = 'resq-active-units'
+
+function saveUnitsToStorage(units) {
+  if (!units || units.length === 0) return
+  try { sessionStorage.setItem(ACTIVE_UNITS_KEY, JSON.stringify(units)) } catch {}
+}
+
+function loadUnitsFromStorage() {
+  try { return JSON.parse(sessionStorage.getItem(ACTIVE_UNITS_KEY) ?? 'null') ?? [] } catch { return [] }
+}
+
+const UNIT_COLORS = {
+  fire: 'var(--status-critical)',
+  medical: 'var(--status-info)',
+  police: 'var(--status-medium)',
+  dispatch: 'var(--accent)',
+}
+
 const MARKER_HEX = {
   critical: '#E8354A',
   fire: '#E8354A',
   medical: '#2196C8',
   police: '#D4A017',
+}
+
+const ACTIVE_STATUSES = ['DISPATCHED', 'EN_ROUTE', 'ON_SCENE', 'active', 'pending', 'RECEIVED']
+
+function fmtDuration(s) {
+  const m = Math.floor(s / 60)
+  const sec = s % 60
+  return `${m}:${String(sec).padStart(2, '0')}`
+}
+
+function colorKeyFromType(vehicleType) {
+  const t = (vehicleType ?? '').toUpperCase()
+  if (t.includes('AMBULANCE')) return 'medical'
+  if (t.includes('FIRE') || t.includes('DISASTER')) return 'fire'
+  if (t.includes('POLICE') || t.includes('TACTICAL')) return 'police'
+  return 'medical'
+}
+
+/**
+ * Build a unit record from a navState team member (comes from dispatch recommendations).
+ * Uses the real lat/lng stored in the recommendation — no random offsets.
+ */
+function teamMemberToUnit(u) {
+  const vType = u.type ?? u.vehicle_type ?? 'Emergency Unit'
+  return {
+    id: u.unit ?? u.vehicle_plate ?? u.vehicle_id,
+    vehicle_id: u.vehicle_id,
+    vehicle_type: vType,
+    role: vType,
+    colorKey: colorKeyFromType(vType),
+    statusLabel: 'En Route',
+    status: 'enroute',
+    eta: u.eta ?? (u.eta_minutes != null ? `${u.eta_minutes} min` : null),
+    current_lat: u.lat ?? u.current_lat ?? null,
+    current_lng: u.lng ?? u.current_lng ?? null,
+    accuracy: (u.lat || u.current_lat) ? 'GPS' : '—',
+  }
+}
+
+/**
+ * Enrich dispatch records with live vehicle data (vehicle_type, GPS position, status).
+ * Replaces the old dispatchesToUnits that used Math.random() for positions.
+ */
+function buildUnitsFromDispatches(dispatches, vehicles) {
+  const vehicleMap = new Map(vehicles.map((v) => [v.vehicle_id, v]))
+  return dispatches.map((d) => {
+    const v = vehicleMap.get(d.vehicle_id) ?? {}
+    const vType = v.vehicle_type ?? 'Emergency Unit'
+    return {
+      id: d.vehicle_plate ?? v.plate_number ?? d.vehicle_id,
+      vehicle_id: d.vehicle_id,
+      vehicle_type: vType,
+      role: d.responder_name ?? 'Responder',
+      colorKey: colorKeyFromType(vType),
+      statusLabel: 'En Route',
+      status: 'enroute',
+      eta: d.eta_minutes != null ? `${d.eta_minutes} min` : null,
+      current_lat: v.current_lat ?? null,
+      current_lng: v.current_lng ?? null,
+      accuracy: v.current_lat ? 'GPS' : '—',
+    }
+  })
 }
 
 function unitMarkerIcon(unit) {
@@ -76,25 +155,167 @@ function StatusBadge({ label, color }) {
   )
 }
 
+function elapsedDisplay(callTime) {
+  if (!callTime) return '—'
+  const mins = Math.floor((Date.now() - new Date(callTime).getTime()) / 60000)
+  if (mins < 60) return `${mins}m`
+  return `${Math.floor(mins / 60)}h ${mins % 60}m`
+}
+
 export default function ActiveIncident() {
   const navigate = useNavigate()
+  const { state: navState } = useLocation()
   const [message, setMessage] = useState('')
-  const [comms, setComms] = useState(mockUnifiedComms)
+  const [comms, setComms] = useState([])
   const [sceneComplete, setSceneComplete] = useState(false)
+  const [incident, setIncident] = useState(null)
+  const [units, setUnits] = useState([])
+  const [, setElapsedTick] = useState(0)
   const addNotification = useNotificationsStore((state) => state.addNotification)
+
+  const navTeam = navState?.dispatchedTeam ?? (navState?.dispatchedUnit ? [navState.dispatchedUnit] : [])
+
+  useEffect(() => {
+    // 1. Resolve incident_id: navState wins, then sessionStorage fallback
+    const navIncidentId = navState?.incident_id ?? navState?.incident?.incident_id
+    const storedId = sessionStorage.getItem(ACTIVE_INCIDENT_KEY)
+    const incidentId = navIncidentId ?? storedId
+
+    if (incidentId) {
+      // Persist so navigation away and back still finds the incident
+      sessionStorage.setItem(ACTIVE_INCIDENT_KEY, incidentId)
+
+      // Seed UI immediately from navState if available to avoid blank flash
+      if (navState?.incident) {
+        setIncident({ ...navState.incident, status: 'DISPATCHED' })
+      }
+      if (navTeam.length > 0) {
+        setUnits(navTeam.map(teamMemberToUnit).filter((u) => u.current_lat != null))
+      }
+
+      // Fetch fresh data from DB: incident + dispatches + all vehicles (for GPS/type enrichment)
+      Promise.all([
+        getIncident(incidentId),
+        listDispatchesForIncident(incidentId),
+        listVehicles(),
+      ])
+        .then(([inc, dispatches, vehicles]) => {
+          setIncident(inc)
+          if (dispatches.length > 0) {
+            const enriched = buildUnitsFromDispatches(dispatches, vehicles)
+            setUnits(enriched)
+            saveUnitsToStorage(enriched)
+          } else if (navTeam.length > 0) {
+            // Dispatches not yet in DB — enrich nav team with real vehicle GPS
+            const vehicleMap = new Map(vehicles.map((v) => [v.vehicle_id, v]))
+            const enriched = navTeam.map((u) => {
+              const vData = vehicleMap.get(u.vehicle_id) ?? {}
+              return {
+                ...teamMemberToUnit(u),
+                current_lat: vData.current_lat ?? u.lat ?? u.current_lat ?? null,
+                current_lng: vData.current_lng ?? u.lng ?? u.current_lng ?? null,
+                accuracy: vData.current_lat ? 'GPS' : (u.lat ? 'Recommended' : '—'),
+              }
+            }).filter((u) => u.current_lat != null)
+            setUnits(enriched)
+            saveUnitsToStorage(enriched)
+          } else {
+            // No dispatches in DB and no navTeam (returning via sidebar) — use last known units
+            const stored = loadUnitsFromStorage()
+            if (stored.length > 0) setUnits(stored)
+          }
+        })
+        .catch(() => {
+          // If API fails, try stored units so the page isn't blank
+          const stored = loadUnitsFromStorage()
+          if (stored.length > 0) setUnits(stored)
+        })
+      return
+    }
+
+    // 2. No incident_id anywhere — fetch the latest active incident from DB
+    listIncidents()
+      .then((incs) => {
+        const active = incs.find((i) => ACTIVE_STATUSES.includes(i.status)) ?? null
+        if (!active) return
+        sessionStorage.setItem(ACTIVE_INCIDENT_KEY, active.incident_id)
+        setIncident(active)
+        return Promise.all([
+          listDispatchesForIncident(active.incident_id),
+          listVehicles(),
+        ]).then(([dispatches, vehicles]) => {
+          if (dispatches.length > 0) {
+            const enriched = buildUnitsFromDispatches(dispatches, vehicles)
+            setUnits(enriched)
+            saveUnitsToStorage(enriched)
+          } else {
+            const stored = loadUnitsFromStorage()
+            if (stored.length > 0) setUnits(stored)
+          }
+        })
+      })
+      .catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Live elapsed time — re-renders every second so the display keeps ticking
+  useEffect(() => {
+    const t = setInterval(() => setElapsedTick((v) => v + 1), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  // 'idle' | 'sending' | 'sent' | 'error'
+  const [escalation, setEscalation] = useState('idle')
+
+  const handleEscalate = async () => {
+    if (!incident?.incident_id || escalation === 'sending' || escalation === 'sent') return
+    setEscalation('sending')
+    try {
+      await requestBackup({
+        incidentId: incident.incident_id,
+        reason: 'ESCALATION',
+        notes: `Escalated to operations manager by dispatcher — ${incident.incident_ref ?? incident.incident_id}`,
+      })
+      setEscalation('sent')
+      addNotification({
+        id: `escalation-${Date.now()}`,
+        type: 'escalation',
+        title: `Escalated — ${incident.incident_ref ?? ''}`,
+        message: 'Operations manager has been alerted for this incident.',
+        time: new Date().toISOString(),
+        read: false,
+        target_role: 'dispatcher',
+      })
+    } catch {
+      setEscalation('error')
+    }
+  }
 
   const handleSceneComplete = () => {
     setSceneComplete(true)
+    // Clear all session data related to this incident and its intake form
+    try {
+      const stored = JSON.parse(sessionStorage.getItem('resq-active-call') ?? 'null')
+      if (stored?.callId) sessionStorage.removeItem(`resq-intake-${stored.callId}`)
+    } catch {}
+    sessionStorage.removeItem('resq-active-call')
+    sessionStorage.removeItem(ACTIVE_INCIDENT_KEY)
+    sessionStorage.removeItem(ACTIVE_UNITS_KEY)
+    // Mark incident as awaiting report in the DB (fire-and-forget; PendingReports is seeded via navState regardless)
+    if (incident?.incident_id) {
+      updateIncidentStatus(incident.incident_id, 'PENDING_REPORT').catch(() => {})
+    }
     addNotification({
       id: `scene-complete-${Date.now()}`,
       type: 'scene_complete',
-      title: `Scene complete — ${activeIncident.incident_ref}`,
-      message: `Units released. Field report required for ${activeIncident.title}.`,
+      title: `Scene complete — ${incident?.incident_ref ?? ''}`,
+      message: `Units released. Field report required for ${incident?.incident_type ?? 'incident'}.`,
       time: new Date().toISOString(),
       read: false,
       target_role: 'dispatcher',
     })
-    setTimeout(() => navigate('/dispatcher/pending-reports'), 1800)
+    setTimeout(() => navigate('/dispatcher/pending-reports', {
+      state: { completedIncident: incident },
+    }), 1800)
   }
 
   // Voice recording state
@@ -162,26 +383,29 @@ export default function ActiveIncident() {
     }, 100)
   }
 
+  const incLat = incident?.lat ?? -1.9441
+  const incLng = incident?.lng ?? 30.0619
+
+  const unitsWithPos = units.filter((u) => u.current_lat != null && u.current_lng != null)
+
   const mapPoints = useMemo(
     () => [
-      [activeIncident.lat, activeIncident.lng],
-      ...activeIncidentUnits.map((u) => [u.current_lat, u.current_lng]),
+      [incLat, incLng],
+      ...unitsWithPos.map((u) => [u.current_lat, u.current_lng]),
     ],
-    [],
+    [incLat, incLng, unitsWithPos],
   )
 
-  const incidentCenter = mapPoints[0]
+  const incidentCenter = [incLat, incLng]
 
   const mapLegend = useMemo(
     () => [
-      { color: MARKER_HEX.critical, label: `${activeIncident.incident_ref} · incident` },
-      { color: MARKER_HEX.fire, label: 'Fire units (FTK)' },
-      { color: MARKER_HEX.medical, label: 'Medical (AMB)' },
-      { color: MARKER_HEX.police, label: 'Police (POL)' },
+      { color: MARKER_HEX.critical, label: `${incident?.incident_ref ?? 'Incident'} · active` },
+      { color: MARKER_HEX.medical, label: 'Dispatched units' },
       { color: MARKER_HEX.critical, label: 'Hot zone', ring: true },
       { color: MARKER_HEX.police, label: 'Safety line', dashed: true },
     ],
-    [],
+    [incident],
   )
 
   const handleSend = (e) => {
@@ -196,13 +420,13 @@ export default function ActiveIncident() {
         time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
         text: message.trim(),
         isSelf: true,
-        type: 'text'
+        type: 'text',
       },
     ])
     setMessage('')
   }
 
-  const activeIncidentLevel = activeIncident.severity === 'critical' ? 4 : activeIncident.severity === 'high' ? 3 : activeIncident.severity === 'medium' ? 2 : 1;
+  const sev = incident?.severity ?? 'medium'
 
   return (
     <div className="flex flex-col h-full min-h-0 bg-(--bg-base) overflow-hidden relative">
@@ -234,21 +458,21 @@ export default function ActiveIncident() {
                   fontFamily: 'var(--font-display)',
                 }}
               >
-                Critical — level {activeIncidentLevel}
+                {sev.charAt(0).toUpperCase() + sev.slice(1)}
               </span>
               <span className="text-[12px] font-bold text-(--accent)" style={{ fontFamily: 'var(--font-mono)' }}>
-                {activeIncident.incident_ref}
+                {incident?.incident_ref ?? '—'}
               </span>
             </div>
             <h1
               className="text-xl md:text-2xl font-bold text-(--text-primary) m-0 leading-tight"
               style={{ fontFamily: 'var(--font-display)' }}
             >
-              {activeIncident.title}
+              {incident?.incident_type ?? 'Active Incident'}
             </h1>
             <p className="flex items-center gap-1.5 text-[13px] text-(--text-secondary) mt-2 m-0">
               <MapPin size={14} className="text-(--accent) shrink-0" />
-              {activeIncident.address}
+              {incident?.address ?? incident?.district ?? '—'}
             </p>
           </div>
 
@@ -259,20 +483,26 @@ export default function ActiveIncident() {
                 className="text-2xl font-bold text-(--accent) tabular-nums"
                 style={{ fontFamily: 'var(--font-mono)' }}
               >
-                {activeIncident.elapsedDisplay}
+                {elapsedDisplay(incident?.call_time)}
               </div>
             </div>
             <button
               type="button"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border-none cursor-pointer text-[11px] font-bold uppercase tracking-wide"
+              onClick={handleEscalate}
+              disabled={escalation === 'sending' || escalation === 'sent'}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border-none cursor-pointer text-[11px] font-bold uppercase tracking-wide disabled:cursor-not-allowed"
               style={{
-                background: 'var(--status-critical)',
+                background: escalation === 'sent' ? 'var(--status-low)' : 'var(--status-critical)',
                 color: '#fff',
+                opacity: escalation === 'sending' ? 0.6 : 1,
                 fontFamily: 'var(--font-display)',
               }}
             >
-              <AlertTriangle size={16} />
-              Escalate to operations manager
+              {escalation === 'sent' ? <CheckCircle size={16} /> : <AlertTriangle size={16} />}
+              {escalation === 'sent' ? 'Escalated — ops manager alerted'
+                : escalation === 'sending' ? 'Escalating…'
+                : escalation === 'error' ? 'Escalation failed — retry'
+                : 'Escalate to operations manager'}
             </button>
             <button
               type="button"
@@ -315,7 +545,7 @@ export default function ActiveIncident() {
 
             <Circle
               center={incidentCenter}
-              radius={activeIncident.safetyLineRadiusM}
+              radius={300}
               pathOptions={{
                 color: MARKER_HEX.police,
                 fillColor: MARKER_HEX.police,
@@ -326,7 +556,7 @@ export default function ActiveIncident() {
             />
             <Circle
               center={incidentCenter}
-              radius={activeIncident.hotZoneRadiusM}
+              radius={100}
               pathOptions={{
                 color: MARKER_HEX.critical,
                 fillColor: MARKER_HEX.critical,
@@ -346,17 +576,17 @@ export default function ActiveIncident() {
               }}
             >
               <Tooltip direction="top" offset={[0, -14]}>
-                <strong>{activeIncident.incident_ref}</strong> — {activeIncident.incident_type}
+                <strong>{incident?.incident_ref ?? '—'}</strong> — {incident?.incident_type ?? ''}
                 <br />
-                {activeIncident.sector}, {activeIncident.district}
+                {incident?.address ?? incident?.district ?? ''}
                 <br />
                 <span style={{ fontFamily: 'monospace' }}>
-                  {activeIncident.lat.toFixed(4)}, {activeIncident.lng.toFixed(4)}
+                  {incLat.toFixed(4)}, {incLng.toFixed(4)}
                 </span>
               </Tooltip>
             </CircleMarker>
 
-            {activeIncidentUnits.map((unit) => (
+            {unitsWithPos.map((unit) => (
               <CircleMarker
                 key={`ring-${unit.id}`}
                 center={[unit.current_lat, unit.current_lng]}
@@ -371,7 +601,7 @@ export default function ActiveIncident() {
               />
             ))}
 
-            {activeIncidentUnits.map((unit) => (
+            {unitsWithPos.map((unit) => (
               <Marker
                 key={unit.id}
                 position={[unit.current_lat, unit.current_lng]}
@@ -384,7 +614,6 @@ export default function ActiveIncident() {
                   <br />
                   <strong>{unit.statusLabel}</strong>
                   {unit.eta ? ` · ETA ${unit.eta}` : ''}
-                  {unit.timestamp ? ` · ${unit.timestamp}` : ''}
                   <br />
                   <span style={{ fontFamily: 'monospace' }}>
                     {unit.current_lat.toFixed(4)}, {unit.current_lng.toFixed(4)} ({unit.accuracy})
@@ -430,12 +659,17 @@ export default function ActiveIncident() {
               className="text-[10px] font-bold px-2 py-0.5 rounded bg-(--accent-ghost) text-(--accent)"
               style={{ fontFamily: 'var(--font-mono)' }}
             >
-              {activeIncidentUnits.length} total
+              {units.length} total
             </span>
           </div>
           <ul className="list-none m-0 p-0 overflow-y-auto flex-1 min-h-0">
-            {activeIncidentUnits.map((unit) => {
-              const color = UNIT_COLORS[unit.colorKey]
+            {units.length === 0 && (
+              <li className="px-4 py-6 text-[12px] text-(--text-muted) text-center">
+                No units dispatched yet
+              </li>
+            )}
+            {units.map((unit) => {
+              const color = UNIT_COLORS[unit.colorKey] ?? 'var(--text-secondary)'
               return (
                 <li
                   key={unit.id}
@@ -458,16 +692,17 @@ export default function ActiveIncident() {
                         </span>
                         <StatusBadge label={unit.statusLabel} color={color} />
                       </div>
-                      <div className="text-[11px] text-(--text-secondary) mt-0.5">{unit.role}</div>
+                      <div className="text-[11px] text-(--text-secondary) mt-0.5">{unit.vehicle_type}</div>
                       <div className="text-[10px] text-(--text-muted) mt-1" style={{ fontFamily: 'var(--font-mono)' }}>
-                        {unit.status === 'arrived' && unit.timestamp && `At scene ${unit.timestamp}`}
-                        {unit.status === 'enroute' && unit.eta && `ETA ${unit.eta}`}
-                        {' · '}
-                        {unit.accuracy}
+                        {unit.eta ? `ETA ${unit.eta}` : ''}
+                        {unit.eta && unit.accuracy ? ' · ' : ''}
+                        {unit.accuracy !== '—' ? unit.accuracy : ''}
                       </div>
-                      <div className="text-[10px] text-(--text-muted) mt-0.5" style={{ fontFamily: 'var(--font-mono)' }}>
-                        {unit.current_lat.toFixed(4)}, {unit.current_lng.toFixed(4)}
-                      </div>
+                      {unit.current_lat != null && (
+                        <div className="text-[10px] text-(--text-muted) mt-0.5" style={{ fontFamily: 'var(--font-mono)' }}>
+                          {unit.current_lat.toFixed(4)}, {unit.current_lng.toFixed(4)}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </li>
@@ -490,7 +725,7 @@ export default function ActiveIncident() {
               style={{ color: 'var(--status-low)' }}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-(--status-low)" />
-              {activeIncident.sector}
+              {incident?.sector ?? incident?.district ?? 'Field'}
             </span>
           </div>
 
@@ -502,7 +737,6 @@ export default function ActiveIncident() {
               return (
                 <div key={msg.id} className={`flex ${isSelf ? 'justify-end' : 'justify-start'}`}>
                   {msg.type === 'text' ? (
-                    // Text Bubble
                     <div
                       className="max-w-[85%] rounded-2xl px-3.5 py-2.5 border shadow-sm relative group"
                       style={{
@@ -528,7 +762,6 @@ export default function ActiveIncident() {
                       <p className="text-[12.5px] m-0 leading-snug font-medium" style={{ color: isSelf ? '#111827' : 'var(--text-primary)' }}>{msg.text}</p>
                     </div>
                   ) : (
-                    // Voice Bubble (iMessage style)
                     <div
                       className="max-w-[85%] rounded-3xl px-1.5 py-1.5 border shadow-sm flex items-center gap-2 relative group"
                       style={{
@@ -536,7 +769,7 @@ export default function ActiveIncident() {
                         borderColor: isSelf ? '#a2cc29' : 'var(--border-subtle)',
                         borderBottomRightRadius: isSelf ? '6px' : '24px',
                         borderBottomLeftRadius: isSelf ? '24px' : '6px',
-                        minWidth: '200px'
+                        minWidth: '200px',
                       }}
                     >
                       {msg.isNew && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-(--status-critical) border border-(--bg-base)" />}
@@ -545,7 +778,7 @@ export default function ActiveIncident() {
                         className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-none transition-transform active:scale-95"
                         style={{
                           background: isSelf ? 'rgba(17,24,39,0.1)' : 'var(--accent)',
-                          color: isSelf ? '#111827' : '#fff'
+                          color: isSelf ? '#111827' : '#fff',
                         }}
                         onClick={() => togglePlay(msg)}
                       >
@@ -573,10 +806,10 @@ export default function ActiveIncident() {
                           </span>
                         </div>
 
-                        {/* Fake Waveform */}
+                        {/* Waveform visualization */}
                         <div className="h-4 flex items-end gap-[2px] w-full overflow-hidden opacity-80 mt-1">
                           {Array.from({ length: 24 }).map((_, i) => {
-                            const isPlayed = playingId === msg.id && ((i / 24) * msg.durationS <= (playProgress[msg.id] || 0));
+                            const isPlayed = playingId === msg.id && ((i / 24) * msg.durationS <= (playProgress[msg.id] || 0))
                             return (
                               <div
                                 key={i}
@@ -635,7 +868,7 @@ export default function ActiveIncident() {
                     style={{
                       background: pttActive ? 'var(--status-critical)' : 'transparent',
                       color: pttActive ? '#fff' : 'var(--accent)',
-                      border: pttActive ? 'none' : '1px solid var(--border)'
+                      border: pttActive ? 'none' : '1px solid var(--border)',
                     }}
                     aria-label="Hold to talk"
                     onMouseDown={startPtt}

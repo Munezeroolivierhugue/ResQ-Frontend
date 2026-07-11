@@ -1,76 +1,97 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Search } from 'lucide-react'
 import DCResourceRequestModal from '../../components/district-commander/DCResourceRequestModal'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
 import DCPageHeader from '../../components/district-commander/DCPageHeader'
 import { getDistrictCommanderDistrict } from '../../utils/districtCommanderSession'
-import { DC_RESOURCE_REQUESTS, getRequestBorderColor } from '../../data/mockDistrictCommanderData'
-import { mockResourceRequests } from '../../data/mockResourceRequests'
-import { getCurrentUser } from '../../utils/authSession'
-import { useNotificationsStore } from '../../store/notificationsStore'
-
-const FILTERS = ['All', 'Pending', 'Approved', 'Declined']
+import { listResourceRequests, createResourceRequest } from '../../api/reporting'
 
 function statusVariant(status) {
-  if (status === 'APPROVED') return 'resolved'
-  if (status === 'PENDING') return 'handover'
+  if (!status) return 'handover'
+  const s = status.toUpperCase()
+  if (s === 'APPROVED') return 'resolved'
+  if (s === 'PENDING') return 'handover'
   return 'critical'
+}
+
+function formatDate(iso) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 export default function DCResources() {
   const district = getDistrictCommanderDistrict()
-  const addNotification = useNotificationsStore((s) => s.addNotification)
+  const districtId = sessionStorage.getItem('resq-district-id') || undefined
+
   const [filter, setFilter] = useState('All')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [requests, setRequests] = useState(() => DC_RESOURCE_REQUESTS.map((r) => ({ ...r })))
+  const [requests, setRequests] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [toast, setToast] = useState(null)
+
+  function showToast(msg) {
+    setToast(msg)
+    setTimeout(() => setToast(null), 2500)
+  }
+
+  function fetchRequests() {
+    return listResourceRequests(districtId)
+      .then(setRequests)
+      .catch(() => setError('Failed to load resource requests'))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { fetchRequests() }, [])
 
   const history = requests.filter((r) => {
-    const matchesFilter = filter === 'All' || r.status === filter.toUpperCase()
+    const matchesFilter =
+      filter === 'All' || (r.status ?? '').toUpperCase() === filter.toUpperCase()
     if (!matchesFilter) return false
-    
     if (!searchQuery) return true
     const q = searchQuery.toLowerCase()
     return (
-      r.id.toLowerCase().includes(q) ||
-      r.unit_type.toLowerCase().includes(q) ||
-      r.detail.toLowerCase().includes(q)
+      (r.request_id ?? '').toLowerCase().includes(q) ||
+      (r.resource_type ?? '').toLowerCase().includes(q) ||
+      (r.reason ?? '').toLowerCase().includes(q)
     )
   })
 
-  const handleRequestSubmit = (data) => {
-    const currentUser = getCurrentUser()
-    const timestamp = new Date().toISOString()
-    const newRequest = {
-      id: 'REQ-' + Math.random().toString(36).slice(2, 7).toUpperCase(),
-      request_id: 'req-' + Math.random().toString(36).slice(2, 10),
-      district_id: currentUser?.district_id ?? null,
-      requested_by: currentUser?.user_id ?? null,
-      unit_type: data.unitType,
-      quantity: parseInt(data.qty, 10),
-      urgency: data.urgency,
-      justification: data.justification,
-      status: 'PENDING',
-      created_at: timestamp,
-      submitted_at: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
-      detail: 'Under review at HQ',
+  const handleRequestSubmit = async (data) => {
+    setSubmitting(true)
+    try {
+      await createResourceRequest({
+        district_id: districtId,
+        resource_type: data.unitType,
+        quantity: parseInt(data.qty, 10) || 1,
+        reason: data.justification || data.urgency,
+      })
+      showToast('Resource request submitted successfully')
+      setIsModalOpen(false)
+      setLoading(true)
+      setError(null)
+      listResourceRequests(districtId)
+        .then(setRequests)
+        .catch(() => {})
+        .finally(() => setLoading(false))
+    } catch {
+      showToast('Failed to submit request — please try again')
+    } finally {
+      setSubmitting(false)
     }
-    mockResourceRequests.push(newRequest)
-    setRequests((prev) => [newRequest, ...prev])
-    addNotification({
-      id: 'notif-' + Math.random().toString(36).slice(2, 10),
-      type: 'RESOURCE_REQUEST',
-      target_role: 'super_admin',
-      title: 'Resource Request Submitted',
-      message: `DC requested ${newRequest.quantity}x ${newRequest.unit_type} — ${newRequest.urgency.split(' ')[0]} urgency.`,
-      timestamp,
-      read: false,
-    })
   }
 
   return (
     <div className="portal-page">
+      {toast && (
+        <div className="fixed bottom-5 right-5 z-[9999] dispatcher-surface px-4 py-2.5 text-[13px] font-medium shadow-lg" style={{ borderLeft: '3px solid var(--accent)' }}>
+          {toast}
+        </div>
+      )}
+
       <DCPageHeader
         title="Resource Requests"
         subtitle="Request additional units or resources from RNP Headquarters."
@@ -99,14 +120,13 @@ export default function DCResources() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            
             <div className="flex items-center gap-3 shrink-0 w-full sm:w-auto">
               <select
                 className="h-10 bg-(--bg-surface) border border-(--border) rounded-lg px-3 pr-8 text-[13px] text-(--text-primary) outline-none focus:border-(--accent) cursor-pointer appearance-none bg-no-repeat"
                 style={{
                   backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6-6H0z'/%3E%3C/svg%3E")`,
                   backgroundPosition: 'right 12px center',
-                  backgroundSize: '10px'
+                  backgroundSize: '10px',
                 }}
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
@@ -124,21 +144,32 @@ export default function DCResources() {
                 <tr className="border-b border-(--border) text-[11px] text-(--text-muted) uppercase tracking-wider">
                   <th className="pb-2 font-semibold">Request ID</th>
                   <th className="pb-2 font-semibold">Submitted</th>
-                  <th className="pb-2 font-semibold">Unit Type</th>
+                  <th className="pb-2 font-semibold">Resource Type</th>
                   <th className="pb-2 font-semibold">Qty</th>
                   <th className="pb-2 font-semibold">Status</th>
-                  <th className="pb-2 font-semibold">Details</th>
+                  <th className="pb-2 font-semibold">Reason</th>
                 </tr>
               </thead>
               <tbody>
-                {history.map((req) => (
-                  <tr key={req.id} className="border-b border-(--border-subtle) last:border-0 hover:bg-(--bg-elevated) transition-colors">
-                    <td className="py-3 font-mono font-bold text-(--accent) text-[12px] pr-4">{req.id}</td>
-                    <td className="py-3 text-[12px] text-(--text-secondary) pr-4 whitespace-nowrap">{req.submitted_at}</td>
-                    <td className="py-3 text-[13px] text-(--text-primary) pr-4">{req.unit_type}</td>
-                    <td className="py-3 text-[13px] text-(--text-primary) pr-4">{req.quantity}</td>
-                    <td className="py-3 pr-4"><StatusBadge label={req.status} variant={statusVariant(req.status)} /></td>
-                    <td className="py-3 text-[12px] text-(--text-secondary)">{req.detail}</td>
+                {loading && (
+                  <tr><td colSpan={6} className="py-6 text-center text-[13px] text-(--text-muted)">Loading requests…</td></tr>
+                )}
+                {error && !loading && (
+                  <tr><td colSpan={6} className="py-6 text-center text-[13px]" style={{ color: 'var(--status-critical)' }}>{error}</td></tr>
+                )}
+                {!loading && !error && history.length === 0 && (
+                  <tr><td colSpan={6} className="py-6 text-center text-[13px] text-(--text-muted)">No requests found.</td></tr>
+                )}
+                {!loading && !error && history.map((req) => (
+                  <tr key={req.request_id} className="border-b border-(--border-subtle) last:border-0 hover:bg-(--bg-elevated) transition-colors">
+                    <td className="py-3 font-mono font-bold text-(--accent) text-[12px] pr-4">{req.request_id?.slice(0, 8) ?? '—'}</td>
+                    <td className="py-3 text-[12px] text-(--text-secondary) pr-4 whitespace-nowrap">{formatDate(req.created_at)}</td>
+                    <td className="py-3 text-[13px] text-(--text-primary) pr-4">{req.resource_type ?? '—'}</td>
+                    <td className="py-3 text-[13px] text-(--text-primary) pr-4">{req.quantity ?? '—'}</td>
+                    <td className="py-3 pr-4">
+                      <StatusBadge label={req.status ?? 'PENDING'} variant={statusVariant(req.status)} />
+                    </td>
+                    <td className="py-3 text-[12px] text-(--text-secondary)">{req.reason ?? '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -146,12 +177,13 @@ export default function DCResources() {
           </div>
         </div>
       </div>
-      
+
       <DCResourceRequestModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleRequestSubmit}
         district={district}
+        submitting={submitting}
       />
     </div>
   )

@@ -1,7 +1,9 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Siren, Lock, RefreshCw, Smartphone } from 'lucide-react'
+import { Siren, Lock, RefreshCw, Mail } from 'lucide-react'
 import FRAuthShell from '../../components/auth/FRAuthShell'
+import { verifyMfa, resendMfaCode } from '../../api/auth'
+import { setSession } from '../../utils/authSession'
 
 const OTP_LEN = 6
 
@@ -9,9 +11,12 @@ export default function FRLoginMfa() {
   const navigate = useNavigate()
   const [digits, setDigits] = useState(Array(OTP_LEN).fill(''))
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [resending, setResending] = useState(false)
+  const [resendMsg, setResendMsg] = useState('')
   const refs = useRef([])
 
-  const email = sessionStorage.getItem('resq-login-email') || 'responder@rnp.gov.rw'
+  const email = sessionStorage.getItem('resq-login-email') || ''
 
   const handleChange = (i, val) => {
     if (!/^\d?$/.test(val)) return
@@ -35,12 +40,60 @@ export default function FRLoginMfa() {
     refs.current[Math.min(pasted.length, OTP_LEN - 1)]?.focus()
   }
 
-  const handleVerify = (e) => {
+  const handleVerify = async (e) => {
     e.preventDefault()
     if (digits.some(d => !d)) { setError('Please enter the complete 6-digit code.'); return }
     setError('')
-    sessionStorage.setItem('resq-trusted-device', 'true')
-    navigate('/field-responder/shift-start')
+    setResendMsg('')
+
+    const challengeToken = sessionStorage.getItem('resq-challenge-token')
+    if (!challengeToken) { navigate('/fr/login'); return }
+
+    setLoading(true)
+    try {
+      const result = await verifyMfa(challengeToken, digits.join(''))
+      sessionStorage.removeItem('resq-challenge-token')
+      sessionStorage.setItem('resq-trusted-device', 'true')
+      setSession({
+        access_token: result.accessToken,
+        refresh_token: result.refreshToken,
+        user: result.user ?? null,
+      })
+      navigate('/field-responder/shift-start')
+    } catch (err) {
+      setError(
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        'Verification failed. The code may be incorrect or expired.'
+      )
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleResend = async () => {
+    const challengeToken = sessionStorage.getItem('resq-challenge-token')
+    if (!challengeToken) { navigate('/fr/login'); return }
+    setResending(true)
+    setResendMsg('')
+    setError('')
+    setDigits(Array(OTP_LEN).fill(''))
+    try {
+      const result = await resendMfaCode(challengeToken)
+      if (result.challengeToken) {
+        sessionStorage.setItem('resq-challenge-token', result.challengeToken)
+      }
+      setResendMsg('A new code has been sent to your email.')
+      refs.current[0]?.focus()
+    } catch (err) {
+      setError(
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        'Failed to resend code. Please go back and log in again.'
+      )
+    } finally {
+      setResending(false)
+    }
   }
 
   return (
@@ -54,12 +107,13 @@ export default function FRLoginMfa() {
 
         <div className="fr-auth-card">
           <div className="fr-otp-icon-wrap">
-            <Smartphone size={26} color="var(--accent)" />
+            <Mail size={26} color="var(--accent)" />
           </div>
           <p className="fr-otp-eyebrow">Verification required</p>
-          <h2 className="fr-auth-card-title">Authenticator Code</h2>
+          <h2 className="fr-auth-card-title">Check Your Email</h2>
           <p className="fr-auth-card-sub">
-            Enter the 6-digit code from your authenticator app for <strong>{email}</strong>
+            A 6-digit code was sent to <strong>{email || 'your email'}</strong>. Enter it below.
+            The code expires in <strong>5 minutes</strong>.
           </p>
 
           <form onSubmit={handleVerify} className="fr-auth-form">
@@ -81,14 +135,29 @@ export default function FRLoginMfa() {
                 />
               ))}
             </div>
-            {error && <p className="fr-auth-error" style={{ textAlign: 'center' }}>{error}</p>}
-            <button type="submit" className="fr-auth-btn fr-auth-btn--primary fr-auth-btn--full">
-              <Lock size={15} /> VERIFY & AUTHORIZE
+
+            {error && (
+              <p className="fr-auth-error" style={{ textAlign: 'center' }}>{error}</p>
+            )}
+            {resendMsg && (
+              <p style={{ fontSize: '11px', color: 'var(--status-low)', textAlign: 'center', margin: '4px 0' }}>
+                {resendMsg}
+              </p>
+            )}
+
+            <button type="submit" className="fr-auth-btn fr-auth-btn--primary fr-auth-btn--full" disabled={loading || resending}>
+              <Lock size={15} /> {loading ? 'VERIFYING…' : 'VERIFY & AUTHORIZE'}
             </button>
           </form>
 
-          <button type="button" className="fr-otp-resend">
-            <RefreshCw size={13} /> Resend secure code
+          <button
+            type="button"
+            className="fr-otp-resend"
+            onClick={handleResend}
+            disabled={resending || loading}
+          >
+            <RefreshCw size={13} className={resending ? 'animate-spin' : ''} />
+            {resending ? 'Sending…' : 'Resend code'}
           </button>
         </div>
 

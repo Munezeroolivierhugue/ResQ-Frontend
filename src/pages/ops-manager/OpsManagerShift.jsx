@@ -1,38 +1,85 @@
-import { Fragment, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Send, Check } from 'lucide-react'
-import MetricCard from '../../components/dispatcher/MetricCard'
-import SectionTitle from '../../components/dispatcher/SectionTitle'
-import StatusBadge from '../../components/dispatcher/StatusBadge'
-import VerticalTimeline from '../../components/dispatcher/VerticalTimeline'
-import { useOpsManagerStore } from '../../store/opsManagerStore'
+import { Fragment, useState } from "react";
+import { Link } from "react-router-dom";
+import { Send, Check, Download } from "lucide-react";
+import { buildPdfHtml, openPdfWindow } from "../../utils/pdfExport";
+
+function exportShiftPDF({
+  district,
+  shiftPeriod,
+  generatedBy,
+  incidents,
+  avgResponse,
+  coverageScore,
+  dispatchAccuracy,
+  escalations,
+  aiAcceptance,
+}) {
+  openPdfWindow(
+    buildPdfHtml({
+      title: "Shift Performance Report",
+      subtitle: shiftPeriod,
+      reportType: "SHIFT REPORT",
+      idPrefix: "OPS",
+      metaItems: [
+        { label: "District", value: district ?? "—" },
+        { label: "Shift Period", value: shiftPeriod },
+      ],
+      kpis: [
+        {
+          label: "Total Incidents",
+          value: incidents ?? "—",
+          sub: "Dispatched this shift",
+        },
+        {
+          label: "Avg Response Time",
+          value: avgResponse ?? "—",
+          sub: "Target < 8 min",
+        },
+        { label: "Coverage Score", value: coverageScore ?? "—" },
+        { label: "Dispatch Accuracy", value: dispatchAccuracy ?? "—" },
+        { label: "Escalations Managed", value: escalations ?? "—" },
+        { label: "AI Acceptance Rate", value: aiAcceptance ?? "—" },
+      ],
+      sections: [],
+      generatedBy: generatedBy ?? "Operations Manager",
+      generatedRole: "Operations Manager",
+    }),
+  );
+}
+import MetricCard from "../../components/dispatcher/MetricCard";
+import SectionTitle from "../../components/dispatcher/SectionTitle";
+import StatusBadge from "../../components/dispatcher/StatusBadge";
+import VerticalTimeline from "../../components/dispatcher/VerticalTimeline";
+import { useOpsManagerStore } from "../../store/opsManagerStore";
 import {
   OPS_SHIFT_REPORT_INCIDENTS,
   OPS_RESOURCE_EVENTS,
   OPS_SHIFT_HANDOVER,
-} from '../../data/mockOpsManagerData'
-import OpsManagerDistrictLabel from '../../components/ops-manager/OpsManagerDistrictLabel'
-import { getOpsManagerDistrict } from '../../utils/opsManagerDistrict'
-import { mockReports } from '../../data/mockReports'
-import { generateUuid } from '../../utils/formHelpers'
-import { getCurrentUser } from '../../utils/authSession'
-import { useNotificationsStore } from '../../store/notificationsStore'
+} from "../../data/mockOpsManagerData";
+import OpsManagerDistrictLabel from "../../components/ops-manager/OpsManagerDistrictLabel";
+import { getOpsManagerDistrict } from "../../utils/opsManagerDistrict";
+import { mockReports } from "../../data/mockReports";
+import { generateUuid } from "../../utils/formHelpers";
+import { getCurrentUser } from "../../utils/authSession";
+import { useNotificationsStore } from "../../store/notificationsStore";
 
 function getCurrentShiftPeriod() {
-  const now = new Date()
-  const year = now.getFullYear()
-  const startOfYear = new Date(year, 0, 1)
-  const week = Math.ceil(((now - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7)
-  return `${year}-W${String(week).padStart(2, '0')}`
+  const now = new Date();
+  const year = now.getFullYear();
+  const startOfYear = new Date(year, 0, 1);
+  const week = Math.ceil(
+    ((now - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7,
+  );
+  return `${year}-W${String(week).padStart(2, "0")}`;
 }
 
 export default function OpsManagerShift() {
-  const [tab, setTab] = useState('performance')
-  const [notes, setNotes] = useState('')
-  const [submitted, setSubmitted] = useState(false)
-  const [expandedId, setExpandedId] = useState(null)
-  const { markHandoverRead } = useOpsManagerStore()
-  const addNotification = useNotificationsStore((s) => s.addNotification)
+  const [tab, setTab] = useState("performance");
+  const [notes, setNotes] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [expandedId, setExpandedId] = useState(null);
+  const { markHandoverRead } = useOpsManagerStore();
+  const addNotification = useNotificationsStore((s) => s.addNotification);
 
   return (
     <div className="portal-page">
@@ -41,43 +88,109 @@ export default function OpsManagerShift() {
         <OpsManagerDistrictLabel />
       </div>
       <div className="flex gap-2 mb-6 border-b border-(--border) pb-2">
-        {['performance', 'handover'].map((t) => (
+        {["performance", "handover"].map((t) => (
           <button
             key={t}
             type="button"
             className="text-[13px] font-semibold px-4 py-2 border-none bg-transparent cursor-pointer border-b-2 -mb-[10px]"
             style={{
-              borderColor: tab === t ? 'var(--accent)' : 'transparent',
-              color: tab === t ? 'var(--accent)' : 'var(--text-muted)',
+              borderColor: tab === t ? "var(--accent)" : "transparent",
+              color: tab === t ? "var(--accent)" : "var(--text-muted)",
             }}
             onClick={() => setTab(t)}
           >
-            {t === 'performance' ? 'Shift Performance Report' : 'Incoming Handover'}
+            {t === "performance"
+              ? "Shift Performance Report"
+              : "Incoming Handover"}
           </button>
         ))}
       </div>
 
-      {tab === 'performance' && (
+      {tab === "performance" && (
         <>
           <div className="flex flex-wrap justify-between gap-4 mb-6">
             <div>
-              <h2 className="text-lg font-bold text-(--text-primary) m-0" style={{ fontFamily: 'var(--font-display)' }}>
+              <h2
+                className="text-lg font-bold text-(--text-primary) m-0"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
                 Shift Performance Report
               </h2>
-              <p className="dispatcher-page-subtitle m-0 mt-1">Auto-generated from shift data. Review and submit to District Commander.</p>
+              <p className="dispatcher-page-subtitle m-0 mt-1">
+                Auto-generated from shift data. Review and submit to District
+                Commander.
+              </p>
             </div>
-            <span className="text-[11px] font-mono text-(--text-muted) self-start">
-              Shift: 08:00 – 16:00 · May 25 2026 · District: {getOpsManagerDistrict()}
-            </span>
+            <div className="flex items-center gap-3 self-start">
+              <span className="text-[11px] font-mono text-(--text-muted)">
+                Shift: 08:00 – 16:00 · May 25 2026 · District:{" "}
+                {getOpsManagerDistrict()}
+              </span>
+              <button
+                type="button"
+                className="dispatcher-btn-ghost text-[12px] inline-flex items-center gap-1.5"
+                onClick={() => {
+                  const cu = getCurrentUser();
+                  exportShiftPDF({
+                    district: getOpsManagerDistrict(),
+                    shiftPeriod:
+                      "08:00 – 16:00 · " +
+                      new Date().toLocaleDateString("en-GB", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      }),
+                    generatedBy:
+                      cu?.fullName ||
+                      sessionStorage.getItem("resq-full-name") ||
+                      "Operations Manager",
+                    incidents: "247",
+                    avgResponse: "7.2m",
+                    coverageScore: "93%",
+                    dispatchAccuracy: "88%",
+                    escalations: "4",
+                    aiAcceptance: "86%",
+                  });
+                }}
+              >
+                <Download size={14} />
+                Export PDF
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-            <MetricCard label="Total Incidents" value="247" hint="✓" hintTone="positive" />
-            <MetricCard label="Avg Response Time" value="7.2m" hint="✓ at target" hintTone="positive" />
-            <MetricCard label="Coverage Score" value="93%" hint="✓ above 90%" hintTone="positive" />
-            <MetricCard label="Dispatch Accuracy" value="88%" hint="⚠ watch" hintTone="warning" />
+            <MetricCard
+              label="Total Incidents"
+              value="247"
+              hint="✓"
+              hintTone="positive"
+            />
+            <MetricCard
+              label="Avg Response Time"
+              value="7.2m"
+              hint="✓ at target"
+              hintTone="positive"
+            />
+            <MetricCard
+              label="Coverage Score"
+              value="93%"
+              hint="✓ above 90%"
+              hintTone="positive"
+            />
+            <MetricCard
+              label="Dispatch Accuracy"
+              value="88%"
+              hint="⚠ watch"
+              hintTone="warning"
+            />
             <MetricCard label="Escalations Managed" value="4" />
-            <MetricCard label="AI Acceptance Rate" value="86%" hint="✓" hintTone="positive" />
+            <MetricCard
+              label="AI Acceptance Rate"
+              value="86%"
+              hint="✓"
+              hintTone="positive"
+            />
           </div>
 
           <div className="dispatcher-surface p-4 mb-6 table-scroll">
@@ -98,18 +211,36 @@ export default function OpsManagerShift() {
                   <Fragment key={row.id}>
                     <tr
                       className="border-b border-(--border-subtle) cursor-pointer hover:bg-(--bg-elevated)"
-                      onClick={() => setExpandedId(expandedId === row.id ? null : row.id)}
+                      onClick={() =>
+                        setExpandedId(expandedId === row.id ? null : row.id)
+                      }
                     >
-                      <td className="p-2 font-mono text-(--accent)">{row.id}</td>
+                      <td className="p-2 font-mono text-(--accent)">
+                        {row.id}
+                      </td>
                       <td className="p-2">{row.type}</td>
-                      <td className="p-2"><StatusBadge label={row.severity} variant={row.severity === 'CRITICAL' ? 'critical' : 'handover'} /></td>
+                      <td className="p-2">
+                        <StatusBadge
+                          label={row.severity}
+                          variant={
+                            row.severity === "CRITICAL"
+                              ? "critical"
+                              : "handover"
+                          }
+                        />
+                      </td>
                       <td className="p-2">{row.duration}</td>
                       <td className="p-2">{row.units}</td>
-                      <td className="p-2 text-(--text-secondary)">{row.outcome}</td>
+                      <td className="p-2 text-(--text-secondary)">
+                        {row.outcome}
+                      </td>
                     </tr>
                     {expandedId === row.id && (
                       <tr>
-                        <td colSpan={6} className="p-3 text-[12px] text-(--text-secondary) bg-(--bg-input)">
+                        <td
+                          colSpan={6}
+                          className="p-3 text-[12px] text-(--text-secondary) bg-(--bg-input)"
+                        >
                           Timeline: logged → units dispatched → {row.outcome}
                         </td>
                       </tr>
@@ -134,7 +265,9 @@ export default function OpsManagerShift() {
 
           <div className="dispatcher-surface p-4 mb-6">
             <label className="dispatcher-field">
-              <span className="field-label">Your notes for District Commander</span>
+              <span className="field-label">
+                Your notes for District Commander
+              </span>
               <textarea
                 className="dispatcher-input dispatcher-textarea"
                 rows={5}
@@ -143,23 +276,27 @@ export default function OpsManagerShift() {
                 onChange={(e) => setNotes(e.target.value)}
               />
             </label>
-            <div className="text-[11px] text-(--text-muted) text-right">{notes.length} characters</div>
+            <div className="text-[11px] text-(--text-muted) text-right">
+              {notes.length} characters
+            </div>
           </div>
 
           {!submitted ? (
             <div className="flex flex-wrap justify-between gap-3 pt-4 border-t border-(--border)">
-              <button type="button" className="dispatcher-btn-ghost">Preview Report</button>
+              <button type="button" className="dispatcher-btn-ghost">
+                Preview Report
+              </button>
               <button
                 type="button"
                 className="dispatcher-btn-primary flex items-center gap-2"
                 onClick={() => {
-                  const cu = getCurrentUser()
-                  const district = getOpsManagerDistrict()
-                  const shiftPeriod = getCurrentShiftPeriod()
+                  const cu = getCurrentUser();
+                  const district = getOpsManagerDistrict();
+                  const shiftPeriod = getCurrentShiftPeriod();
                   mockReports.push({
                     report_id: generateUuid(),
-                    submitted_by: cu?.user_id || 'demo-user-uuid',
-                    role: 'ops_manager',
+                    submitted_by: cu?.user_id || "demo-user-uuid",
+                    role: "OPERATIONS_MANAGER",
                     district_id: cu?.district_id || district,
                     shift_period: shiftPeriod,
                     total_incidents: 247,
@@ -170,51 +307,73 @@ export default function OpsManagerShift() {
                     ai_acceptance_rate_pct: 86,
                     notes: notes || null,
                     submitted_at: new Date().toISOString(),
-                  })
+                  });
                   addNotification({
                     id: `sr-${Date.now()}`,
-                    type: 'SHIFT_REPORT_SUBMITTED',
-                    title: 'Shift Report Submitted',
+                    type: "SHIFT_REPORT_SUBMITTED",
+                    title: "Shift Report Submitted",
                     desc: `Ops Manager shift report for ${shiftPeriod} sent to District Commander`,
-                    time: 'Just now',
+                    time: "Just now",
                     read: false,
-                    href: '#shift-report',
-                    target_role: 'district_commander',
-                  })
-                  setSubmitted(true)
+                    href: "#shift-report",
+                    target_role: "district_commander",
+                  });
+                  setSubmitted(true);
                 }}
               >
                 <Send size={16} /> Submit to District Commander
               </button>
             </div>
           ) : (
-            <div className="p-4 rounded-lg flex items-start gap-3" style={{ background: 'var(--status-low-bg)', border: '1px solid var(--status-low)' }}>
-              <Check size={22} style={{ color: 'var(--status-low)' }} />
+            <div
+              className="p-4 rounded-lg flex items-start gap-3"
+              style={{
+                background: "var(--status-low-bg)",
+                border: "1px solid var(--status-low)",
+              }}
+            >
+              <Check size={22} style={{ color: "var(--status-low)" }} />
               <div>
-                <div className="font-bold text-(--text-primary)">Report submitted to District Commander</div>
-                <p className="text-[13px] text-(--text-secondary) m-0 mt-1">Handover summary prepared for incoming Operations Manager.</p>
+                <div className="font-bold text-(--text-primary)">
+                  Report submitted to District Commander
+                </div>
+                <p className="text-[13px] text-(--text-secondary) m-0 mt-1">
+                  Handover summary prepared for incoming Operations Manager.
+                </p>
               </div>
             </div>
           )}
           {!submitted && (
             <p className="text-[11px] text-(--text-muted) mt-2">
-              Submission will also prepare handover summary for the incoming Operations Manager.
+              Submission will also prepare handover summary for the incoming
+              Operations Manager.
             </p>
           )}
         </>
       )}
 
-      {tab === 'handover' && (
+      {tab === "handover" && (
         <div className="dispatcher-surface p-6 max-w-4xl">
           <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-(--accent) font-bold mb-4">
             Shift Handover Briefing
           </div>
-          <p className="text-[13px] text-(--text-secondary) m-0">{OPS_SHIFT_HANDOVER.outgoing}</p>
-          <p className="text-[11px] font-mono text-(--text-muted) mt-1">Generated: {OPS_SHIFT_HANDOVER.generated}</p>
+          <p className="text-[13px] text-(--text-secondary) m-0">
+            {OPS_SHIFT_HANDOVER.outgoing}
+          </p>
+          <p className="text-[11px] font-mono text-(--text-muted) mt-1">
+            Generated: {OPS_SHIFT_HANDOVER.generated}
+          </p>
 
           <HandoverSection title="Active Incidents Inherited">
             <table className="w-full text-[12px] mt-2">
-              <thead><tr className="text-(--text-muted)"><th className="text-left p-1">ID</th><th className="text-left p-1">Type</th><th className="text-left p-1">Status</th><th className="text-left p-1">Units</th></tr></thead>
+              <thead>
+                <tr className="text-(--text-muted)">
+                  <th className="text-left p-1">ID</th>
+                  <th className="text-left p-1">Type</th>
+                  <th className="text-left p-1">Status</th>
+                  <th className="text-left p-1">Units</th>
+                </tr>
+              </thead>
               <tbody>
                 {OPS_SHIFT_HANDOVER.activeIncidents.map((r) => (
                   <tr key={r.id} className="border-t border-(--border-subtle)">
@@ -229,40 +388,81 @@ export default function OpsManagerShift() {
           </HandoverSection>
 
           <HandoverSection title="Unit Issues">
-            <ul className="m-0 pl-4 text-[13px] text-(--text-secondary)">{OPS_SHIFT_HANDOVER.unitIssues.map((u) => <li key={u}>{u}</li>)}</ul>
+            <ul className="m-0 pl-4 text-[13px] text-(--text-secondary)">
+              {OPS_SHIFT_HANDOVER.unitIssues.map((u) => (
+                <li key={u}>{u}</li>
+              ))}
+            </ul>
           </HandoverSection>
 
           <HandoverSection title="Unresolved Escalations">
-            <ul className="m-0 pl-4 text-[13px] text-(--text-secondary)">{OPS_SHIFT_HANDOVER.unresolvedEscalations.map((u) => <li key={u}>{u}</li>)}</ul>
+            <ul className="m-0 pl-4 text-[13px] text-(--text-secondary)">
+              {OPS_SHIFT_HANDOVER.unresolvedEscalations.map((u) => (
+                <li key={u}>{u}</li>
+              ))}
+            </ul>
           </HandoverSection>
 
           <HandoverSection title="AI Recommendations Pending">
-            <ul className="m-0 pl-4 text-[13px] text-(--text-secondary)">{OPS_SHIFT_HANDOVER.pendingAi.map((u) => <li key={u}>{u}</li>)}</ul>
+            <ul className="m-0 pl-4 text-[13px] text-(--text-secondary)">
+              {OPS_SHIFT_HANDOVER.pendingAi.map((u) => (
+                <li key={u}>{u}</li>
+              ))}
+            </ul>
           </HandoverSection>
 
           <HandoverSection title="Outgoing Notes">
-            <blockquote className="dispatcher-quote m-0 mt-2">{OPS_SHIFT_HANDOVER.notes}</blockquote>
+            <blockquote className="dispatcher-quote m-0 mt-2">
+              {OPS_SHIFT_HANDOVER.notes}
+            </blockquote>
           </HandoverSection>
 
           <HandoverSection title="Shift Stats">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2 text-[12px]">
-              <div><span className="text-(--text-muted)">Incidents</span><div className="font-bold">{OPS_SHIFT_HANDOVER.stats.incidents}</div></div>
-              <div><span className="text-(--text-muted)">Avg response</span><div className="font-bold">{OPS_SHIFT_HANDOVER.stats.avgResponse}</div></div>
-              <div><span className="text-(--text-muted)">Coverage</span><div className="font-bold">{OPS_SHIFT_HANDOVER.stats.coverage}</div></div>
-              <div><span className="text-(--text-muted)">Escalations</span><div className="font-bold">{OPS_SHIFT_HANDOVER.stats.escalations}</div></div>
+              <div>
+                <span className="text-(--text-muted)">Incidents</span>
+                <div className="font-bold">
+                  {OPS_SHIFT_HANDOVER.stats.incidents}
+                </div>
+              </div>
+              <div>
+                <span className="text-(--text-muted)">Avg response</span>
+                <div className="font-bold">
+                  {OPS_SHIFT_HANDOVER.stats.avgResponse}
+                </div>
+              </div>
+              <div>
+                <span className="text-(--text-muted)">Coverage</span>
+                <div className="font-bold">
+                  {OPS_SHIFT_HANDOVER.stats.coverage}
+                </div>
+              </div>
+              <div>
+                <span className="text-(--text-muted)">Escalations</span>
+                <div className="font-bold">
+                  {OPS_SHIFT_HANDOVER.stats.escalations}
+                </div>
+              </div>
             </div>
           </HandoverSection>
 
-          <button type="button" className="dispatcher-btn-outline mt-6" onClick={markHandoverRead}>
+          <button
+            type="button"
+            className="dispatcher-btn-outline mt-6"
+            onClick={markHandoverRead}
+          >
             Mark as Read
           </button>
-          <Link to="/ops-manager/dashboard" className="block text-[12px] text-(--accent) mt-3 no-underline">
+          <Link
+            to="/ops-manager/dashboard"
+            className="block text-[12px] text-(--accent) mt-3 no-underline"
+          >
             Return to Command Overview
           </Link>
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function HandoverSection({ title, children }) {
@@ -274,5 +474,5 @@ function HandoverSection({ title, children }) {
       </div>
       {children}
     </div>
-  )
+  );
 }

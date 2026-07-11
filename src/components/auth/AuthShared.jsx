@@ -1,78 +1,39 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { Siren, ArrowRight, ShieldCheck } from 'lucide-react'
-import { setDemoRole } from '../../utils/authSession'
-import { setDistrictCommanderSession } from '../../utils/districtCommanderSession'
-import signupImage from '../../assets/signup_Image.png'
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Siren, ArrowRight, ShieldCheck } from "lucide-react";
+import { setDemoRole } from "../../utils/authSession";
+import { setDistrictCommanderSession } from "../../utils/districtCommanderSession";
+import signupImage from "../../assets/signup_Image.png";
 
 const DEMO_PORTALS = [
-  { label: 'Dispatcher', value: 'dispatcher', href: '/dispatcher' },
-  { label: 'Operations Manager', value: 'ops_manager', href: '/ops-manager/dashboard' },
-  { label: 'District Commander', value: 'district_commander', href: '/district-commander/dashboard' },
-  { label: 'Field Responder', value: 'field_responder', href: '/field-responder/shift-start' },
-  { label: 'Emergency Planner', value: 'emergency_planner', href: '/planner/dashboard' },
-  { label: 'Analyst', value: 'analyst', href: '/analyst/dashboard' },
-  { label: 'Super Admin', value: 'super_admin', href: '/admin/dashboard' },
-]
+  { label: "Dispatcher", value: "dispatcher", href: "/dispatcher" },
+  {
+    label: "Operations Manager",
+    value: "OPERATIONS_MANAGER",
+    href: "/ops-manager/dashboard",
+  },
+  {
+    label: "District Commander",
+    value: "district_commander",
+    href: "/district-commander/dashboard",
+  },
+  {
+    label: "Field Responder",
+    value: "field_responder",
+    href: "/field-responder/shift-start",
+  },
+  {
+    label: "Emergency Planner",
+    value: "emergency_planner",
+    href: "/planner/dashboard",
+  },
+  { label: "Analyst", value: "analyst", href: "/analyst/dashboard" },
+  { label: "Super Admin", value: "super_admin", href: "/admin/dashboard" },
+];
 
-/** Login-only demo portal switcher — remove when backend is wired. */
-export function DemoPortalDropdown({ inline = false }) {
-  const [open, setOpen] = useState(false)
-  const navigate = useNavigate()
-
-  const enterPortal = (portal) => {
-    setDemoRole(portal.value)
-    if (portal.value === 'district_commander') {
-      setDistrictCommanderSession('Nyarugenge')
-    }
-    if (portal.value === 'field_responder') {
-      setOpen(false)
-      navigate('/fr')
-      return
-    }
-    sessionStorage.setItem('resq-trusted-device', 'true')
-    setOpen(false)
-    navigate(portal.href)
-  }
-
-  return (
-    <div className={`auth-demo-dropdown relative${inline ? ' auth-demo-dropdown--inline' : ''}`}>
-      <button
-        type="button"
-        className="auth-demo-dropdown-trigger"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        aria-haspopup="listbox"
-      >
-        Demo portal access
-        <span className="auth-demo-dropdown-chevron" aria-hidden>
-          {open ? '▲' : '▼'}
-        </span>
-      </button>
-      {open && (
-        <>
-          <button
-            type="button"
-            className="auth-demo-dropdown-backdrop"
-            aria-label="Close menu"
-            onClick={() => setOpen(false)}
-          />
-          <div className="auth-demo-dropdown-menu" role="listbox">
-            {DEMO_PORTALS.map((portal) => (
-              <button
-                key={portal.value}
-                type="button"
-                className={`auth-demo-dropdown-item w-full text-left${portal.value === 'dispatcher' ? ' auth-demo-dropdown-item--accent' : ''}`}
-                onClick={() => enterPortal(portal)}
-              >
-                {portal.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  )
+/** Demo portal switcher disabled — all users must authenticate via the real login form. */
+export function DemoPortalDropdown() {
+  return null;
 }
 
 export function AuthBrandPanel() {
@@ -81,7 +42,7 @@ export function AuthBrandPanel() {
       <div
         className="auth-brand-panel-bg"
         aria-hidden
-        style={{ '--auth-brand-photo': `url(${signupImage})` }}
+        style={{ "--auth-brand-photo": `url(${signupImage})` }}
       />
       <div className="auth-brand-content auth-brand-content--centered">
         <div className="auth-logo-row">
@@ -94,16 +55,16 @@ export function AuthBrandPanel() {
           </div>
         </div>
         <h2 className="auth-brand-headline">
-          Precision response starts with secure{' '}
+          Precision response starts with secure{" "}
           <span className="auth-brand-accent">intelligence</span>.
         </h2>
         <p className="auth-brand-desc">
-          Join the elite network of emergency response professionals powered by the highest AI
-          intelligence systems.
+          Join the elite network of emergency response professionals powered by
+          the highest AI intelligence systems.
         </p>
       </div>
     </div>
-  )
+  );
 }
 
 export function AuthStatusFooter() {
@@ -115,7 +76,7 @@ export function AuthStatusFooter() {
         <span className="auth-status-ok">System status: nominal</span>
       </span>
     </footer>
-  )
+  );
 }
 
 export function AuthFormFooter() {
@@ -131,68 +92,102 @@ export function AuthFormFooter() {
         <a href="#">Terms of service</a>
       </span>
     </div>
-  )
+  );
 }
 
 export function AuthTabs({ active }) {
   return (
     <div className="auth-tabs">
-      <Link to="/login" className={`auth-tab${active === 'login' ? ' auth-tab--active' : ''}`}>
+      <Link
+        to="/login"
+        className={`auth-tab${active === "login" ? " auth-tab--active" : ""}`}
+      >
         Authentication
       </Link>
-      <Link to="/register" className={`auth-tab${active === 'register' ? ' auth-tab--active' : ''}`}>
+      <Link
+        to="/register"
+        className={`auth-tab${active === "register" ? " auth-tab--active" : ""}`}
+      >
         Registration
       </Link>
     </div>
-  )
+  );
 }
 
 export function PasswordStrength({ password }) {
-  const score = !password ? 0 : password.length < 6 ? 1 : password.length < 10 ? 2 : /[A-Z]/.test(password) && /[0-9]/.test(password) ? 4 : 3
-  const label = score <= 1 ? 'Weak' : score === 2 ? 'Fair' : score === 3 ? 'Good' : 'Strong'
+  const score = !password
+    ? 0
+    : password.length < 6
+      ? 1
+      : password.length < 10
+        ? 2
+        : /[A-Z]/.test(password) && /[0-9]/.test(password)
+          ? 4
+          : 3;
+  const label =
+    score <= 1
+      ? "Weak"
+      : score === 2
+        ? "Fair"
+        : score === 3
+          ? "Good"
+          : "Strong";
   return (
     <div className="auth-pw-strength">
       <div className="auth-pw-bars">
         {[1, 2, 3, 4].map((i) => (
-          <span key={i} className={`auth-pw-bar${i <= score ? ' auth-pw-bar--on' : ''}`} />
+          <span
+            key={i}
+            className={`auth-pw-bar${i <= score ? " auth-pw-bar--on" : ""}`}
+          />
         ))}
       </div>
       <span className="auth-pw-label">{label}</span>
     </div>
-  )
+  );
 }
 
-export function PrimaryButton({ children, type = 'button', onClick, to, showArrow = true }) {
-  const className = 'auth-primary-btn'
+export function PrimaryButton({
+  children,
+  type = "button",
+  onClick,
+  to,
+  showArrow = true,
+}) {
+  const className = "auth-primary-btn";
   if (to) {
     return (
       <Link to={to} className={className}>
         {children}
         {showArrow && <ArrowRight size={16} />}
       </Link>
-    )
+    );
   }
   return (
     <button type={type} onClick={onClick} className={className}>
       {children}
       {showArrow && <ArrowRight size={16} />}
     </button>
-  )
+  );
 }
 
-export function AuthField({ label, children, className = '' }) {
+export function AuthField({ label, children, className = "" }) {
   return (
     <label className={`auth-field ${className}`}>
       <span className="auth-field-label">{label}</span>
       {children}
     </label>
-  )
+  );
 }
 
 export function AuthInput(props) {
-  return <input className="auth-input" {...props} />
+  return <input className="auth-input" {...props} />;
 }
 
 export function AuthSelect({ children, ...props }) {
-  return <select className="auth-input auth-select" {...props}>{children}</select>
+  return (
+    <select className="auth-input auth-select" {...props}>
+      {children}
+    </select>
+  );
 }

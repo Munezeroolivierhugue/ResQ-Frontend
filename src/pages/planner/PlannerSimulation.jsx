@@ -1,11 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Play, ArrowRight, FileDown, Plus, Loader2 } from 'lucide-react'
 import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
-import { PLANNER_SAVED_SCENARIOS } from '../../data/mockPlannerData'
-import { mockSimulations } from '../../data/mockSimulations'
 import { getCurrentUser } from '../../utils/authSession'
+import { listSimulations, runSimulation as apiRunSimulation } from '../../api/planning'
 
 const SCENARIOS = [
   'Flash Flood — Kigali',
@@ -21,37 +20,50 @@ export default function PlannerSimulation() {
   const [resourceMode, setResourceMode] = useState('current')
   const [loading, setLoading] = useState(false)
   const [showResults, setShowResults] = useState(true)
-  const [savedScenarios, setSavedScenarios] = useState(() => PLANNER_SAVED_SCENARIOS.map((s) => ({ ...s })))
+  const [savedScenarios, setSavedScenarios] = useState([])
 
-  const runSimulation = () => {
+  useEffect(() => {
+    listSimulations().then((sims) => {
+      setSavedScenarios(sims.map((s) => ({
+        id: s.simulation_id,
+        name: s.scenario_type ? `${s.scenario_type} · ${s.multiplier ?? 1}×` : '—',
+        scenario_type: s.scenario_type ?? '—',
+        created_at: s.ran_at
+          ? new Date(s.ran_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+          : '—',
+        result_summary: s.coverage_score != null ? `${Math.round(s.coverage_score)}% coverage` : '—',
+      })))
+    }).catch(() => setSavedScenarios([]))
+  }, [])
+
+  const runSimulation = async () => {
     setLoading(true)
     setShowResults(false)
-    setTimeout(() => {
-      const currentUser = getCurrentUser()
-      const timestamp = new Date().toISOString()
-      const sim = {
-        simulation_id: Math.random().toString(36).slice(2, 10),
-        created_by: currentUser?.user_id ?? null,
-        scenario_type: resourceMode === 'ai' ? 'AI_OPTIMIZED' : 'CURRENT_RESOURCES',
-        multiplier,
-        duration: null,
+    try {
+      const scenario_type = resourceMode === 'ai' ? 'AI_OPTIMIZED' : 'CURRENT_RESOURCES'
+
+      const newSim = await apiRunSimulation({
+        scenario_type,
+        multiplier: Math.round(multiplier),
+        duration_hours: 4,
         focus_area: null,
-        projected_response_time: null,
-        projected_coverage: null,
-        created_at: timestamp,
-      }
-      mockSimulations.push(sim)
+      })
+
       const scenarioEntry = {
-        name: `${resourceMode === 'ai' ? 'AI Optimized' : 'Current'} · ${multiplier}× baseline`,
-        scenario_type: sim.scenario_type,
+        id: newSim.simulation_id ?? Math.random().toString(36).slice(2),
+        name: `${newSim.scenario_type ?? scenario_type} · ${newSim.multiplier ?? multiplier}×`,
+        scenario_type: newSim.scenario_type ?? scenario_type,
         created_at: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
-        result_summary: resourceMode === 'ai' ? 'Sufficient' : 'Insufficient',
+        result_summary: newSim.coverage_score != null ? `${Math.round(newSim.coverage_score)}% coverage` : '—',
       }
-      PLANNER_SAVED_SCENARIOS.unshift(scenarioEntry)
+
       setSavedScenarios((prev) => [scenarioEntry, ...prev])
       setLoading(false)
       setShowResults(true)
-    }, 1500)
+    } catch (err) {
+      console.error(err)
+      setLoading(false)
+    }
   }
 
   return (
@@ -240,9 +252,9 @@ export default function PlannerSimulation() {
 
           <div className="dispatcher-surface p-4">
             <h3 className="text-[13px] font-semibold m-0 mb-3">Saved Scenarios</h3>
-            {savedScenarios.map((row) => (
+            {savedScenarios.map((row, i) => (
               <div
-                key={row.name}
+                key={row.id ?? i}
                 className="flex flex-wrap items-center gap-2 py-2 border-t border-(--border-subtle) text-[12px]"
               >
                 <span className="font-medium flex-1 min-w-[140px]">{row.name}</span>

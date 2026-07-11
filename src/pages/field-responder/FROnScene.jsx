@@ -3,15 +3,18 @@ import { useNavigate } from 'react-router-dom'
 import { MapPin, AlertTriangle, Check, MessageSquare, FileText, Send, Mic, Square, Play } from 'lucide-react'
 import SeverityBanner from '../../components/field-responder/SeverityBanner'
 import BackupRequestModal from '../../components/field-responder/BackupRequestModal'
-import { FR_ASSIGNMENT, FR_QUICK_REPLIES } from '../../data/mockFieldResponderData'
+import { FR_QUICK_REPLIES } from '../../data/mockFieldResponderData'
 import { useFieldResponderStore } from '../../store/fieldResponderStore'
-import { mockAudioClips, fmtDuration } from '../../data/mockAudioCommsData'
+import { fmtDuration } from '../../data/mockAudioCommsData'
+import { updateIncidentStatus } from '../../api/incidents'
 
 export default function FROnScene() {
   const navigate = useNavigate()
   const messages = useFieldResponderStore((s) => s.messages)
   const addMessage = useFieldResponderStore((s) => s.addMessage)
   const clearIncident = useFieldResponderStore((s) => s.clearIncident)
+  const assignment    = useFieldResponderStore((s) => s.assignment)
+  const incidentId    = useFieldResponderStore((s) => s.incidentId)
   const showToast = useFieldResponderStore((s) => s.showToast)
   const [backupOpen, setBackupOpen] = useState(false)
   const [draft, setDraft] = useState('')
@@ -84,12 +87,24 @@ export default function FROnScene() {
 
   useEffect(() => () => { clearInterval(pttRef.current); clearInterval(playRef.current) }, [])
 
-  const handleClear = () => {
+  const handleClear = async () => {
     if (!window.confirm('Submit field report before clearing incident?')) return
+    if (incidentId) {
+      try {
+        await updateIncidentStatus(incidentId, 'RESOLVED')
+      } catch {
+        // Continue even if status update fails — field report will set PENDING_REPORT
+      }
+    }
     navigate('/field-responder/report')
   }
 
-  const a = FR_ASSIGNMENT
+  const inc = assignment?.incident
+  const a = {
+    severity: inc?.severity ?? inc?.final_severity ?? 'medium',
+    type: inc?.incident_type ?? 'Incident',
+    location: inc?.district ?? inc?.address ?? 'Unknown location',
+  }
 
   return (
     <div className="fr-page fr-page--no-pad">

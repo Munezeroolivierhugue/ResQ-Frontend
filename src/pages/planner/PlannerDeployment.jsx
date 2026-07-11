@@ -1,14 +1,13 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Plus, Send, X, ChartLine } from 'lucide-react'
 import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
-import { PLANNER_DEFAULT_INSTRUCTIONS, PLANNER_PLANS, RWANDA_DISTRICTS, planStatusVariant } from '../../data/mockPlannerData'
-import { mockDeploymentPlans } from '../../data/mockDeploymentPlans'
-import { mockPositioningInstructions } from '../../data/mockPositioningInstructions'
+import { PLANNER_DEFAULT_INSTRUCTIONS, RWANDA_DISTRICTS, planStatusVariant } from '../../data/mockPlannerData'
 import { getCurrentUser } from '../../utils/authSession'
 import { useNotificationsStore } from '../../store/notificationsStore'
+import { listPlans, createPlan } from '../../api/planning'
 
 const EMPTY_INSTRUCTION = { vehicle_id: '', from_location: '', to_location: '', move_time: '' }
 const BASE_COVERAGE = 82
@@ -36,7 +35,32 @@ export default function PlannerDeployment() {
   const [activeFrom, setActiveFrom] = useState('')
   const [activeUntil, setActiveUntil] = useState('')
   const [activeUntilTime, setActiveUntilTime] = useState('')
-  const [plans, setPlans] = useState(() => PLANNER_PLANS.map((p) => ({ ...p })))
+  const [plans, setPlans] = useState([])
+  const [plansLoading, setPlansLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(null)
+  const [toast, setToast] = useState(null)
+
+  function showToast(msg) {
+    setToast(msg)
+    setTimeout(() => setToast(null), 2500)
+  }
+
+  useEffect(() => {
+    listPlans()
+      .then((apiPlans) => {
+        setPlans(apiPlans.map((p) => ({
+          id: p.plan_id ? p.plan_id.slice(0, 8).toUpperCase() : '—',
+          plan_name: p.title ?? '(Untitled)',
+          district: p.district_name ?? '—',
+          active_from: p.event_date ?? '—',
+          active_until: '—',
+          status: p.status ?? 'DRAFT',
+        })))
+      })
+      .catch(() => setPlans([]))
+      .finally(() => setPlansLoading(false))
+  }, [])
 
   const projected = useMemo(() => projectedFromInstructions(instructions), [instructions])
   const improvement = projected - BASE_COVERAGE
@@ -49,63 +73,54 @@ export default function PlannerDeployment() {
   const updateInstruction = (idx, field, value) =>
     setInstructions((rows) => rows.map((r, i) => (i === idx ? { ...r, [field]: value } : r)))
 
-  const savePlan = (isDraft) => {
+  const savePlan = async (isDraft) => {
+    if (saving) return
+    setSaving(true)
+    setSaveError(null)
     const currentUser = getCurrentUser()
-    const timestamp = new Date().toISOString()
-    const planId = generateId()
     const activeUntilFull = activeUntil + (activeUntilTime ? 'T' + activeUntilTime : '')
-    const newPlan = {
-      plan_id: planId,
-      plan_name: planName || '(Untitled Plan)',
-      district_id: currentUser?.district_id ?? null,
-      created_by: currentUser?.user_id ?? null,
-      active_from: activeFrom || null,
-      active_until: activeUntilFull || null,
-      projected_coverage: projected,
-      status: isDraft ? 'DRAFT' : 'SUBMITTED',
-      created_at: timestamp,
-    }
-    mockDeploymentPlans.push(newPlan)
-
-    instructions.forEach((inst) => {
-      if (!inst.vehicle_id.trim()) return
-      mockPositioningInstructions.push({
-        instruction_id: generateId(),
-        plan_id: planId,
-        vehicle_id: inst.vehicle_id,
-        from_location: inst.from_location,
-        to_location: inst.to_location,
-        move_time: inst.move_time,
+    try {
+      const created = await createPlan({
+        title: planName || '(Untitled Plan)',
+        district_id: currentUser?.district_id ?? null,
+        description: '',
+        event_date: activeFrom || null,
       })
-    })
-
-    // Add to displayed Plan Library immediately
-    const libraryEntry = {
-      id: 'PLN-' + planId.slice(0, 4).toUpperCase(),
-      plan_name: newPlan.plan_name,
-      district: 'Kigali',
-      active_from: activeFrom || '—',
-      active_until: activeUntilFull || '—',
-      status: newPlan.status,
-    }
-    PLANNER_PLANS.unshift(libraryEntry)
-    setPlans((prev) => [libraryEntry, ...prev])
-
-    if (!isDraft) {
-      addNotification({
-        id: 'notif-' + generateId(),
-        type: 'DEPLOYMENT_PLAN_SUBMITTED',
-        target_role: 'operations_manager',
-        title: 'Deployment Plan Submitted',
-        message: `Planner submitted "${newPlan.plan_name}" for OM approval.`,
-        timestamp,
-        read: false,
-      })
+      const libraryEntry = {
+        id: created.plan_id ? created.plan_id.slice(0, 8).toUpperCase() : generateId().toUpperCase(),
+        plan_name: created.title ?? planName,
+        district: created.district_name ?? '—',
+        active_from: created.event_date ?? activeFrom ?? '—',
+        active_until: activeUntilFull || '—',
+        status: isDraft ? 'DRAFT' : 'SUBMITTED',
+      }
+      setPlans((prev) => [libraryEntry, ...prev])
+      showToast(isDraft ? 'Draft saved.' : 'Plan submitted to Operations Manager.')
+      if (!isDraft) {
+        addNotification({
+          id: 'notif-' + generateId(),
+          type: 'DEPLOYMENT_PLAN_SUBMITTED',
+          target_role: 'operations_manager',
+          title: 'Deployment Plan Submitted',
+          message: `Planner submitted "${libraryEntry.plan_name}" for OM approval.`,
+          timestamp: new Date().toISOString(),
+          read: false,
+        })
+      }
+    } catch {
+      setSaveError('Failed to save plan. Please try again.')
+    } finally {
+      setSaving(false)
     }
   }
 
   return (
     <div className="portal-page flex flex-col gap-4 min-w-[1024px]">
+      {toast && (
+        <div className="fixed bottom-5 right-5 z-[9999] dispatcher-surface px-4 py-2.5 text-[13px] font-medium shadow-lg" style={{ borderLeft: '3px solid var(--accent)' }}>
+          {toast}
+        </div>
+      )}
       <PlannerPageHeader
         title="Deployment Planning"
         subtitle="Create and manage evidence-based unit positioning plans."
@@ -216,13 +231,18 @@ export default function PlannerDeployment() {
               />
             </label>
 
+            {saveError && (
+              <div className="text-[12px] px-3 py-2 rounded" style={{ background: 'var(--status-critical-bg)', color: 'var(--status-critical)' }}>
+                {saveError}
+              </div>
+            )}
             <div className="flex flex-wrap gap-2 mt-2">
-              <button type="button" className="dispatcher-btn-ghost" onClick={() => savePlan(true)}>
-                Save as Draft
+              <button type="button" className="dispatcher-btn-ghost" onClick={() => savePlan(true)} disabled={saving}>
+                {saving ? 'Saving…' : 'Save as Draft'}
               </button>
-              <button type="button" className="dispatcher-btn-primary inline-flex items-center gap-1.5" onClick={() => savePlan(false)}>
+              <button type="button" className="dispatcher-btn-primary inline-flex items-center gap-1.5" onClick={() => savePlan(false)} disabled={saving}>
                 <Send size={16} />
-                Submit to Operations Manager
+                {saving ? 'Submitting…' : 'Submit to Operations Manager'}
               </button>
             </div>
           </div>
@@ -298,6 +318,12 @@ export default function PlannerDeployment() {
                 ))}
               </div>
             </div>
+            {plansLoading && (
+              <div className="text-[12px] text-(--text-muted) py-4 text-center">Loading plans…</div>
+            )}
+            {!plansLoading && filteredPlans.length === 0 && (
+              <div className="text-[12px] text-(--text-muted) py-4 text-center">No plans found.</div>
+            )}
             {filteredPlans.map((plan) => (
               <div
                 key={plan.id}

@@ -1,16 +1,14 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { FileCheck, Clock, ChevronRight, AlertTriangle } from 'lucide-react'
-import { mockIncidents } from '../../data/mockIncidents'
+import { listIncidents } from '../../api/incidents'
 import SeverityBadge from '../../components/dispatcher/SeverityBadge'
-
-const ALL_PENDING = mockIncidents.filter((i) => i.status === 'PENDING_REPORT')
 
 const SEV_UPPER = (s) => (s ?? '').toUpperCase()
 
 function ElapsedChip({ callTime }) {
   if (!callTime) return null
-  const mins = Math.round((new Date('2026-06-24T15:12:00Z') - new Date(callTime)) / 60000)
+  const mins = Math.round((Date.now() - new Date(callTime).getTime()) / 60000)
   const over60 = mins > 60
   return (
     <span
@@ -29,9 +27,47 @@ function ElapsedChip({ callTime }) {
 
 export default function PendingReports() {
   const navigate = useNavigate()
-  const [tab, setTab] = useState('pending')
+  const { state: navState } = useLocation()
+  const completedIncident = navState?.completedIncident ?? null
 
-  const items = tab === 'pending' ? ALL_PENDING : mockIncidents
+  const [tab, setTab] = useState('pending')
+  const [allIncidents, setAllIncidents] = useState([])
+  const [pendingIncidents, setPendingIncidents] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  // Ref map so we can auto-scroll to the just-completed row
+  const rowRefs = useRef({})
+
+  useEffect(() => {
+    setLoading(true)
+    Promise.all([
+      listIncidents({ status: 'PENDING_REPORT' }),
+      listIncidents(),
+    ]).then(([pending, all]) => {
+      // If the DB update hasn't landed yet, inject the completed incident at the top
+      if (completedIncident?.incident_id) {
+        const alreadyInPending = pending.some((p) => p.incident_id === completedIncident.incident_id)
+        if (!alreadyInPending) {
+          pending = [{ ...completedIncident, status: 'PENDING_REPORT' }, ...pending]
+        }
+        const alreadyInAll = all.some((p) => p.incident_id === completedIncident.incident_id)
+        if (!alreadyInAll) {
+          all = [{ ...completedIncident, status: 'PENDING_REPORT' }, ...all]
+        }
+      }
+      setPendingIncidents(pending)
+      setAllIncidents(all)
+    }).catch(() => {}).finally(() => setLoading(false))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-scroll to the highlighted row once the list renders
+  useEffect(() => {
+    if (!completedIncident?.incident_id) return
+    const el = rowRefs.current[completedIncident.incident_id]
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [pendingIncidents, completedIncident])
+
+  const items = tab === 'pending' ? pendingIncidents : allIncidents
 
   return (
     <div className="portal-page dispatcher-page">
@@ -46,7 +82,7 @@ export default function PendingReports() {
             Pending Reports
           </h1>
         </div>
-        {ALL_PENDING.length > 0 && (
+        {pendingIncidents.length > 0 && (
           <div
             className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-semibold border"
             style={{
@@ -57,7 +93,7 @@ export default function PendingReports() {
             }}
           >
             <AlertTriangle size={14} />
-            {ALL_PENDING.length} report{ALL_PENDING.length !== 1 ? 's' : ''} awaiting closure
+            {pendingIncidents.length} report{pendingIncidents.length !== 1 ? 's' : ''} awaiting closure
           </div>
         )}
       </div>
@@ -65,7 +101,7 @@ export default function PendingReports() {
       {/* Tabs */}
       <div className="flex gap-1 mb-4 p-1 rounded-lg border border-(--border) bg-(--bg-surface) w-fit">
         {[
-          { key: 'pending', label: `Pending (${ALL_PENDING.length})` },
+          { key: 'pending', label: `Pending (${pendingIncidents.length})` },
           { key: 'all', label: 'All incidents' },
         ].map(({ key, label }) => (
           <button
@@ -86,7 +122,9 @@ export default function PendingReports() {
 
       {/* Table */}
       <div className="bg-(--bg-surface) border border-(--border) rounded-xl overflow-hidden">
-        {items.length === 0 ? (
+        {loading ? (
+          <div className="py-16 text-center text-(--text-muted) text-[13px]">Loading…</div>
+        ) : items.length === 0 ? (
           <div className="py-16 text-center text-(--text-muted) text-[13px]">
             No incidents found.
           </div>
@@ -105,63 +143,88 @@ export default function PendingReports() {
               </tr>
             </thead>
             <tbody>
-              {items.map((inc) => (
-                <tr
-                  key={inc.incident_id}
-                  className="border-b border-(--border-subtle) hover:bg-(--bg-elevated) transition-colors"
-                >
-                  <td className="px-4 h-12">
-                    <span
-                      className="text-[12px] font-bold text-(--accent)"
+              {items.map((inc) => {
+                const isJustCompleted = inc.incident_id === completedIncident?.incident_id
+                return (
+                  <tr
+                    key={inc.incident_id}
+                    ref={(el) => { if (el) rowRefs.current[inc.incident_id] = el }}
+                    className="border-b border-(--border-subtle) transition-colors"
+                    style={{
+                      background: isJustCompleted
+                        ? 'color-mix(in srgb, var(--accent) 8%, transparent)'
+                        : undefined,
+                      outline: isJustCompleted ? '2px solid var(--accent)' : undefined,
+                      outlineOffset: isJustCompleted ? '-2px' : undefined,
+                    }}
+                  >
+                    <td className="px-4 h-12">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="text-[12px] font-bold text-(--accent)"
+                          style={{ fontFamily: 'var(--font-mono)' }}
+                        >
+                          {inc.incident_ref}
+                        </span>
+                        {isJustCompleted && (
+                          <span
+                            className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                            style={{
+                              background: 'var(--accent)',
+                              color: '#fff',
+                              fontFamily: 'var(--font-display)',
+                            }}
+                          >
+                            Just completed
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 text-[13px] text-(--text-primary)">{inc.incident_type}</td>
+                    <td className="px-4 text-[12px] text-(--text-secondary)">
+                      {inc.district ? `${inc.district}${inc.sector ? ' / ' + inc.sector : ''}` : (inc.address ?? '—')}
+                    </td>
+                    <td className="px-4">
+                      <SeverityBadge severity={SEV_UPPER(inc.severity)} />
+                    </td>
+                    <td
+                      className="px-4 text-[12px] text-(--text-secondary)"
                       style={{ fontFamily: 'var(--font-mono)' }}
                     >
-                      {inc.incident_ref}
-                    </span>
-                  </td>
-                  <td className="px-4 text-[13px] text-(--text-primary)">{inc.incident_type}</td>
-                  <td className="px-4 text-[12px] text-(--text-secondary)">
-                    {inc.district} / {inc.sector}
-                  </td>
-                  <td className="px-4">
-                    <SeverityBadge severity={SEV_UPPER(inc.severity)} />
-                  </td>
-                  <td
-                    className="px-4 text-[12px] text-(--text-secondary)"
-                    style={{ fontFamily: 'var(--font-mono)' }}
-                  >
-                    {inc.reported}
-                  </td>
-                  <td className="px-4">
-                    <ElapsedChip callTime={inc.call_time} />
-                  </td>
-                  <td
-                    className="px-4 text-[12px] text-(--status-info)"
-                    style={{ fontFamily: 'var(--font-mono)' }}
-                  >
-                    {inc.unit ?? '—'}
-                  </td>
-                  <td className="px-4">
-                    {inc.status === 'PENDING_REPORT' ? (
-                      <button
-                        type="button"
-                        onClick={() => navigate('/dispatcher/incident-report')}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border-none cursor-pointer text-[11px] font-bold transition-opacity hover:opacity-80"
-                        style={{
-                          background: 'var(--accent)',
-                          color: '#fff',
-                          fontFamily: 'var(--font-display)',
-                        }}
-                      >
-                        <FileCheck size={12} />
-                        File Report
-                        <ChevronRight size={12} />
-                      </button>
-                    ) : (
-                      <span className="text-[11px] text-(--text-muted)">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                      {inc.call_time ? new Date(inc.call_time).toLocaleString() : '—'}
+                    </td>
+                    <td className="px-4">
+                      <ElapsedChip callTime={inc.call_time} />
+                    </td>
+                    <td
+                      className="px-4 text-[12px] text-(--status-info)"
+                      style={{ fontFamily: 'var(--font-mono)' }}
+                    >
+                      —
+                    </td>
+                    <td className="px-4">
+                      {inc.status === 'PENDING_REPORT' ? (
+                        <button
+                          type="button"
+                          onClick={() => navigate('/dispatcher/incident-report', { state: { incident: inc } })}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border-none cursor-pointer text-[11px] font-bold transition-opacity hover:opacity-80"
+                          style={{
+                            background: 'var(--accent)',
+                            color: '#fff',
+                            fontFamily: 'var(--font-display)',
+                          }}
+                        >
+                          <FileCheck size={12} />
+                          File Report
+                          <ChevronRight size={12} />
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-(--text-muted)">—</span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}

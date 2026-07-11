@@ -1,112 +1,127 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { X, Flag, Check } from 'lucide-react'
+import { X, Flag, Check, Download } from 'lucide-react'
+import { buildPdfHtml, openPdfWindow } from '../../utils/pdfExport'
+
+function exportShiftPDF(report, detail, status) {
+  const period = report?.period_start ? `${report.period_start} – ${report.period_end ?? ''}` : '—'
+  openPdfWindow(buildPdfHtml({
+    title: 'District Shift Report',
+    subtitle: period,
+    reportType: 'SHIFT REPORT',
+    idPrefix: 'SHF',
+    metaItems: [
+      { label: 'Report ID', value: report?.report_id?.slice(0, 8) ?? '—' },
+      { label: 'Submitted By', value: report?.generated_by_name ?? '—' },
+      { label: 'Period', value: period },
+      { label: 'Status', value: String(status ?? report?.status ?? 'PENDING').toUpperCase() },
+    ],
+    kpis: [
+      { label: 'Total Incidents', value: detail?.total_incidents ?? report?.total_incidents ?? '—' },
+      { label: 'Avg Response Time', value: detail?.avg_response_time != null ? `${Number(detail.avg_response_time).toFixed(1)} min` : '—', sub: 'Target < 8 min' },
+      { label: 'Resolution Rate', value: detail?.resolution_rate != null ? `${Math.round(detail.resolution_rate * 100)}%` : '—' },
+      { label: 'District', value: detail?.district_name ?? report?.district_name ?? '—' },
+    ],
+    sections: [],
+    generatedBy: report?.generated_by_name ?? 'District Commander',
+    generatedRole: 'District Commander',
+  }))
+}
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import DCPageHeader from '../../components/district-commander/DCPageHeader'
-import {
-  DC_SHIFT_REPORTS,
-  getReportStatusVariant,
-} from '../../data/mockDistrictCommanderData'
-import { mockAuditLogs } from '../../data/mockAuditLogs'
-import { getCurrentUser } from '../../utils/authSession'
+import { getReportStatusVariant } from '../../data/mockDistrictCommanderData'
+import { listReports, getReport } from '../../api/reporting'
 import { useNotificationsStore } from '../../store/notificationsStore'
-
-// NOTE FOR BACKEND: reports table currently lacks reviewed_by (UUID) and reviewed_at (TIMESTAMP)
-// columns per schema Section 3.13.28. These fields are written to the mock and to audit_logs.
-// Backend can add the columns later; audit_logs alone is sufficient as a fallback.
 
 const FILTERS = ['All', 'Pending Review', 'Reviewed', 'Flagged']
 
 function matchFilter(status, filter) {
   if (filter === 'All') return true
-  if (filter === 'Pending Review') return status === 'PENDING REVIEW'
-  if (filter === 'Reviewed') return status === 'REVIEWED'
-  if (filter === 'Flagged') return status === 'FLAGGED'
+  const s = (status ?? '').toUpperCase()
+  if (filter === 'Pending Review') return s === 'PENDING' || s === 'PENDING REVIEW'
+  if (filter === 'Reviewed') return s === 'REVIEWED'
+  if (filter === 'Flagged') return s === 'FLAGGED'
   return true
 }
 
-function generateId() {
-  return 'log-' + Math.random().toString(36).slice(2, 10)
+function fmtDate(iso) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 export default function DCShiftReports() {
   const location = useLocation()
   const addNotification = useNotificationsStore((s) => s.addNotification)
-  const [reports, setReports] = useState(() => DC_SHIFT_REPORTS.map((r) => ({ ...r })))
+  const districtId = sessionStorage.getItem('resq-district-id') || undefined
+
+  const [reports, setReports] = useState([])
+  const [tableLoading, setTableLoading] = useState(true)
+  const [tableError, setTableError] = useState(null)
   const [filter, setFilter] = useState('All')
   const [search, setSearch] = useState('')
+
   const [selectedId, setSelectedId] = useState(null)
+  const [detail, setDetail] = useState(null)
+  const [detailLoading, setDetailLoading] = useState(false)
   const [dcNote, setDcNote] = useState('')
   const [panelMessage, setPanelMessage] = useState(null)
+  const [localStatuses, setLocalStatuses] = useState({})
 
-  const selected = reports.find((r) => r.id === selectedId)
+  useEffect(() => {
+    listReports('SHIFT', districtId)
+      .then(setReports)
+      .catch(() => setTableError('Failed to load shift reports'))
+      .finally(() => setTableLoading(false))
+  }, [])
 
   useEffect(() => {
     const id = location.state?.reportId
-    if (id) setSelectedId(id)
+    if (id) openPanel(id)
   }, [location.state])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return reports.filter((r) => {
-      if (!matchFilter(r.status, filter)) return false
+      const status = localStatuses[r.report_id] ?? r.status
+      if (!matchFilter(status, filter)) return false
       if (!q) return true
-      return r.id.toLowerCase().includes(q) || r.om.toLowerCase().includes(q)
+      return (
+        (r.report_id ?? '').toLowerCase().includes(q) ||
+        (r.generated_by_name ?? '').toLowerCase().includes(q)
+      )
     })
-  }, [reports, filter, search])
+  }, [reports, filter, search, localStatuses])
 
-  const openPanel = (id) => {
+  function openPanel(id) {
     setSelectedId(id)
     setDcNote('')
     setPanelMessage(null)
+    setDetail(null)
+    setDetailLoading(true)
+    getReport(id)
+      .then(setDetail)
+      .catch(() => setDetail(null))
+      .finally(() => setDetailLoading(false))
   }
 
-  const updateStatus = (id, status, message) => {
-    const currentUser = getCurrentUser()
-    const timestamp = new Date().toISOString()
-    const action = status === 'REVIEWED' ? 'SHIFT_REPORT_REVIEWED' : 'SHIFT_REPORT_FLAGGED'
-
-    // Persist to mock array (mirrors DB write — backend adds reviewed_by/reviewed_at columns)
-    const target = DC_SHIFT_REPORTS.find((r) => r.id === id)
-    if (target) {
-      target.status = status
-      target.reviewed_by = currentUser?.user_id ?? null
-      target.reviewed_at = timestamp
-    }
-
-    // Update local UI state
-    setReports((list) =>
-      list.map((r) =>
-        r.id === id
-          ? { ...r, status, reviewed_by: currentUser?.user_id ?? null, reviewed_at: timestamp }
-          : r
-      )
-    )
+  function updateStatus(id, status, message) {
+    setLocalStatuses((prev) => ({ ...prev, [id]: status }))
     setPanelMessage(message)
-
-    // Write to audit log
-    mockAuditLogs.push({
-      log_id: generateId(),
-      user_id: currentUser?.user_id ?? 'unknown',
-      timestamp,
-      action,
-      module: 'DISTRICT_COMMANDER',
-      status: 'SUCCESS',
-    })
-
-    // Fire notification to OM if flagged
     if (status === 'FLAGGED') {
       addNotification({
-        id: generateId(),
+        id: 'notif-' + Math.random().toString(36).slice(2, 10),
         type: 'SHIFT_REPORT_FLAGGED',
         target_role: 'operations_manager',
         title: 'Shift Report Flagged',
-        message: `Report ${id} has been flagged by District Commander for discussion.`,
-        timestamp,
+        message: `Report flagged by District Commander for discussion.`,
+        timestamp: new Date().toISOString(),
         read: false,
       })
     }
   }
+
+  const selected = reports.find((r) => r.report_id === selectedId)
+  const selectedStatus = selectedId ? (localStatuses[selectedId] ?? selected?.status) : null
 
   return (
     <div className="portal-page relative">
@@ -120,7 +135,7 @@ export default function DCShiftReports() {
         <input
           className="dispatcher-input dispatcher-text-input w-full max-w-xs sm:max-w-sm flex-1 min-w-[12rem]"
           style={{ height: '40px' }}
-          placeholder="Search by report ID or OM name..."
+          placeholder="Search by report ID or submitted by..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -148,9 +163,9 @@ export default function DCShiftReports() {
           <thead>
             <tr className="text-[10px] uppercase tracking-wide text-(--text-muted) border-b border-(--border-subtle)">
               <th className="py-2 px-3 font-semibold">Report ID</th>
-              <th className="py-2 px-3 font-semibold">Operations Manager</th>
-              <th className="py-2 px-3 font-semibold">Shift Period</th>
-              <th className="py-2 px-3 font-semibold">Submitted</th>
+              <th className="py-2 px-3 font-semibold">Submitted By</th>
+              <th className="py-2 px-3 font-semibold">Period</th>
+              <th className="py-2 px-3 font-semibold">Generated</th>
               <th className="py-2 px-3 font-semibold">Total Incidents</th>
               <th className="py-2 px-3 font-semibold">Avg Response</th>
               <th className="py-2 px-3 font-semibold">Status</th>
@@ -158,71 +173,85 @@ export default function DCShiftReports() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((row) => (
-              <tr
-                key={row.id}
-                className="border-b border-(--border-subtle) last:border-0 cursor-pointer hover:bg-(--bg-elevated)/50"
-                onClick={() => openPanel(row.id)}
-              >
-                <td className="py-3 px-3 font-mono font-bold text-(--accent)">{row.id}</td>
-                <td className="py-3 px-3">{row.om}</td>
-                <td className="py-3 px-3 font-mono text-(--text-secondary)">{row.shift}</td>
-                <td className="py-3 px-3 text-(--text-secondary)">{row.submitted_at}</td>
-                <td className="py-3 px-3 font-mono">{row.incidents}</td>
-                <td className="py-3 px-3 font-mono">{row.avg_response_time}</td>
-                <td className="py-3 px-3">
-                  <StatusBadge label={row.status} variant={getReportStatusVariant(row.status)} />
-                </td>
-                <td className="py-3 px-3">
-                  <button
-                    type="button"
-                    className={row.status === 'PENDING REVIEW' ? 'dispatcher-btn-primary text-[11px]' : 'dispatcher-btn-ghost text-[11px]'}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      openPanel(row.id)
-                    }}
-                  >
-                    {row.status === 'PENDING REVIEW' ? 'Review' : 'View'}
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {tableLoading && (
+              <tr><td colSpan={8} className="py-6 text-center text-[13px] text-(--text-muted)">Loading reports…</td></tr>
+            )}
+            {tableError && !tableLoading && (
+              <tr><td colSpan={8} className="py-6 text-center text-[13px]" style={{ color: 'var(--status-critical)' }}>{tableError}</td></tr>
+            )}
+            {!tableLoading && !tableError && filtered.length === 0 && (
+              <tr><td colSpan={8} className="py-6 text-center text-[13px] text-(--text-muted)">No shift reports found.</td></tr>
+            )}
+            {!tableLoading && !tableError && filtered.map((row) => {
+              const status = localStatuses[row.report_id] ?? row.status
+              return (
+                <tr
+                  key={row.report_id}
+                  className="border-b border-(--border-subtle) last:border-0 cursor-pointer hover:bg-(--bg-elevated)/50"
+                  onClick={() => openPanel(row.report_id)}
+                >
+                  <td className="py-3 px-3 font-mono font-bold text-(--accent)">{row.report_id?.slice(0, 8) ?? '—'}</td>
+                  <td className="py-3 px-3">{row.generated_by_name ?? '—'}</td>
+                  <td className="py-3 px-3 font-mono text-(--text-secondary)">
+                    {row.period_start ? `${row.period_start} – ${row.period_end ?? ''}` : '—'}
+                  </td>
+                  <td className="py-3 px-3 text-(--text-secondary)">{fmtDate(row.generated_at)}</td>
+                  <td className="py-3 px-3 font-mono">{row.total_incidents ?? '—'}</td>
+                  <td className="py-3 px-3 font-mono">
+                    {row.avg_response_time != null ? `${Number(row.avg_response_time).toFixed(1)}m` : '—'}
+                  </td>
+                  <td className="py-3 px-3">
+                    <StatusBadge label={status ?? 'PENDING'} variant={getReportStatusVariant(status)} />
+                  </td>
+                  <td className="py-3 px-3">
+                    <button
+                      type="button"
+                      className={status === 'PENDING' || status === 'PENDING REVIEW' ? 'dispatcher-btn-primary text-[11px]' : 'dispatcher-btn-ghost text-[11px]'}
+                      onClick={(e) => { e.stopPropagation(); openPanel(row.report_id) }}
+                    >
+                      {status === 'PENDING' || status === 'PENDING REVIEW' ? 'Review' : 'View'}
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
 
-      {selected && (
+      {selectedId && (
         <>
-          <div
-            className="dc-drawer-backdrop"
-            onClick={() => setSelectedId(null)}
-            aria-hidden
-          />
-          <aside
-            className="dc-drawer"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="dc-shift-report-title"
-            style={{ fontFamily: 'var(--font-body)' }}
-          >
+          <div className="dc-drawer-backdrop" onClick={() => setSelectedId(null)} aria-hidden />
+          <aside className="dc-drawer" role="dialog" aria-modal="true" aria-labelledby="dc-shift-report-title">
             <div className="dc-drawer-header flex items-start justify-between gap-2 p-4">
               <div className="min-w-0 pr-2">
-                <div
-                  id="dc-shift-report-title"
-                  className="font-mono text-[12px] font-bold text-(--accent)"
-                >
-                  SHIFT REPORT — {selected.id}
+                <div id="dc-shift-report-title" className="font-mono text-[12px] font-bold text-(--accent)">
+                  SHIFT REPORT — {selectedId?.slice(0, 8)}
                 </div>
-                <div className="text-[13px] font-semibold text-(--text-primary) mt-1">{selected.om}</div>
-                <div className="text-[12px] text-(--text-secondary)">{selected.shift}</div>
-                <div className="text-[11px] font-mono text-(--text-muted) mt-0.5">Submitted {selected.submitted_at}</div>
+                <div className="text-[13px] font-semibold text-(--text-primary) mt-1">{selected?.generated_by_name ?? '—'}</div>
+                <div className="text-[12px] text-(--text-secondary)">
+                  {selected?.period_start ? `${selected.period_start} – ${selected.period_end ?? ''}` : '—'}
+                </div>
+                <div className="text-[11px] font-mono text-(--text-muted) mt-0.5">
+                  {fmtDate(selected?.generated_at)}
+                </div>
               </div>
-              <button type="button" className="dispatcher-btn-icon shrink-0" onClick={() => setSelectedId(null)} aria-label="Close">
-                <X size={18} />
-              </button>
+              <div className="flex gap-2 shrink-0">
+                <button type="button" className="dispatcher-btn-icon" aria-label="Export PDF"
+                  onClick={() => exportShiftPDF(selected, detail, selectedStatus)}>
+                  <Download size={16} />
+                </button>
+                <button type="button" className="dispatcher-btn-icon" onClick={() => setSelectedId(null)} aria-label="Close">
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             <div className="dc-drawer-body p-4 flex flex-col gap-5">
+              {detailLoading && (
+                <p className="text-[13px] text-(--text-muted)">Loading report details…</p>
+              )}
+
               {panelMessage && (
                 <div
                   className="dc-drawer-notice p-3 rounded-lg text-[12px]"
@@ -236,57 +265,26 @@ export default function DCShiftReports() {
                 </div>
               )}
 
-              <section>
-                <h3 className="text-[11px] font-bold uppercase tracking-wide text-(--text-muted) m-0 mb-2">Key Metrics</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    ['Total Incidents', selected.metrics.incidents],
-                    ['Avg Response', selected.metrics.avgResponse],
-                    ['Coverage Score', selected.metrics.coverage],
-                    ['AI Acceptance', selected.metrics.ai_acceptance_rate],
-                  ].map(([label, val]) => (
-                    <div key={label} className="dispatcher-summary-stat">
-                      <div className="field-label mb-0.5">{label}</div>
-                      <div className="text-[14px] font-bold font-mono">{val}</div>
-                    </div>
-                  ))}
-                </div>
-              </section>
+              {!detailLoading && (
+                <section>
+                  <h3 className="text-[11px] font-bold uppercase tracking-wide text-(--text-muted) m-0 mb-2">Key Metrics</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      ['Total Incidents', detail?.total_incidents ?? selected?.total_incidents ?? '—'],
+                      ['Avg Response', detail?.avg_response_time != null ? `${Number(detail.avg_response_time).toFixed(1)}m` : '—'],
+                      ['Resolution Rate', detail?.resolution_rate != null ? `${Math.round(detail.resolution_rate * 100)}%` : '—'],
+                      ['District', detail?.district_name ?? selected?.district_name ?? '—'],
+                    ].map(([label, val]) => (
+                      <div key={label} className="dispatcher-summary-stat">
+                        <div className="field-label mb-0.5">{label}</div>
+                        <div className="text-[14px] font-bold font-mono">{String(val)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
 
-              <section>
-                <h3 className="text-[11px] font-bold uppercase tracking-wide text-(--text-muted) m-0 mb-2">Significant Incidents</h3>
-                {selected.significantIncidents.length === 0 ? (
-                  <p className="text-[12px] text-(--text-muted) m-0">None recorded for this shift.</p>
-                ) : (
-                  <table className="w-full text-[11px] border-collapse">
-                    <thead>
-                      <tr className="text-(--text-muted) border-b border-(--border-subtle)">
-                        <th className="text-left py-1 pr-2">ID</th>
-                        <th className="text-left py-1 pr-2">Type</th>
-                        <th className="text-left py-1 pr-2">Severity</th>
-                        <th className="text-left py-1">Outcome</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selected.significantIncidents.map((inc) => (
-                        <tr key={inc.id} className="border-b border-(--border-subtle)">
-                          <td className="py-2 pr-2 font-mono text-(--accent)">{inc.id}</td>
-                          <td className="py-2 pr-2">{inc.type}</td>
-                          <td className="py-2 pr-2">{inc.severity}</td>
-                          <td className="py-2">{inc.outcome}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </section>
-
-              <section>
-                <h3 className="text-[11px] font-bold uppercase tracking-wide text-(--text-muted) m-0 mb-2">Operations Manager Notes</h3>
-                <blockquote className="dispatcher-quote m-0">{selected.notes}</blockquote>
-              </section>
-
-              {selected.status !== 'REVIEWED' && (
+              {selectedStatus !== 'REVIEWED' && selectedStatus !== 'FLAGGED' && (
                 <section>
                   <label className="dispatcher-field">
                     <span className="field-label">Your acknowledgment note</span>
@@ -309,10 +307,7 @@ export default function DCShiftReports() {
                       }}
                       onClick={() => {
                         if (!dcNote.trim()) return
-                        updateStatus(selected.id, 'FLAGGED', {
-                          type: 'flag',
-                          text: 'Report flagged. Reason recorded for OM follow-up.',
-                        })
+                        updateStatus(selectedId, 'FLAGGED', { type: 'flag', text: 'Report flagged. Reason recorded for OM follow-up.' })
                       }}
                     >
                       <Flag size={14} />
@@ -321,12 +316,7 @@ export default function DCShiftReports() {
                     <button
                       type="button"
                       className="dispatcher-btn-primary inline-flex items-center gap-1.5 text-[12px]"
-                      onClick={() => {
-                        updateStatus(selected.id, 'REVIEWED', {
-                          type: 'success',
-                          text: 'Report acknowledged and marked REVIEWED.',
-                        })
-                      }}
+                      onClick={() => updateStatus(selectedId, 'REVIEWED', { type: 'success', text: 'Report acknowledged and marked REVIEWED.' })}
                     >
                       <Check size={14} />
                       Acknowledge Report

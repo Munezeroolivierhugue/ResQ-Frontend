@@ -1,16 +1,25 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
-  ClipboardList, Clock, MapPin, Target, AlertTriangle, X, CheckCircle,
-  Brain, MessageSquare, Radio, ShieldAlert,
-} from 'lucide-react'
-import MetricCard from '../../components/dispatcher/MetricCard'
-import SectionTitle from '../../components/dispatcher/SectionTitle'
-import StatusBadge from '../../components/dispatcher/StatusBadge'
-import { useOpsManagerStore } from '../../store/opsManagerStore'
-import { useNotificationsStore } from '../../store/notificationsStore'
-import OpsManagerReviewModal from '../../components/ops-manager/OpsManagerReviewModal'
-import MutualAidOfferModal from '../../components/dispatcher/MutualAidOfferModal'
+  ClipboardList,
+  Clock,
+  MapPin,
+  Target,
+  AlertTriangle,
+  X,
+  CheckCircle,
+  Brain,
+  MessageSquare,
+  Radio,
+  ShieldAlert,
+} from "lucide-react";
+import MetricCard from "../../components/dispatcher/MetricCard";
+import SectionTitle from "../../components/dispatcher/SectionTitle";
+import StatusBadge from "../../components/dispatcher/StatusBadge";
+import { useOpsManagerStore } from "../../store/opsManagerStore";
+import { useNotificationsStore } from "../../store/notificationsStore";
+import OpsManagerReviewModal from "../../components/ops-manager/OpsManagerReviewModal";
+import MutualAidOfferModal from "../../components/dispatcher/MutualAidOfferModal";
 import {
   OPS_ESCALATIONS,
   OPS_DASHBOARD_RECOMMENDATIONS,
@@ -18,63 +27,73 @@ import {
   OPS_FLEET,
   getWorkloadVariant,
   getWorkloadLabel,
-} from '../../data/mockOpsManagerData'
-import OpsManagerDistrictLabel from '../../components/ops-manager/OpsManagerDistrictLabel'
-import OpsManagerMissedCallsPanel from '../../components/ops-manager/OpsManagerMissedCallsPanel'
-import DispatchUnitsModal from '../../components/ops-manager/DispatchUnitsModal'
-import { getOpsManagerDistrict } from '../../utils/opsManagerDistrict'
-import { mockBackupRequests } from '../../data/mockBackupRequests'
-import { mockVehicles } from '../../data/mockVehicles'
-import { mockIncidents } from '../../data/mockIncidents'
-import { mockAuditLogs } from '../../data/mockAuditLogs'
-import { generateUuid } from '../../utils/formHelpers'
-import { getCurrentUser } from '../../utils/authSession'
+} from "../../data/mockOpsManagerData";
+import OpsManagerDistrictLabel from "../../components/ops-manager/OpsManagerDistrictLabel";
+import OpsManagerMissedCallsPanel from "../../components/ops-manager/OpsManagerMissedCallsPanel";
+import DispatchUnitsModal from "../../components/ops-manager/DispatchUnitsModal";
+import { getOpsManagerDistrict } from "../../utils/opsManagerDistrict";
+import { mockBackupRequests } from "../../data/mockBackupRequests";
+import { listVehicles } from "../../api/vehicles";
+import { listIncidents } from "../../api/incidents";
+import { mockVehicles } from "../../data/mockVehicles";
+import { mockIncidents } from "../../data/mockIncidents";
+import { mockAuditLogs } from "../../data/mockAuditLogs";
+import { generateUuid } from "../../utils/formHelpers";
+import { getCurrentUser } from "../../utils/authSession";
 
 function timeAgo(isoString) {
-  const diffMs = Date.now() - new Date(isoString).getTime()
-  const diffMin = Math.floor(diffMs / 60000)
-  if (diffMin < 1) return 'Just now'
-  if (diffMin < 60) return `${diffMin}m ago`
-  return `${Math.floor(diffMin / 60)}h ago`
+  const diffMs = Date.now() - new Date(isoString).getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return "Just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  return `${Math.floor(diffMin / 60)}h ago`;
 }
 
-function BackupRequestsPanel() {
-  const [requests, setRequests] = useState(() => [...mockBackupRequests])
-  const [dispatchTarget, setDispatchTarget] = useState(null)
-  const [dispatchToast, setDispatchToast] = useState(null)
+function BackupRequestsPanel({ vehicles, incidents }) {
+  const [requests, setRequests] = useState(() => [...mockBackupRequests]);
+  const [dispatchTarget, setDispatchTarget] = useState(null);
+  const [dispatchToast, setDispatchToast] = useState(null);
 
   const showToast = (msg) => {
-    setDispatchToast(msg)
-    setTimeout(() => setDispatchToast(null), 3000)
-  }
+    setDispatchToast(msg);
+    setTimeout(() => setDispatchToast(null), 3000);
+  };
 
   const handleAcknowledge = (backup) => {
-    const cu = getCurrentUser()
+    const cu = getCurrentUser();
     mockAuditLogs.push({
       log_id: generateUuid(),
-      user_id: cu?.user_id || 'demo-user-uuid',
+      user_id: cu?.user_id || "demo-user-uuid",
       timestamp: new Date().toISOString(),
       action: `BACKUP_REQUEST_ACKNOWLEDGED: ${backup.backup_id}`,
-      module: 'OPS_MANAGER',
+      module: "OPERATIONS_MANAGER",
       ip_address: null,
-      status: 'SUCCESS',
-    })
-    setRequests((prev) => prev.filter((r) => r.backup_id !== backup.backup_id))
-    showToast('Backup request acknowledged')
-  }
+      status: "SUCCESS",
+    });
+    setRequests((prev) => prev.filter((r) => r.backup_id !== backup.backup_id));
+    showToast("Backup request acknowledged");
+  };
 
   const openDispatch = (backup) => {
-    const reqVehicle = mockVehicles.find((v) => v.vehicle_id === backup.requesting_unit_id || v.id === backup.requesting_unit_id)
-    const incData = mockIncidents.find((i) => i.incident_id === backup.incident_id)
-    setDispatchTarget({ backup, vehicle: reqVehicle, incData })
-  }
+    const reqVehicle = vehicles.find(
+      (v) =>
+        v.vehicle_id === backup.requesting_unit_id ||
+        v.id === backup.requesting_unit_id,
+    );
+    const incData = incidents.find((i) => i.incident_id === backup.incident_id);
+    setDispatchTarget({ backup, vehicle: reqVehicle, incData });
+  };
 
   return (
     <div className="dispatcher-surface overflow-hidden relative">
       {dispatchToast && (
         <div
           className="absolute top-2 right-2 z-10 text-[12px] px-3 py-1.5 rounded-lg font-semibold"
-          style={{ background: 'var(--status-low-bg)', color: 'var(--status-low)', border: '1px solid var(--status-low)' }}
+          style={{
+            background: "var(--status-low-bg)",
+            color: "var(--status-low)",
+            border: "1px solid var(--status-low)",
+          }}
         >
           {dispatchToast}
         </div>
@@ -82,43 +101,70 @@ function BackupRequestsPanel() {
       <DispatchUnitsModal
         isOpen={!!dispatchTarget}
         incidentId={dispatchTarget?.backup?.incident_id}
-        incidentRef={dispatchTarget?.incData?.incident_ref || dispatchTarget?.backup?.incident_id}
+        incidentRef={
+          dispatchTarget?.incData?.incident_ref ||
+          dispatchTarget?.backup?.incident_id
+        }
         districtId={dispatchTarget?.vehicle?.district_id}
         onClose={() => setDispatchTarget(null)}
         onConfirm={(units) => {
-          setDispatchTarget(null)
-          showToast(`${units.length} unit${units.length > 1 ? 's' : ''} dispatched`)
+          setDispatchTarget(null);
+          showToast(
+            `${units.length} unit${units.length > 1 ? "s" : ""} dispatched`,
+          );
         }}
       />
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-(--border-subtle)">
         <div className="flex items-center gap-2 min-w-0">
-          <ShieldAlert size={16} style={{ color: 'var(--status-medium)' }} aria-hidden />
-          <span className="text-[14px] font-semibold text-(--text-primary)">Backup Requests</span>
+          <ShieldAlert
+            size={16}
+            style={{ color: "var(--status-medium)" }}
+            aria-hidden
+          />
+          <span className="text-[14px] font-semibold text-(--text-primary)">
+            Backup Requests
+          </span>
           {requests.length > 0 && (
             <span
               className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[11px] font-bold"
-              style={{ background: 'var(--status-medium-bg)', color: 'var(--status-medium)' }}
+              style={{
+                background: "var(--status-medium-bg)",
+                color: "var(--status-medium)",
+              }}
             >
               {requests.length}
             </span>
           )}
         </div>
-        <span className="text-[11px] font-mono text-(--text-muted)">From field units</span>
+        <span className="text-[11px] font-mono text-(--text-muted)">
+          From field units
+        </span>
       </div>
       {requests.length === 0 ? (
-        <div className="flex flex-col items-center justify-center text-center" style={{ padding: '1.25rem' }}>
-          <p className="text-[12px] text-(--text-muted) m-0">No pending backup requests</p>
+        <div
+          className="flex flex-col items-center justify-center text-center"
+          style={{ padding: "1.25rem" }}
+        >
+          <p className="text-[12px] text-(--text-muted) m-0">
+            No pending backup requests
+          </p>
         </div>
       ) : (
         <div>
           {requests.map((req) => {
-            const reqVehicle = mockVehicles.find((v) => v.vehicle_id === req.requesting_unit_id || v.id === req.requesting_unit_id)
-            const incData = mockIncidents.find((i) => i.incident_id === req.incident_id)
+            const reqVehicle = vehicles.find(
+              (v) =>
+                v.vehicle_id === req.requesting_unit_id ||
+                v.id === req.requesting_unit_id,
+            );
+            const incData = incidents.find(
+              (i) => i.incident_id === req.incident_id,
+            );
             return (
               <div
                 key={req.backup_id}
                 className="flex flex-col gap-2 border-b border-(--border-subtle) last:border-0"
-                style={{ padding: '0.65rem 0.85rem' }}
+                style={{ padding: "0.65rem 0.85rem" }}
               >
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-mono text-[11px] font-bold text-(--accent)">
@@ -127,9 +173,13 @@ function BackupRequestsPanel() {
                   <span className="text-[11px] text-(--text-muted)">
                     · {reqVehicle?.plate_number || req.requesting_unit_id}
                   </span>
-                  <span className="text-[10px] font-mono text-(--text-muted) ml-auto">{timeAgo(req.created_at)}</span>
+                  <span className="text-[10px] font-mono text-(--text-muted) ml-auto">
+                    {timeAgo(req.created_at)}
+                  </span>
                 </div>
-                <div className="text-[12px] text-(--text-secondary)">{req.reason}</div>
+                <div className="text-[12px] text-(--text-secondary)">
+                  {req.reason}
+                </div>
                 <div className="flex gap-2 flex-wrap">
                   <button
                     type="button"
@@ -147,72 +197,99 @@ function BackupRequestsPanel() {
                   </button>
                 </div>
               </div>
-            )
+            );
           })}
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function FleetBar({ type, available, total }) {
-  const pct = Math.round((available / total) * 100)
-  const low = pct < 60
-  const barColor = low && type === 'Ambulances' ? 'var(--status-medium)' : 'var(--accent)'
+  const pct = Math.round((available / total) * 100);
+  const low = pct < 60;
+  const barColor =
+    low && type === "Ambulances" ? "var(--status-medium)" : "var(--accent)";
   return (
     <div className="flex-1 min-w-[140px]">
       <div className="flex justify-between text-[12px] mb-1">
         <span className="text-(--text-secondary)">{type}</span>
-        <span className="font-mono text-(--text-primary)">{available}/{total}</span>
+        <span className="font-mono text-(--text-primary)">
+          {available}/{total}
+        </span>
       </div>
       <div className="h-1.5 rounded-full bg-(--bg-input) overflow-hidden">
-        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: barColor }} />
+        <div
+          className="h-full rounded-full transition-all"
+          style={{ width: `${pct}%`, background: barColor }}
+        />
       </div>
     </div>
-  )
+  );
 }
 
 export default function OpsManagerDashboard() {
-  const { handoverBannerDismissed, handoverRead, dismissHandoverBanner } = useOpsManagerStore()
-  const { items, markRead, addNotification } = useNotificationsStore()
-  
-  const [showBanner, setShowBanner] = useState(!handoverBannerDismissed && !handoverRead)
+  const { handoverBannerDismissed, handoverRead, dismissHandoverBanner } =
+    useOpsManagerStore();
+  const { items, markRead, addNotification } = useNotificationsStore();
+
+  const [showBanner, setShowBanner] = useState(
+    !handoverBannerDismissed && !handoverRead,
+  );
 
   // Mutual Aid Modals state
-  const [reviewingEscalation, setReviewingEscalation] = useState(null)
-  const [reviewingOffer, setReviewingOffer] = useState(null)
+  const [reviewingEscalation, setReviewingEscalation] = useState(null);
+  const [reviewingOffer, setReviewingOffer] = useState(null);
+
+  const [vehicles, setVehicles] = useState(() => [...mockVehicles]);
+  const [incidents, setIncidents] = useState(() => [...mockIncidents]);
 
   useEffect(() => {
-    setShowBanner(!handoverBannerDismissed && !handoverRead)
-  }, [handoverBannerDismissed, handoverRead])
+    listVehicles()
+      .then(setVehicles)
+      .catch(() => {});
+    listIncidents()
+      .then(setIncidents)
+      .catch(() => {});
+  }, []);
 
-  const pendingEscalations = items.filter(n => n.type === 'mutual_aid_escalation' && !n.read)
-  const pendingBroadcasts = items.filter(n => n.type === 'mutual_aid' && !n.read)
+  useEffect(() => {
+    setShowBanner(!handoverBannerDismissed && !handoverRead);
+  }, [handoverBannerDismissed, handoverRead]);
+
+  const pendingEscalations = items.filter(
+    (n) => n.type === "mutual_aid_escalation" && !n.read,
+  );
+  const pendingBroadcasts = items.filter(
+    (n) => n.type === "mutual_aid" && !n.read,
+  );
 
   const handleBroadcast = (details) => {
     // The Ops Manager approves the escalation and broadcasts it
-    if (reviewingEscalation) markRead(reviewingEscalation.id)
-    
+    if (reviewingEscalation) markRead(reviewingEscalation.id);
+
     addNotification({
       id: `ma-broadcast-${Date.now()}`,
-      type: 'mutual_aid',
+      type: "mutual_aid",
       title: `MUTUAL AID: Neighboring District (${details.radius}km)`,
       desc: `Priority request for ${details.priority}`,
-      time: 'Just now',
+      time: "Just now",
       read: false,
-      href: '#ops-manager',
-      details: details
-    })
-  }
+      href: "#ops-manager",
+      details: details,
+    });
+  };
 
   const handlePledge = (units) => {
-    if (reviewingOffer) markRead(reviewingOffer.id)
+    if (reviewingOffer) markRead(reviewingOffer.id);
     // Handle actual pledge logic here
-  }
+  };
 
-  const fleetShortage = OPS_FLEET.some((f) => f.available / f.total < 0.5)
-  const omDistrict = getOpsManagerDistrict()
-  const districtDispatchers = OPS_DISPATCHERS.filter((d) => d.district === omDistrict)
+  const fleetShortage = OPS_FLEET.some((f) => f.available / f.total < 0.5);
+  const omDistrict = getOpsManagerDistrict();
+  const districtDispatchers = OPS_DISPATCHERS.filter(
+    (d) => d.district === omDistrict,
+  );
 
   return (
     <div className="portal-page flex flex-col gap-5">
@@ -226,36 +303,53 @@ export default function OpsManagerDashboard() {
           <button
             type="button"
             className="absolute top-3 right-3 bg-transparent border-none cursor-pointer text-(--text-muted) hover:text-(--text-primary)"
-            onClick={() => { dismissHandoverBanner(); setShowBanner(false) }}
+            onClick={() => {
+              dismissHandoverBanner();
+              setShowBanner(false);
+            }}
             aria-label="Dismiss"
           >
             <X size={18} />
           </button>
           <ClipboardList size={22} className="text-(--accent) shrink-0" />
           <div className="flex-1 min-w-[200px] pr-8">
-            <div className="font-bold text-(--text-primary)">Shift Handover Summary Available</div>
+            <div className="font-bold text-(--text-primary)">
+              Shift Handover Summary Available
+            </div>
             <p className="text-[13px] text-(--text-secondary) m-0 mt-1">
-              Incoming briefing from outgoing dispatcher — read before operations begin
+              Incoming briefing from outgoing dispatcher — read before
+              operations begin
             </p>
           </div>
-          <Link to="/ops-manager/shift" className="dispatcher-btn-outline no-underline text-[13px]">
+          <Link
+            to="/ops-manager/shift"
+            className="dispatcher-btn-outline no-underline text-[13px]"
+          >
             Read Handover →
           </Link>
         </div>
       )}
 
       {/* Local Dispatcher Escalations */}
-      {pendingEscalations.map(esc => (
-        <div key={esc.id} className="dispatcher-surface p-4 flex flex-wrap items-start gap-4 relative border border-(--status-critical)">
-          <AlertTriangle size={22} className="text-(--status-critical) shrink-0" />
+      {pendingEscalations.map((esc) => (
+        <div
+          key={esc.id}
+          className="dispatcher-surface p-4 flex flex-wrap items-start gap-4 relative border border-(--status-critical)"
+        >
+          <AlertTriangle
+            size={22}
+            className="text-(--status-critical) shrink-0"
+          />
           <div className="flex-1 min-w-[200px] pr-8">
-            <div className="font-bold text-(--status-critical)">Mutual Aid Escalation</div>
+            <div className="font-bold text-(--status-critical)">
+              Mutual Aid Escalation
+            </div>
             <p className="text-[13px] text-(--text-secondary) m-0 mt-1">
               {esc.title}
             </p>
           </div>
-          <button 
-            type="button" 
+          <button
+            type="button"
             className="dispatcher-btn-primary text-[13px]"
             onClick={() => setReviewingEscalation(esc)}
           >
@@ -265,17 +359,22 @@ export default function OpsManagerDashboard() {
       ))}
 
       {/* External Mutual Aid Broadcasts */}
-      {pendingBroadcasts.map(broadcast => (
-        <div key={broadcast.id} className="dispatcher-surface p-4 flex flex-wrap items-start gap-4 relative border border-(--status-medium)">
+      {pendingBroadcasts.map((broadcast) => (
+        <div
+          key={broadcast.id}
+          className="dispatcher-surface p-4 flex flex-wrap items-start gap-4 relative border border-(--status-medium)"
+        >
           <Radio size={22} className="text-(--status-medium) shrink-0" />
           <div className="flex-1 min-w-[200px] pr-8">
-            <div className="font-bold text-(--text-primary)">Incoming Mutual Aid Broadcast</div>
+            <div className="font-bold text-(--text-primary)">
+              Incoming Mutual Aid Broadcast
+            </div>
             <p className="text-[13px] text-(--text-secondary) m-0 mt-1">
               {broadcast.title}
             </p>
           </div>
-          <button 
-            type="button" 
+          <button
+            type="button"
             className="dispatcher-btn-outline text-[13px]"
             onClick={() => setReviewingOffer(broadcast)}
           >
@@ -285,13 +384,31 @@ export default function OpsManagerDashboard() {
       ))}
 
       <div className="portal-grid-4">
-        <MetricCard icon={Clock} label="Avg Response Time" value="7.2m" hint="↓ 0.8m vs target" hintTone="positive">
+        <MetricCard
+          icon={Clock}
+          label="Avg Response Time"
+          value="7.2m"
+          hint="↓ 0.8m vs target"
+          hintTone="positive"
+        >
           <div className="dispatcher-metric-target">Target: 8 min</div>
         </MetricCard>
-        <MetricCard icon={MapPin} label="Coverage Score" value="93%" hint="↑ 3% above target" hintTone="positive">
+        <MetricCard
+          icon={MapPin}
+          label="Coverage Score"
+          value="93%"
+          hint="↑ 3% above target"
+          hintTone="positive"
+        >
           <div className="dispatcher-metric-target">Target: 90%</div>
         </MetricCard>
-        <MetricCard icon={Target} label="Dispatch Accuracy" value="88%" hint="↓ 4% this hour" hintTone="warning" />
+        <MetricCard
+          icon={Target}
+          label="Dispatch Accuracy"
+          value="88%"
+          hint="↓ 4% this hour"
+          hintTone="warning"
+        />
         <MetricCard
           icon={AlertTriangle}
           label="Active Escalations"
@@ -306,29 +423,57 @@ export default function OpsManagerDashboard() {
         <div className="om-dashboard-col--wide flex flex-col gap-3">
           <SectionTitle
             title="Escalation Queue"
-            badge={<StatusBadge label={`${OPS_ESCALATIONS.length} live`} variant="critical" />}
+            badge={
+              <StatusBadge
+                label={`${OPS_ESCALATIONS.length} live`}
+                variant="critical"
+              />
+            }
           />
           {OPS_ESCALATIONS.length === 0 ? (
             <div className="dispatcher-surface p-8 text-center">
               <CheckCircle size={32} className="text-(--accent) mx-auto mb-2" />
-              <p className="text-(--text-secondary) m-0">No active escalations</p>
+              <p className="text-(--text-secondary) m-0">
+                No active escalations
+              </p>
             </div>
           ) : (
             OPS_ESCALATIONS.map((esc) => (
               <div key={esc.id} className="dispatcher-surface p-4">
                 <div className="flex flex-wrap items-center gap-2 mb-1">
-                  <span className="text-(--accent) font-bold font-mono text-[13px]">{esc.id}</span>
-                  <StatusBadge label={esc.severity.toUpperCase()} variant={esc.severity === 'critical' ? 'critical' : 'handover'} />
+                  <span className="text-(--accent) font-bold font-mono text-[13px]">
+                    {esc.id}
+                  </span>
+                  <StatusBadge
+                    label={esc.severity.toUpperCase()}
+                    variant={
+                      esc.severity === "critical" ? "critical" : "handover"
+                    }
+                  />
                 </div>
-                <div className="text-[14px] font-semibold text-(--text-primary)">{esc.type}</div>
-                <div className="text-[12px] text-(--text-secondary) mt-0.5">{esc.location}</div>
-                <div className="text-[13px] font-mono text-(--accent) mt-1">{esc.elapsed}</div>
-                <p className="text-[12px] text-(--text-secondary) italic m-0 mt-2">{esc.reason}</p>
+                <div className="text-[14px] font-semibold text-(--text-primary)">
+                  {esc.type}
+                </div>
+                <div className="text-[12px] text-(--text-secondary) mt-0.5">
+                  {esc.location}
+                </div>
+                <div className="text-[13px] font-mono text-(--accent) mt-1">
+                  {esc.elapsed}
+                </div>
+                <p className="text-[12px] text-(--text-secondary) italic m-0 mt-2">
+                  {esc.reason}
+                </p>
                 <div className="flex flex-wrap gap-2 mt-3">
-                  <Link to={`/ops-manager/escalations/${esc.id}`} className="dispatcher-btn-primary no-underline text-[12px] py-2 px-3">
+                  <Link
+                    to={`/ops-manager/escalations/${esc.id}`}
+                    className="dispatcher-btn-primary no-underline text-[12px] py-2 px-3"
+                  >
                     Take Command →
                   </Link>
-                  <Link to={`/ops-manager/escalations/${esc.id}`} className="dispatcher-btn-ghost no-underline text-[12px] py-2 px-3">
+                  <Link
+                    to={`/ops-manager/escalations/${esc.id}`}
+                    className="dispatcher-btn-ghost no-underline text-[12px] py-2 px-3"
+                  >
                     View Only
                   </Link>
                 </div>
@@ -340,20 +485,47 @@ export default function OpsManagerDashboard() {
         <div className="om-dashboard-col--mid flex flex-col gap-3">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <SectionTitle title="AI Resource Recommendations" accent />
-            <span className="text-[10px] text-(--text-muted) font-mono">15m refresh</span>
+            <span className="text-[10px] text-(--text-muted) font-mono">
+              15m refresh
+            </span>
           </div>
           {OPS_DASHBOARD_RECOMMENDATIONS.map((rec) => (
             <div key={rec.id} className="dispatcher-surface p-4">
-              <div className="text-[13px] font-bold text-(--text-primary)">{rec.text}</div>
-              <p className="text-[12px] text-(--text-secondary) m-0 mt-1">{rec.reason}</p>
-              <p className="text-[12px] text-(--accent) m-0 mt-1">{rec.impact}</p>
+              <div className="text-[13px] font-bold text-(--text-primary)">
+                {rec.text}
+              </div>
+              <p className="text-[12px] text-(--text-secondary) m-0 mt-1">
+                {rec.reason}
+              </p>
+              <p className="text-[12px] text-(--accent) m-0 mt-1">
+                {rec.impact}
+              </p>
               <div className="h-1 rounded-full bg-(--bg-input) mt-3 overflow-hidden">
-                <div className="h-full bg-(--accent)" style={{ width: `${rec.confidence}%` }} />
+                <div
+                  className="h-full bg-(--accent)"
+                  style={{ width: `${rec.confidence}%` }}
+                />
               </div>
               <div className="flex flex-wrap gap-2 mt-3">
-                <button type="button" className="dispatcher-btn-primary text-[11px] py-1.5 px-2.5">Execute</button>
-                <Link to="/ops-manager/resources" className="dispatcher-btn-ghost no-underline text-[11px] py-1.5 px-2.5">Modify</Link>
-                <button type="button" className="dispatcher-btn-ghost text-[11px] py-1.5 px-2.5" style={{ color: 'var(--status-critical)' }}>Reject</button>
+                <button
+                  type="button"
+                  className="dispatcher-btn-primary text-[11px] py-1.5 px-2.5"
+                >
+                  Execute
+                </button>
+                <Link
+                  to="/ops-manager/resources"
+                  className="dispatcher-btn-ghost no-underline text-[11px] py-1.5 px-2.5"
+                >
+                  Modify
+                </Link>
+                <button
+                  type="button"
+                  className="dispatcher-btn-ghost text-[11px] py-1.5 px-2.5"
+                  style={{ color: "var(--status-critical)" }}
+                >
+                  Reject
+                </button>
               </div>
             </div>
           ))}
@@ -363,33 +535,57 @@ export default function OpsManagerDashboard() {
           <SectionTitle title="Active Dispatchers" />
           <div className="dispatcher-surface p-3 flex flex-col gap-2">
             {districtDispatchers.slice(0, 3).map((d) => (
-              <div key={d.id} className="flex items-center gap-2 py-2 border-b border-(--border-subtle) last:border-0">
+              <div
+                key={d.id}
+                className="flex items-center gap-2 py-2 border-b border-(--border-subtle) last:border-0"
+              >
                 <span
                   className="w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
-                  style={{ background: 'var(--accent-ghost)', color: 'var(--accent)' }}
+                  style={{
+                    background: "var(--accent-ghost)",
+                    color: "var(--accent)",
+                  }}
                 >
                   {d.initials}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-semibold truncate">{d.name}</div>
-                  <div className="text-[10px] text-(--text-muted)">Dispatcher</div>
+                  <div className="text-[13px] font-semibold truncate">
+                    {d.name}
+                  </div>
+                  <div className="text-[10px] text-(--text-muted)">
+                    Dispatcher
+                  </div>
                 </div>
-                <StatusBadge label={getWorkloadLabel(d.workload)} variant={getWorkloadVariant(d.workload)} />
+                <StatusBadge
+                  label={getWorkloadLabel(d.workload)}
+                  variant={getWorkloadVariant(d.workload)}
+                />
                 <div className="text-right shrink-0">
-                  <div className="text-[11px] font-mono font-bold">{d.incidents}</div>
-                  <div className="text-[10px] text-(--text-muted)">{d.ai_acceptance_rate}% AI</div>
+                  <div className="text-[11px] font-mono font-bold">
+                    {d.incidents}
+                  </div>
+                  <div className="text-[10px] text-(--text-muted)">
+                    {d.ai_acceptance_rate}% AI
+                  </div>
                 </div>
-                <button type="button" className="dispatcher-btn-icon shrink-0" aria-label="Message">
+                <button
+                  type="button"
+                  className="dispatcher-btn-icon shrink-0"
+                  aria-label="Message"
+                >
                   <MessageSquare size={14} />
                 </button>
               </div>
             ))}
-            <Link to="/ops-manager/dispatchers" className="text-[12px] text-(--accent) font-semibold no-underline mt-1 text-center">
+            <Link
+              to="/ops-manager/dispatchers"
+              className="text-[12px] text-(--accent) font-semibold no-underline mt-1 text-center"
+            >
               View All Dispatchers →
             </Link>
           </div>
           <OpsManagerMissedCallsPanel />
-          <BackupRequestsPanel />
+          <BackupRequestsPanel vehicles={vehicles} incidents={incidents} />
         </div>
       </div>
 
@@ -403,12 +599,18 @@ export default function OpsManagerDashboard() {
         {fleetShortage && (
           <div
             className="mt-4 p-3 rounded-lg flex flex-wrap items-center gap-3 text-[13px]"
-            style={{ background: 'var(--status-medium-bg)', border: '1px solid var(--status-medium)' }}
+            style={{
+              background: "var(--status-medium-bg)",
+              border: "1px solid var(--status-medium)",
+            }}
           >
             <span className="text-(--text-secondary) flex-1 min-w-[200px]">
               Resource shortage detected — consider mutual aid request
             </span>
-            <Link to="/ops-manager/resources" className="dispatcher-btn-outline no-underline text-[12px]">
+            <Link
+              to="/ops-manager/resources"
+              className="dispatcher-btn-outline no-underline text-[12px]"
+            >
               Request Mutual Aid →
             </Link>
           </div>
@@ -429,5 +631,5 @@ export default function OpsManagerDashboard() {
         onPledge={handlePledge}
       />
     </div>
-  )
+  );
 }

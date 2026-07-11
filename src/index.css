@@ -1033,18 +1033,20 @@
   flex: 1;
   overflow-y: auto;
   display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  padding: 1.5rem 1.5rem 1rem;
+  padding: 2rem 1.5rem;
 }
 @media (max-width: 767px) {
   .auth-form-scroll {
-    padding: 1.25rem 1rem 1.5rem;
+    padding: 1.5rem 1rem;
+    justify-content: flex-start;
   }
 }
 .auth-form-inner {
   width: 100%;
-  max-width: 480px;
-  margin: 0 auto;
+  max-width: 420px;
 }
 .auth-form-panel-status {
   display: flex;
@@ -1232,6 +1234,8 @@ a[href*="recover"]:hover {
 }
 .auth-banner--info { background: var(--accent-ghost); color: var(--text-primary); border-color: var(--accent); }
 .auth-banner--ok { background: var(--status-low-bg); color: var(--status-low); border-color: var(--status-low); }
+.auth-banner--error { background: var(--status-critical-bg); color: var(--status-critical); border-color: var(--status-critical); }
+.auth-banner--success { background: var(--status-low-bg); color: var(--status-low); border-color: var(--status-low); }
 .auth-field-error { font-size: 11px; color: var(--status-critical); margin-top: 0.25rem; }
 .auth-status-footer {
   display: flex;
@@ -1744,7 +1748,7 @@ a[href*="recover"]:hover {
   padding: 1.25rem 1.5rem;
 }
 .aiu-district-reveal {
-  padding: 0 1.5rem;
+  padding: 0 1.5rem 1rem;
 }
 .aiu-form-footer {
   padding: 1rem 1.5rem 1.5rem;

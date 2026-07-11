@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import {
   Sun, Moon, Palette, Check, Bell, Map, Send, Clock, Languages,
   Volume2, ShieldCheck, Monitor, Smartphone, Info, Play, UserCircle,
@@ -41,9 +41,11 @@ const OVERRIDE_REASONS = [
 
 export default function DispatcherSettingsView() {
   const { section: sectionParam } = useParams()
+  const navigate = useNavigate()
   const section = sectionParam || 'profile'
   const { theme, setTheme } = useThemeStore()
   const [toast, setToast] = useState(false)
+  const [mfaEnabled, setMfaEnabled] = useState(false)
 
   const [toggles, setToggles] = useState({
     soundCritical: true,
@@ -72,8 +74,6 @@ export default function DispatcherSettingsView() {
   const [toneHigh, setToneHigh] = useState('beep')
   const [toneMed, setToneMed] = useState('beep')
   const [overrideReasons, setOverrideReasons] = useState([])
-  const [twoFa, setTwoFa] = useState(false)
-
   const flashToast = () => {
     setToast(true)
     setTimeout(() => setToast(false), 2500)
@@ -103,9 +103,7 @@ export default function DispatcherSettingsView() {
     >
           {section === 'profile' && (
             <SettingsProfileSection
-              initials="JB"
-              roleLabel="DISPATCHER"
-              badge="DSP-0042"
+              onUserLoaded={(u) => setMfaEnabled(u.mfa_enabled)}
             />
           )}
 
@@ -321,16 +319,15 @@ export default function DispatcherSettingsView() {
                     Adds a second verification step at login using an authenticator app or SMS to your registered phone number.
                   </p>
                 </div>
-                {twoFa ? (
+                {mfaEnabled ? (
                   <>
                     <StatusBadge label="ENABLED" variant="resolved" />
-                    <button type="button" className="dispatcher-btn-ghost text-[12px]">Manage 2FA</button>
-                    <button type="button" className="text-[12px] text-(--text-muted) bg-transparent border-none cursor-pointer hover:text-(--status-critical)" onClick={() => { setTwoFa(false); flashToast() }}>Disable</button>
+                    <button type="button" className="dispatcher-btn-ghost text-[12px]" onClick={() => navigate('/mfa-setup')}>Manage 2FA</button>
                   </>
                 ) : (
                   <>
                     <StatusBadge label="NOT ENABLED" variant="critical" />
-                    <button type="button" className="dispatcher-btn-outline text-[12px]" onClick={() => { setTwoFa(true); flashToast() }}>Enable 2FA</button>
+                    <button type="button" className="dispatcher-btn-outline text-[12px]" onClick={() => navigate('/mfa-setup')}>Enable 2FA</button>
                   </>
                 )}
               </div>

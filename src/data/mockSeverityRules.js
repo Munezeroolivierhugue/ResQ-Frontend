@@ -1,135 +1,97 @@
+// Fallback severity rules — used when backend rules haven't loaded yet.
+// Question codes here must match V5__seed_triage_questions_and_rules.sql.
 export const mockSeverityRules = [
-  // RTA Rules
-  {
-    rule_id: "sr111111-0000-4000-8000-000000000001",
-    incident_type: "RTA",
-    rule_order: 1,
-    condition_json: {
-      or: [
-        { field: "Q_RTA_01", equals: "Yes - severe" },
-        { field: "Q_RTA_02", equals: "Yes" }
-      ]
-    },
-    severity: "critical",
-    active: true
-  },
-  {
-    rule_id: "sr111112-0000-4000-8000-000000000002",
-    incident_type: "RTA",
-    rule_order: 2,
-    condition_json: {
-      field: "Q_RTA_01",
-      equals: "Yes - minor"
-    },
-    severity: "high",
-    active: true
-  },
-  {
-    rule_id: "sr111113-0000-4000-8000-000000000003",
-    incident_type: "RTA",
-    rule_order: 3,
-    condition_json: {}, // Fallback
-    severity: "medium",
-    active: true
-  },
 
-  // MEDICAL Rules
-  {
-    rule_id: "sr222221-0000-4000-8000-000000000001",
-    incident_type: "MEDICAL",
-    rule_order: 1,
-    condition_json: {
-      or: [
-        { field: "Q_MED_01", equals: "No" },
-        { field: "Q_MED_02", equals: "No" }
-      ]
-    },
-    severity: "critical",
-    active: true
-  },
-  {
-    rule_id: "sr222222-0000-4000-8000-000000000002",
-    incident_type: "MEDICAL",
-    rule_order: 2,
-    condition_json: {
-      field: "Q_MED_02",
-      equals: "Difficulty Breathing"
-    },
-    severity: "high",
-    active: true
-  },
-  {
-    rule_id: "sr222223-0000-4000-8000-000000000003",
-    incident_type: "MEDICAL",
-    rule_order: 3,
+  // ── MEDICAL ─────────────────────────────────────────────────────────────────
+  { rule_id: 'sr-med-1', incident_type: 'MEDICAL', rule_order: 1, active: true,
+    condition_json: { or: [{ field: 'Q_MED_CONSCIOUS', equals: 'Unconscious' }, { field: 'Q_MED_BREATHING', equals: 'Not breathing' }] },
+    severity: 'critical' },
+  { rule_id: 'sr-med-2', incident_type: 'MEDICAL', rule_order: 2, active: true,
+    condition_json: { field: 'Q_MED_BLEEDING', equals: 'Yes' },
+    severity: 'critical' },
+  { rule_id: 'sr-med-3', incident_type: 'MEDICAL', rule_order: 3, active: true,
+    condition_json: { or: [{ field: 'Q_MED_BREATHING', equals: 'Difficulty breathing' }, { field: 'Q_MED_CHEST_PAIN', equals: 'Yes' }, { field: 'Q_MED_CONSCIOUS', equals: 'Confused or drowsy' }] },
+    severity: 'high' },
+  { rule_id: 'sr-med-4', incident_type: 'MEDICAL', rule_order: 4, active: true,
+    condition_json: { field: 'Q_MED_COUNT', equals: '4 or more' },
+    severity: 'high' },
+  { rule_id: 'sr-med-5', incident_type: 'MEDICAL', rule_order: 5, active: true,
+    condition_json: { field: 'Q_MED_COUNT', equals: '2–3' },
+    severity: 'medium' },
+  { rule_id: 'sr-med-6', incident_type: 'MEDICAL', rule_order: 6, active: true,
     condition_json: {},
-    severity: "medium",
-    active: true
-  },
+    severity: 'low' },
 
-  // FIRE Rules
-  {
-    rule_id: "sr333331-0000-4000-8000-000000000001",
-    incident_type: "FIRE",
-    rule_order: 1,
-    condition_json: {
-      field: "Q_FIR_01",
-      equals: "Yes"
-    },
-    severity: "critical",
-    active: true
-  },
-  {
-    rule_id: "sr333332-0000-4000-8000-000000000002",
-    incident_type: "FIRE",
-    rule_order: 2,
-    condition_json: {
-      field: "Q_FIR_02",
-      equals: "Yes"
-    },
-    severity: "high",
-    active: true
-  },
-  {
-    rule_id: "sr333333-0000-4000-8000-000000000003",
-    incident_type: "FIRE",
-    rule_order: 3,
+  // ── RTA ──────────────────────────────────────────────────────────────────────
+  { rule_id: 'sr-rta-1', incident_type: 'RTA', rule_order: 1, active: true,
+    condition_json: { or: [{ field: 'Q_RTA_FATALITY', equals: 'Yes' }, { field: 'Q_RTA_TRAPPED', equals: 'Yes, multiple' }, { field: 'Q_RTA_FIRE', equals: 'Yes' }] },
+    severity: 'critical' },
+  { rule_id: 'sr-rta-2', incident_type: 'RTA', rule_order: 2, active: true,
+    condition_json: { or: [{ field: 'Q_RTA_TRAPPED', equals: 'Yes, one' }, { field: 'Q_RTA_INJURIES', equals: 'Multiple severe' }] },
+    severity: 'high' },
+  { rule_id: 'sr-rta-3', incident_type: 'RTA', rule_order: 3, active: true,
+    condition_json: { field: 'Q_RTA_VEHICLES', equals: '4 or more' },
+    severity: 'high' },
+  { rule_id: 'sr-rta-4', incident_type: 'RTA', rule_order: 4, active: true,
+    condition_json: { field: 'Q_RTA_INJURIES', equals: 'One severe' },
+    severity: 'medium' },
+  { rule_id: 'sr-rta-5', incident_type: 'RTA', rule_order: 5, active: true,
     condition_json: {},
-    severity: "medium",
-    active: true
-  },
+    severity: 'low' },
 
-  // SECURITY Rules
-  {
-    rule_id: "sr444441-0000-4000-8000-000000000001",
-    incident_type: "SECURITY",
-    rule_order: 1,
-    condition_json: {
-      field: "Q_SEC_01",
-      equals: "Yes - firearm"
-    },
-    severity: "critical",
-    active: true
-  },
-  {
-    rule_id: "sr444442-0000-4000-8000-000000000002",
-    incident_type: "SECURITY",
-    rule_order: 2,
-    condition_json: {
-      or: [
-        { field: "Q_SEC_01", equals: "Yes - knife/other" },
-        { field: "Q_SEC_02", equals: "Yes" }
-      ]
-    },
-    severity: "high",
-    active: true
-  },
-  {
-    rule_id: "sr444443-0000-4000-8000-000000000003",
-    incident_type: "SECURITY",
-    rule_order: 3,
+  // ── FIRE ─────────────────────────────────────────────────────────────────────
+  { rule_id: 'sr-fir-1', incident_type: 'FIRE', rule_order: 1, active: true,
+    condition_json: { or: [{ field: 'Q_FIR_TRAPPED', equals: 'Yes, many' }, { field: 'Q_FIR_SPREAD', equals: 'Spreading rapidly' }] },
+    severity: 'critical' },
+  { rule_id: 'sr-fir-2', incident_type: 'FIRE', rule_order: 2, active: true,
+    condition_json: { or: [{ field: 'Q_FIR_TRAPPED', equals: 'Yes, one' }, { field: 'Q_FIR_CASUALTIES', equals: 'Multiple' }, { field: 'Q_FIR_HAZMAT', equals: 'Yes' }] },
+    severity: 'high' },
+  { rule_id: 'sr-fir-3', incident_type: 'FIRE', rule_order: 3, active: true,
+    condition_json: { field: 'Q_FIR_CASUALTIES', equals: 'One' },
+    severity: 'medium' },
+  { rule_id: 'sr-fir-4', incident_type: 'FIRE', rule_order: 4, active: true,
     condition_json: {},
-    severity: "medium",
-    active: true
-  }
-];
+    severity: 'low' },
+
+  // ── SECURITY ─────────────────────────────────────────────────────────────────
+  { rule_id: 'sr-sec-1', incident_type: 'SECURITY', rule_order: 1, active: true,
+    condition_json: { or: [{ field: 'Q_SEC_WEAPON', equals: 'Yes - firearm' }, { field: 'Q_SEC_HOSTAGE', equals: 'Yes' }] },
+    severity: 'critical' },
+  { rule_id: 'sr-sec-2', incident_type: 'SECURITY', rule_order: 2, active: true,
+    condition_json: { or: [{ field: 'Q_SEC_ACTIVE', equals: 'Yes' }, { field: 'Q_SEC_WEAPON', equals: 'Yes - knife or other' }, { field: 'Q_SEC_CASUALTIES', equals: 'Multiple' }] },
+    severity: 'high' },
+  { rule_id: 'sr-sec-3', incident_type: 'SECURITY', rule_order: 3, active: true,
+    condition_json: { or: [{ field: 'Q_SEC_CASUALTIES', equals: 'One' }, { field: 'Q_SEC_WEAPON', equals: 'Unknown' }] },
+    severity: 'medium' },
+  { rule_id: 'sr-sec-4', incident_type: 'SECURITY', rule_order: 4, active: true,
+    condition_json: {},
+    severity: 'low' },
+
+  // ── DISASTER ──────────────────────────────────────────────────────────────────
+  { rule_id: 'sr-dis-1', incident_type: 'DISASTER', rule_order: 1, active: true,
+    condition_json: { or: [{ field: 'Q_DIS_TYPE', equals: 'Earthquake' }, { field: 'Q_DIS_TYPE', equals: 'Landslide' }, { field: 'Q_DIS_SCALE', equals: '200 or more' }, { field: 'Q_DIS_TRAPPED', equals: 'Yes, many' }] },
+    severity: 'critical' },
+  { rule_id: 'sr-dis-2', incident_type: 'DISASTER', rule_order: 2, active: true,
+    condition_json: { or: [{ field: 'Q_DIS_SCALE', equals: '51–200' }, { field: 'Q_DIS_TRAPPED', equals: 'Yes, few' }, { field: 'Q_DIS_INFRA', equals: 'Severe (buildings collapsed)' }] },
+    severity: 'high' },
+  { rule_id: 'sr-dis-3', incident_type: 'DISASTER', rule_order: 3, active: true,
+    condition_json: { or: [{ field: 'Q_DIS_SCALE', equals: '11–50' }, { field: 'Q_DIS_INFRA', equals: 'Moderate' }] },
+    severity: 'medium' },
+  { rule_id: 'sr-dis-4', incident_type: 'DISASTER', rule_order: 4, active: true,
+    condition_json: {},
+    severity: 'low' },
+
+  // ── OTHER ─────────────────────────────────────────────────────────────────────
+  { rule_id: 'sr-oth-1', incident_type: 'OTHER', rule_order: 1, active: true,
+    condition_json: { or: [{ field: 'Q_OTH_THREAT', equals: 'Yes, confirmed' }, { field: 'Q_OTH_CASUALTIES', equals: 'Multiple' }] },
+    severity: 'critical' },
+  { rule_id: 'sr-oth-2', incident_type: 'OTHER', rule_order: 2, active: true,
+    condition_json: { or: [{ field: 'Q_OTH_THREAT', equals: 'Possible' }, { field: 'Q_OTH_WEAPON', equals: 'Yes' }, { field: 'Q_OTH_CASUALTIES', equals: 'One' }] },
+    severity: 'high' },
+  { rule_id: 'sr-oth-3', incident_type: 'OTHER', rule_order: 3, active: true,
+    condition_json: { or: [{ field: 'Q_OTH_ESCALATING', equals: 'Yes' }, { field: 'Q_OTH_PEOPLE', equals: '10 or more' }] },
+    severity: 'medium' },
+  { rule_id: 'sr-oth-4', incident_type: 'OTHER', rule_order: 4, active: true,
+    condition_json: {},
+    severity: 'low' },
+]

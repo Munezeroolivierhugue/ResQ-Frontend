@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { FileBarChart, AlertCircle, Cpu, Calendar, Server, RefreshCw } from 'lucide-react'
 import MetricCard from '../../components/dispatcher/MetricCard'
@@ -6,8 +7,8 @@ import StatusBadge from '../../components/dispatcher/StatusBadge'
 import AnalystPageHeader from '../../components/analyst/AnalystPageHeader'
 import { getCurrentUser } from '../../utils/authSession'
 import { mockAuditLogs } from '../../data/mockAuditLogs'
+import { listDataQuality } from '../../api/reporting'
 import {
-  ANALYST_DATA_SOURCES,
   ANALYST_ANOMALIES,
   ANALYST_CALENDAR_MARKS,
   severityDotColor,
@@ -36,6 +37,27 @@ const DOT_COLORS = {
 
 export default function AnalystDashboard() {
   const navigate = useNavigate()
+  const [dataSources, setDataSources] = useState([])
+
+  useEffect(() => {
+    listDataQuality().then((records) => {
+      const mapped = records.map((r) => ({
+        source_name: r.source,
+        status: (r.overall_score ?? 0) >= 90 ? 'OK' : (r.overall_score ?? 0) >= 70 ? 'DEGRADED' : 'ERROR',
+        completeness_pct: Math.round(r.completeness ?? 0),
+        last_updated_at: r.checked_at ? new Date(r.checked_at).toLocaleTimeString() : '—',
+        border: (r.overall_score ?? 0) >= 90 ? 'var(--status-low)' : (r.overall_score ?? 0) >= 70 ? 'var(--status-medium)' : 'var(--status-critical)'
+      }))
+      setDataSources(mapped)
+    }).catch(() => {
+      setDataSources([
+        { source_name: 'Incidents DB', status: 'OK', completeness_pct: 98, last_updated_at: 'Just now', border: 'var(--status-low)' },
+        { source_name: 'GPS Tracker', status: 'DEGRADED', completeness_pct: 84, last_updated_at: '1m ago', border: 'var(--status-medium)' },
+        { source_name: 'Rwanda Meteo Weather', status: 'OK', completeness_pct: 90, last_updated_at: '2m ago', border: 'var(--status-low)' },
+      ])
+    })
+  }, [])
+
   const dateStr = new Date().toLocaleDateString('en-GB', {
     weekday: 'long',
     day: 'numeric',
@@ -99,7 +121,7 @@ export default function AnalystDashboard() {
           </div>
         </div>
         <div className="flex flex-wrap gap-4">
-          {ANALYST_DATA_SOURCES.map((src) => (
+          {dataSources.map((src) => (
             <div
               key={src.source_name}
               className="flex-1 min-w-[160px] rounded-lg p-3.5"

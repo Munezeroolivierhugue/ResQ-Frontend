@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { Sun, Moon, Palette, Check, ShieldCheck, Monitor, Bell, Languages, UserCircle } from 'lucide-react'
 import { useThemeStore } from '../../store/themeStore'
 import StatusBadge from '../dispatcher/StatusBadge'
@@ -27,7 +27,8 @@ export default function AdminPortalSettingsView() {
   const section = sectionParam || 'profile'
   const { theme, setTheme } = useThemeStore()
   const [toast, setToast] = useState(false)
-  const [twoFa, setTwoFa] = useState(true)
+  const navigate = useNavigate()
+  const [mfaEnabled, setMfaEnabled] = useState(false)
   const [language, setLanguage] = useState('en')
   const [toggles, setToggles] = useState({
     newUserInvite: true,
@@ -62,16 +63,7 @@ export default function AdminPortalSettingsView() {
     >
       {section === 'profile' && (
         <SettingsProfileSection
-          initials="SA"
-          roleLabel="SUPER ADMIN"
-          badge="ADM-0001"
-          defaultForm={{
-            name: 'Super Admin',
-            email: 'admin@resq.rw',
-            phone: '+250 788 000 001',
-            station: 'HQ Central Command — Kigali',
-          }}
-          stationAdminNote="Provisioned role and station are managed at system level"
+          onUserLoaded={(u) => setMfaEnabled(u.mfa_enabled)}
         />
       )}
 
@@ -255,7 +247,17 @@ export default function AdminPortalSettingsView() {
               <div className="font-semibold text-[13px]">Two-factor authentication</div>
               <p className="text-[12px] text-(--text-secondary) m-0 mt-1">Mandatory for all administration accounts.</p>
             </div>
-            <StatusBadge label={twoFa ? 'ENABLED' : 'NOT ENABLED'} variant={twoFa ? 'resolved' : 'critical'} />
+            {mfaEnabled ? (
+              <>
+                <StatusBadge label="ENABLED" variant="resolved" />
+                <button type="button" className="dispatcher-btn-ghost text-[12px]" onClick={() => navigate('/mfa-setup')}>Manage 2FA</button>
+              </>
+            ) : (
+              <>
+                <StatusBadge label="NOT ENABLED" variant="critical" />
+                <button type="button" className="dispatcher-btn-outline text-[12px]" onClick={() => navigate('/mfa-setup')}>Enable 2FA</button>
+              </>
+            )}
           </div>
         </div>
       )}

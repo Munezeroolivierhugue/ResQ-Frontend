@@ -31,10 +31,14 @@ import FRVerifyOtp from './pages/auth/FRVerifyOtp'
 import FRMfaSetup from './pages/auth/FRMfaSetup'
 import LoginMfa from './pages/auth/LoginMfa'
 import Register from './pages/auth/Register'
+import SetPassword from './pages/auth/SetPassword'
 import VerifyOtp from './pages/auth/VerifyOtp'
 import MfaSetup from './pages/auth/MfaSetup'
 import AdminInviteUser from './pages/admin/AdminInviteUser'
 import AdminUsers from './pages/admin/AdminUsers'
+import AdminUnits from './pages/admin/AdminUnits'
+import AdminAgencies from './pages/admin/AdminAgencies'
+import AdminSystemReport from './pages/admin/AdminSystemReport'
 import OpsManagerShell from './components/ops-manager/OpsManagerShell'
 import OpsManagerRoute from './components/layout/OpsManagerRoute'
 import OpsManagerDashboard from './pages/ops-manager/OpsManagerDashboard'
@@ -57,6 +61,7 @@ import DCResources from './pages/district-commander/DCResources'
 import DCExecutiveReport from './pages/district-commander/DCExecutiveReport'
 import DCProfile from './pages/district-commander/DCProfile'
 import DCSettings from './pages/district-commander/DCSettings'
+import DCCreateUser from './pages/district-commander/DCCreateUser'
 import FieldResponderRoute from './components/layout/FieldResponderRoute'
 import FieldResponderShell from './components/field-responder/FieldResponderShell'
 import FRShiftStart from './pages/field-responder/FRShiftStart'
@@ -114,6 +119,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/login/mfa" element={<LoginMfa />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/set-password" element={<SetPassword />} />
         <Route path="/register/password" element={<Navigate to="/register" replace />} />
         <Route path="/verify-otp" element={<VerifyOtp />} />
         <Route path="/mfa-setup" element={<MfaSetup />} />
@@ -130,6 +136,9 @@ export default function App() {
             <Route path="settings" element={<Navigate to="/admin/settings/general" replace />} />
             <Route path="settings/:section" element={<AdminSettings />} />
             <Route path="users/invite" element={<AdminInviteUser />} />
+            <Route path="units" element={<AdminUnits />} />
+            <Route path="agencies" element={<AdminAgencies />} />
+            <Route path="system-report" element={<AdminSystemReport />} />
             <Route path="help" element={<AdminHelp />} />
             <Route index element={<Navigate to="/admin/dashboard" replace />} />
           </Route>
@@ -163,6 +172,7 @@ export default function App() {
             <Route path="coverage" element={<DCCoverage />} />
             <Route path="resources" element={<DCResources />} />
             <Route path="executive-report" element={<DCExecutiveReport />} />
+            <Route path="create-user" element={<DCCreateUser />} />
             <Route path="profile" element={<DCProfile />} />
             <Route path="settings" element={<Navigate to="/district-commander/settings/profile" replace />} />
             <Route path="settings/:section" element={<DCSettings />} />

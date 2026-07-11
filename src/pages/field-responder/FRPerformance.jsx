@@ -1,5 +1,33 @@
 import { useState } from 'react'
-import { BarChart3 } from 'lucide-react'
+import { BarChart3, Download } from 'lucide-react'
+import { getCurrentUser } from '../../utils/authSession'
+import { buildPdfHtml, openPdfWindow } from '../../utils/pdfExport'
+
+function exportPerfPDF(p) {
+  const cu = getCurrentUser()
+  const name = cu?.fullName || sessionStorage.getItem('resq-full-name') || 'Field Responder'
+  openPdfWindow(buildPdfHtml({
+    title: 'Field Responder Performance Report',
+    subtitle: "Today's Shift · 08:00 – Now",
+    reportType: 'PERFORMANCE REPORT',
+    idPrefix: 'FRP',
+    metaItems: [
+      { label: 'Responder', value: name },
+      { label: 'Period', value: "Today's Shift · 08:00 – Now" },
+    ],
+    kpis: [
+      { label: 'Incidents', value: p.incidents ?? '—', sub: 'Responded this shift' },
+      { label: 'Avg Response', value: p.avgResponse ?? '—', sub: 'Target < 8 min' },
+      { label: 'Distance', value: p.distance ?? '—', sub: 'Total km driven' },
+      { label: 'Reports Filed', value: p.reportsFiled ?? '—' },
+      { label: 'Performance', value: p.performance != null ? `${p.performance}/100` : '—' },
+      { label: 'GPS Uptime', value: p.gpsUptime ?? '—' },
+    ],
+    sections: [],
+    generatedBy: name,
+    generatedRole: 'Field Responder',
+  }))
+}
 import {
   LineChart,
   Line,
@@ -13,14 +41,6 @@ import {
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import { FR_PERFORMANCE, FR_SHIFT_HISTORY } from '../../data/mockFieldResponderData'
 
-const STATS = [
-  ['14', 'Incidents'],
-  ['6.8m', 'Avg response'],
-  ['94 km', 'Distance'],
-  ['14', 'Reports filed'],
-  ['87', 'Performance'],
-  ['100%', 'GPS uptime'],
-]
 
 function WeeklyTrendChart({ data }) {
   try {
@@ -53,6 +73,14 @@ function WeeklyTrendChart({ data }) {
 export default function FRPerformance() {
   const [tab, setTab] = useState('today')
   const p = FR_PERFORMANCE
+  const STATS = [
+    [p.incidents ?? '—', 'Incidents'],
+    [p.avgResponse ?? '—', 'Avg response'],
+    [p.distance ?? '—', 'Distance'],
+    [p.reportsFiled ?? '—', 'Reports filed'],
+    [p.performance != null ? String(p.performance) : '—', 'Performance'],
+    [p.gpsUptime ?? '—', 'GPS uptime'],
+  ]
 
   return (
     <div className="fr-page fr-page--fill">
@@ -62,6 +90,10 @@ export default function FRPerformance() {
             <BarChart3 size={16} className="text-(--accent)" />
             <span className="font-semibold text-[13px]">Today&apos;s Shift</span>
             <span className="text-[11px] text-(--text-muted) ml-auto">08:00 – Now</span>
+            <button type="button" className="dispatcher-btn-ghost text-[11px] inline-flex items-center gap-1 px-2 py-1 ml-2"
+              onClick={() => exportPerfPDF(p)}>
+              <Download size={12} />PDF
+            </button>
           </div>
           <div className="fr-divider" />
           <div className="fr-perf-grid">

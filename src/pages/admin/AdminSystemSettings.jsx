@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, Navigate } from 'react-router-dom'
 import { Settings, Database, Save, Megaphone } from 'lucide-react'
 import SettingsNavLayout from '../../components/settings/SettingsNavLayout'
 import { SettingsGroup } from '../../components/settings/SettingsToggle'
+import { getSystemSettings, saveSystemSettings } from '../../api/admin'
 
 const NAV = [
   { id: 'general',       label: 'General',        icon: Settings  },
@@ -24,6 +25,33 @@ export default function AdminSystemSettings() {
   const { section: sectionParam } = useParams()
   const section = sectionParam || 'general'
   const [priority, setPriority] = useState('WARNING')
+  const [responseTarget, setResponseTarget] = useState(8)
+  const [coverageTarget, setCoverageTarget] = useState(90)
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState(null)
+
+  useEffect(() => {
+    getSystemSettings()
+      .then((s) => {
+        if (s?.responseTimeTargetMinutes != null) setResponseTarget(s.responseTimeTargetMinutes)
+        if (s?.coverageScoreTarget != null) setCoverageTarget(s.coverageScoreTarget)
+      })
+      .catch(() => {})
+  }, [])
+
+  const handleSaveGeneral = async () => {
+    setSaving(true)
+    setSaveMsg(null)
+    try {
+      await saveSystemSettings({ responseTimeTargetMinutes: responseTarget, coverageScoreTarget: coverageTarget })
+      setSaveMsg({ ok: true, text: 'Settings saved.' })
+    } catch {
+      setSaveMsg({ ok: false, text: 'Failed to save. Please try again.' })
+    } finally {
+      setSaving(false)
+      setTimeout(() => setSaveMsg(null), 4000)
+    }
+  }
 
   if (!NAV.some((n) => n.id === section)) {
     return <Navigate to="/admin/settings/general" replace />
@@ -47,20 +75,32 @@ export default function AdminSystemSettings() {
           </label>
           <label className="dispatcher-field">
             <span className="text-[12px] font-medium">National Response Time Target (minutes)</span>
-            <input type="number" className="dispatcher-input h-10 w-20" defaultValue={8} />
+            <input type="number" className="dispatcher-input h-10 w-20"
+              value={responseTarget}
+              min={1} max={60}
+              onChange={(e) => setResponseTarget(Number(e.target.value))} />
+            <p className="text-[11px] text-(--text-muted) mt-1">Current target: {responseTarget} min. Changes are saved to the database.</p>
           </label>
           <label className="dispatcher-field">
             <span className="text-[12px] font-medium">Minimum Coverage Score Target (%)</span>
-            <input type="number" className="dispatcher-input h-10 w-20" defaultValue={90} />
+            <input type="number" className="dispatcher-input h-10 w-20"
+              value={coverageTarget}
+              min={0} max={100}
+              onChange={(e) => setCoverageTarget(Number(e.target.value))} />
           </label>
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-[12px] font-medium">Rwanda Admin Boundaries</div>
-              <div className="text-[13px] text-(--text-secondary)">RNADB v4.2 · 30 districts</div>
-            </div>
-            <button type="button" className="dispatcher-btn-ghost text-[11px] h-8">Update Database</button>
+          <div>
+            <div className="text-[12px] font-medium">Rwanda Admin Boundaries</div>
+            <div className="text-[13px] text-(--text-secondary)">RNADB v4.2 · 30 districts</div>
           </div>
-          <button type="button" className="dispatcher-btn-primary w-full max-w-xs">Save General Settings</button>
+          {saveMsg && (
+            <p className="text-[12px]" style={{ color: saveMsg.ok ? 'var(--status-low)' : 'var(--status-critical)' }}>
+              {saveMsg.text}
+            </p>
+          )}
+          <button type="button" className="dispatcher-btn-primary w-full max-w-xs"
+            disabled={saving} onClick={handleSaveGeneral}>
+            {saving ? 'Saving…' : 'Save General Settings'}
+          </button>
         </SettingsGroup>
       )}
 

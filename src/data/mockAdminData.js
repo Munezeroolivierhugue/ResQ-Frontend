@@ -1,220 +1,645 @@
+// PARTIAL INTEGRATION: audit logs wired via src/api/admin.js. Security events also available.
+// TODO: backend gap — ADMIN_HEALTH_ALERTS, ADMIN_SYSTEM_STATUS, ADMIN_INTEGRATIONS_HEALTH have no backend equivalent.
 /** Super Admin — mock system administration data. */
 
-export const ADMIN_HEALTH_ALERTS = 1
-export const ADMIN_PENDING_INVITES = 3
-export const ADMIN_INTEGRATION_DOWN = true
-export const ADMIN_SECURITY_ALERTS = 2
+export const ADMIN_HEALTH_ALERTS = 1;
+export const ADMIN_PENDING_INVITES = 3;
+export const ADMIN_INTEGRATION_DOWN = true;
+export const ADMIN_SECURITY_ALERTS = 2;
 
 export const ADMIN_SYSTEM_STATUS = [
-  { name: 'Application Server', status: 'OPERATIONAL', color: 'var(--status-low)', pulse: true },
-  { name: 'Database', status: 'OPERATIONAL', color: 'var(--status-low)', pulse: true },
-  { name: 'AI Engine', status: 'OPERATIONAL', color: 'var(--status-low)', pulse: true },
-  { name: 'External Integrations', status: 'DEGRADED', color: 'var(--status-medium)', pulse: false },
-  { name: 'Authentication', status: 'OPERATIONAL', color: 'var(--status-low)', pulse: true },
-]
+  {
+    name: "Application Server",
+    status: "OPERATIONAL",
+    color: "var(--status-low)",
+    pulse: true,
+  },
+  {
+    name: "Database",
+    status: "OPERATIONAL",
+    color: "var(--status-low)",
+    pulse: true,
+  },
+  {
+    name: "AI Engine",
+    status: "OPERATIONAL",
+    color: "var(--status-low)",
+    pulse: true,
+  },
+  {
+    name: "External Integrations",
+    status: "DEGRADED",
+    color: "var(--status-medium)",
+    pulse: false,
+  },
+  {
+    name: "Authentication",
+    status: "OPERATIONAL",
+    color: "var(--status-low)",
+    pulse: true,
+  },
+];
 
 export const ADMIN_INTEGRATIONS_HEALTH = [
-  { name: 'Incident Database', status: 'OPERATIONAL', last_sync: '30s ago', ms: '142ms', border: 'var(--status-low)' },
-  { name: 'GPS Fleet Tracker', status: 'OPERATIONAL', last_sync: '45s ago', ms: '89ms', border: 'var(--status-low)' },
   {
-    name: 'Rwanda Meteo Weather',
-    status: 'DEGRADED',
-    last_sync: '18m ago',
-    ms: 'Timeout errors',
-    border: 'var(--status-medium)',
-    error: '3 stations unreachable — partial data only',
+    name: "Incident Database",
+    status: "OPERATIONAL",
+    last_sync: "30s ago",
+    ms: "142ms",
+    border: "var(--status-low)",
   },
-  { name: 'KCC Traffic Data', status: 'OPERATIONAL', last_sync: '2m', ms: '201ms', border: 'var(--status-low)' },
-  { name: 'RURA Hospital System', status: 'OPERATIONAL', last_sync: '5m', ms: '334ms', border: 'var(--status-low)' },
-]
+  {
+    name: "GPS Fleet Tracker",
+    status: "OPERATIONAL",
+    last_sync: "45s ago",
+    ms: "89ms",
+    border: "var(--status-low)",
+  },
+  {
+    name: "Rwanda Meteo Weather",
+    status: "DEGRADED",
+    last_sync: "18m ago",
+    ms: "Timeout errors",
+    border: "var(--status-medium)",
+    error: "3 stations unreachable — partial data only",
+  },
+  {
+    name: "KCC Traffic Data",
+    status: "OPERATIONAL",
+    last_sync: "2m",
+    ms: "201ms",
+    border: "var(--status-low)",
+  },
+  {
+    name: "RURA Hospital System",
+    status: "OPERATIONAL",
+    last_sync: "5m",
+    ms: "334ms",
+    border: "var(--status-low)",
+  },
+];
 
 // level renamed to status; values: SUCCESS, ERROR (warnings/timeouts), DENIED (auth failures)
 export const ADMIN_ACTIVITY_LOG = [
-  { status: 'SUCCESS', action: 'User Jean Bosco logged in', user: 'Dispatcher · Auth', time: '14:31' },
-  { status: 'SUCCESS', action: 'Incident INC-2403 dispatched', user: 'Dispatcher: Bosco · Dispatch', time: '14:28' },
-  { status: 'SUCCESS', action: 'AI recommendation approved', user: 'OM: Kagame R. · AI Engine', time: '14:26' },
-  { status: 'DENIED',  action: 'Failed login attempt (3rd)', user: 'Unknown · Auth · IP: 41.222.xxx.xxx', time: '14:24' },
-  { status: 'SUCCESS', action: 'Shift report RPT-0041 submitted', user: 'OM: Uwimana A. · Reports', time: '14:18' },
-  { status: 'SUCCESS', action: 'Hotspot prediction model refreshed', user: 'System · AI Engine', time: '14:00' },
-  { status: 'SUCCESS', action: 'New user invited: Mutoni A.', user: 'Super Admin · User Mgmt', time: '13:45' },
-  { status: 'SUCCESS', action: 'Daily backup completed', user: 'System · Backup · 2.4GB', time: '13:00' },
-  { status: 'ERROR',   action: 'Rwanda Meteo API timeout', user: 'System · Integrations', time: '12:48' },
-  { status: 'SUCCESS', action: 'AI model retrained: Dispatch', user: 'Analyst · AI Engine', time: '11:30' },
-  { status: 'DENIED',  action: 'Failed login (account locked)', user: 'Mugisha K. · Auth · IP: 197.243.xxx.xxx', time: '10:12' },
-  { status: 'SUCCESS', action: 'Coverage Watcher recalculated', user: 'System · AI Engine', time: '10:00' },
-  { status: 'SUCCESS', action: 'User Rugamba suspended', user: 'Super Admin · User Mgmt', time: '09:44' },
-  { status: 'SUCCESS', action: 'System startup complete', user: 'System · Core', time: '08:00' },
-  { status: 'SUCCESS', action: 'Weekly backup completed', user: 'System · Backup · 18.7GB', time: '03:00' },
-]
+  {
+    status: "SUCCESS",
+    action: "User Jean Bosco logged in",
+    user: "Dispatcher · Auth",
+    time: "14:31",
+  },
+  {
+    status: "SUCCESS",
+    action: "Incident INC-2403 dispatched",
+    user: "Dispatcher: Bosco · Dispatch",
+    time: "14:28",
+  },
+  {
+    status: "SUCCESS",
+    action: "AI recommendation approved",
+    user: "OM: Kagame R. · AI Engine",
+    time: "14:26",
+  },
+  {
+    status: "DENIED",
+    action: "Failed login attempt (3rd)",
+    user: "Unknown · Auth · IP: 41.222.xxx.xxx",
+    time: "14:24",
+  },
+  {
+    status: "SUCCESS",
+    action: "Shift report RPT-0041 submitted",
+    user: "OM: Uwimana A. · Reports",
+    time: "14:18",
+  },
+  {
+    status: "SUCCESS",
+    action: "Hotspot prediction model refreshed",
+    user: "System · AI Engine",
+    time: "14:00",
+  },
+  {
+    status: "SUCCESS",
+    action: "New user invited: Mutoni A.",
+    user: "Super Admin · User Mgmt",
+    time: "13:45",
+  },
+  {
+    status: "SUCCESS",
+    action: "Daily backup completed",
+    user: "System · Backup · 2.4GB",
+    time: "13:00",
+  },
+  {
+    status: "ERROR",
+    action: "Rwanda Meteo API timeout",
+    user: "System · Integrations",
+    time: "12:48",
+  },
+  {
+    status: "SUCCESS",
+    action: "AI model retrained: Dispatch",
+    user: "Analyst · AI Engine",
+    time: "11:30",
+  },
+  {
+    status: "DENIED",
+    action: "Failed login (account locked)",
+    user: "Mugisha K. · Auth · IP: 197.243.xxx.xxx",
+    time: "10:12",
+  },
+  {
+    status: "SUCCESS",
+    action: "Coverage Watcher recalculated",
+    user: "System · AI Engine",
+    time: "10:00",
+  },
+  {
+    status: "SUCCESS",
+    action: "User Rugamba suspended",
+    user: "Super Admin · User Mgmt",
+    time: "09:44",
+  },
+  {
+    status: "SUCCESS",
+    action: "System startup complete",
+    user: "System · Core",
+    time: "08:00",
+  },
+  {
+    status: "SUCCESS",
+    action: "Weekly backup completed",
+    user: "System · Backup · 18.7GB",
+    time: "03:00",
+  },
+];
 
 export const ADMIN_SCHEDULED_JOBS = [
-  { name: 'Geocoding Engine', status: 'COMPLETED', last: 'Today 14:00', next: 'Today 15:00' },
-  { name: 'Travel Time Matrix', status: 'COMPLETED', last: 'Today 13:30', next: 'Today 14:30' },
-  { name: 'Incident Clustering', status: 'COMPLETED', last: 'Today 14:00', next: 'Today 15:00' },
-  { name: 'Hotspot Prediction Refresh', status: 'COMPLETED', last: 'Today 14:00', next: 'Today 18:00' },
-  { name: 'Daily Backup', status: 'COMPLETED', last: 'Today 13:00', next: 'Tomorrow 13:00' },
-  { name: 'Audit Log Archive', status: 'SCHEDULED', last: 'May 25', next: 'Jun 1' },
-]
+  {
+    name: "Geocoding Engine",
+    status: "COMPLETED",
+    last: "Today 14:00",
+    next: "Today 15:00",
+  },
+  {
+    name: "Travel Time Matrix",
+    status: "COMPLETED",
+    last: "Today 13:30",
+    next: "Today 14:30",
+  },
+  {
+    name: "Incident Clustering",
+    status: "COMPLETED",
+    last: "Today 14:00",
+    next: "Today 15:00",
+  },
+  {
+    name: "Hotspot Prediction Refresh",
+    status: "COMPLETED",
+    last: "Today 14:00",
+    next: "Today 18:00",
+  },
+  {
+    name: "Daily Backup",
+    status: "COMPLETED",
+    last: "Today 13:00",
+    next: "Tomorrow 13:00",
+  },
+  {
+    name: "Audit Log Archive",
+    status: "SCHEDULED",
+    last: "May 25",
+    next: "Jun 1",
+  },
+];
 
 // user_id added; lastLogin → last_login; mfa → mfa_enabled
 export const ADMIN_USERS = [
-  { user_id: 'usr-0001-0000-0000-000000000001', name: 'Jean Bosco Nkurunziza', email: 'j.bosco@rnp.gov.rw',         initials: 'JB', role: 'dispatcher',         district: 'Nyarugenge',  status: 'ACTIVE',    last_login: 'Today 14:31', session: 'ONLINE',  mfa_enabled: true  },
-  { user_id: 'usr-0002-0000-0000-000000000002', name: 'Kagame R.',              email: 'k.rwabukwende@rnp.gov.rw',   initials: 'KR', role: 'ops_manager',        district: 'Nyarugenge',  status: 'ACTIVE',    last_login: 'Today 14:26', session: 'ONLINE',  mfa_enabled: true  },
-  { user_id: 'usr-0003-0000-0000-000000000003', name: 'Uwimana Aline',         email: 'a.uwimana@rnp.gov.rw',       initials: 'UA', role: 'district_commander', district: 'Gasabo',      status: 'ACTIVE',    last_login: 'Today 09:14', session: 'OFFLINE', mfa_enabled: true  },
-  { user_id: 'usr-0004-0000-0000-000000000004', name: 'Mutoni Aline',          email: 'm.mutoni@rnp.gov.rw',        initials: 'MA', role: 'emergency_planner',  district: 'Kigali City', status: 'PENDING',   last_login: 'Never',       session: 'OFFLINE', mfa_enabled: false, tint: 'medium' },
-  { user_id: 'usr-0005-0000-0000-000000000005', name: 'Nkurunziza K.',         email: 'k.nkurunziza@rnp.gov.rw',   initials: 'NK', role: 'field_responder',    district: 'Nyarugenge',  status: 'ACTIVE',    last_login: 'Today 08:00', session: 'ONLINE',  mfa_enabled: true  },
-  { user_id: 'usr-0006-0000-0000-000000000006', name: 'Rugamba Andre',         email: 'r.rugamba@rnp.gov.rw',       initials: 'RA', role: 'analyst',            district: 'All Districts',status: 'SUSPENDED', last_login: 'May 24',      session: 'OFFLINE', mfa_enabled: true,  tint: 'critical', opacity: 0.5 },
-  { user_id: 'usr-0007-0000-0000-000000000007', name: 'Habimana J.',           email: 'j.habimana@rnp.gov.rw',      initials: 'HJ', role: 'field_responder',    district: 'Kicukiro',    status: 'ACTIVE',    last_login: 'Today 07:45', session: 'ONLINE',  mfa_enabled: false },
-  { user_id: 'usr-0008-0000-0000-000000000008', name: 'System Admin',          email: 'admin@resq.rw',              initials: 'SA', role: 'super_admin',        district: '—',           status: 'ACTIVE',    last_login: 'Today 08:00', session: 'ONLINE',  mfa_enabled: true,  isSelf: true },
-]
+  {
+    user_id: "usr-0001-0000-0000-000000000001",
+    name: "Jean Bosco Nkurunziza",
+    email: "j.bosco@rnp.gov.rw",
+    initials: "JB",
+    role: "dispatcher",
+    district: "Nyarugenge",
+    status: "ACTIVE",
+    last_login: "Today 14:31",
+    session: "ONLINE",
+    mfa_enabled: true,
+  },
+  {
+    user_id: "usr-0002-0000-0000-000000000002",
+    name: "Kagame R.",
+    email: "k.rwabukwende@rnp.gov.rw",
+    initials: "KR",
+    role: "OPERATIONS_MANAGER",
+    district: "Nyarugenge",
+    status: "ACTIVE",
+    last_login: "Today 14:26",
+    session: "ONLINE",
+    mfa_enabled: true,
+  },
+  {
+    user_id: "usr-0003-0000-0000-000000000003",
+    name: "Uwimana Aline",
+    email: "a.uwimana@rnp.gov.rw",
+    initials: "UA",
+    role: "district_commander",
+    district: "Gasabo",
+    status: "ACTIVE",
+    last_login: "Today 09:14",
+    session: "OFFLINE",
+    mfa_enabled: true,
+  },
+  {
+    user_id: "usr-0004-0000-0000-000000000004",
+    name: "Mutoni Aline",
+    email: "m.mutoni@rnp.gov.rw",
+    initials: "MA",
+    role: "emergency_planner",
+    district: "Kigali City",
+    status: "PENDING",
+    last_login: "Never",
+    session: "OFFLINE",
+    mfa_enabled: false,
+    tint: "medium",
+  },
+  {
+    user_id: "usr-0005-0000-0000-000000000005",
+    name: "Nkurunziza K.",
+    email: "k.nkurunziza@rnp.gov.rw",
+    initials: "NK",
+    role: "field_responder",
+    district: "Nyarugenge",
+    status: "ACTIVE",
+    last_login: "Today 08:00",
+    session: "ONLINE",
+    mfa_enabled: true,
+  },
+  {
+    user_id: "usr-0006-0000-0000-000000000006",
+    name: "Rugamba Andre",
+    email: "r.rugamba@rnp.gov.rw",
+    initials: "RA",
+    role: "analyst",
+    district: "All Districts",
+    status: "SUSPENDED",
+    last_login: "May 24",
+    session: "OFFLINE",
+    mfa_enabled: true,
+    tint: "critical",
+    opacity: 0.5,
+  },
+  {
+    user_id: "usr-0007-0000-0000-000000000007",
+    name: "Habimana J.",
+    email: "j.habimana@rnp.gov.rw",
+    initials: "HJ",
+    role: "field_responder",
+    district: "Kicukiro",
+    status: "ACTIVE",
+    last_login: "Today 07:45",
+    session: "ONLINE",
+    mfa_enabled: false,
+  },
+  {
+    user_id: "usr-0008-0000-0000-000000000008",
+    name: "System Admin",
+    email: "admin@resq.rw",
+    initials: "SA",
+    role: "super_admin",
+    district: "—",
+    status: "ACTIVE",
+    last_login: "Today 08:00",
+    session: "ONLINE",
+    mfa_enabled: true,
+    isSelf: true,
+  },
+];
 
 export function adminRoleBadge(role) {
   const map = {
-    dispatcher:         { bg: 'var(--accent-ghost)',         color: 'var(--accent)',          label: 'DISPATCHER'         },
-    field_responder:    { bg: 'var(--status-info-bg)',       color: 'var(--status-info)',     label: 'FIELD RESPONDER'    },
-    ops_manager:        { bg: 'var(--status-medium-bg)',     color: 'var(--status-medium)',   label: 'OPS MANAGER'        },
-    district_commander: { bg: 'rgba(83,74,183,0.15)',        color: '#534AB7',                label: 'DISTRICT COMMANDER' },
-    emergency_planner:  { bg: 'var(--status-low-bg)',        color: 'var(--status-low)',      label: 'EMERGENCY PLANNER'  },
-    analyst:            { bg: 'rgba(33,150,200,0.15)',       color: 'var(--status-info)',     label: 'ANALYST'            },
-    super_admin:        { bg: 'var(--status-critical-bg)',   color: 'var(--status-critical)', label: 'SUPER ADMIN'        },
-  }
-  return map[role] || { bg: 'var(--bg-elevated)', color: 'var(--text-secondary)', label: role }
+    dispatcher: {
+      bg: "var(--accent-ghost)",
+      color: "var(--accent)",
+      label: "DISPATCHER",
+    },
+    field_responder: {
+      bg: "var(--status-info-bg)",
+      color: "var(--status-info)",
+      label: "FIELD RESPONDER",
+    },
+    OPERATIONS_MANAGER: {
+      bg: "var(--status-medium-bg)",
+      color: "var(--status-medium)",
+      label: "OPS MANAGER",
+    },
+    district_commander: {
+      bg: "rgba(83,74,183,0.15)",
+      color: "#534AB7",
+      label: "DISTRICT COMMANDER",
+    },
+    emergency_planner: {
+      bg: "var(--status-low-bg)",
+      color: "var(--status-low)",
+      label: "EMERGENCY PLANNER",
+    },
+    analyst: {
+      bg: "rgba(33,150,200,0.15)",
+      color: "var(--status-info)",
+      label: "ANALYST",
+    },
+    super_admin: {
+      bg: "var(--status-critical-bg)",
+      color: "var(--status-critical)",
+      label: "SUPER ADMIN",
+    },
+  };
+  return (
+    map[role] || {
+      bg: "var(--bg-elevated)",
+      color: "var(--text-secondary)",
+      label: role,
+    }
+  );
 }
 
 export function logLevelColor(status) {
-  if (status === 'SUCCESS') return 'var(--status-low)'
-  if (status === 'DENIED')  return 'var(--status-critical)'
-  if (status === 'ERROR')   return 'var(--status-medium)'
-  return 'var(--status-info)'
+  if (status === "SUCCESS") return "var(--status-low)";
+  if (status === "DENIED") return "var(--status-critical)";
+  if (status === "ERROR") return "var(--status-medium)";
+  return "var(--status-info)";
 }
 
 // lastSync → last_sync; removed response; errorRate → error_rate
 export const ADMIN_INTEGRATION_CARDS = [
   {
-    id: 'cad',
-    name: 'CAD System Connection',
-    status: 'OPERATIONAL',
-    endpoint: 'https://cad.rnp.gov.rw/api/v2',
-    auth: 'OAuth2',
-    frequency: 'Every 1 min',
-    last_sync: '45s',
-    error_rate: '0.01%',
-    mappings: [],
-  },
-  {
-    id: 'gps',
-    name: 'GPS Fleet Tracker',
-    status: 'OPERATIONAL',
-    endpoint: 'https://gps.resq.rw/fleet/v3',
-    auth: 'API Key',
-    frequency: 'Every 30s',
-    last_sync: '30s',
-    error_rate: '0.00%',
+    id: "cad",
+    name: "RNP CAD System",
+    status: "OPERATIONAL",
+    endpoint: "https://cad.rnp.gov.rw/api/v2",
+    auth: "OAuth 2.0 (client_credentials)",
+    frequency: "Every 1 min",
+    lastSync: "45s ago",
+    response: "120ms",
+    errorRate: "0.01%",
     mappings: [
-      ['vehicle_id', 'unit_id'],
-      ['position_lat', 'gps_latitude'],
-      ['position_lng', 'gps_longitude'],
-      ['speed_kmh', 'unit_speed'],
-      ['heading', 'unit_bearing'],
+      ["incident_id", "resq_incident_id"],
+      ["call_type", "incident_type"],
+      ["caller_number", "caller_phone"],
+      ["location_wkt", "gps_coordinates"],
+      ["priority_level", "severity"],
     ],
   },
   {
-    id: 'meteo',
-    name: 'Rwanda Meteo Weather API',
-    status: 'DEGRADED',
-    endpoint: 'https://api.meteorwanda.gov.rw',
-    auth: 'API Key',
-    frequency: 'Every 5 min',
-    last_sync: '18m ago',
-    error_rate: '8.4%',
+    id: "gps",
+    name: "GPS Fleet Tracker (Internal)",
+    status: "OPERATIONAL",
+    endpoint: "https://gps.resq.rw/fleet/v3",
+    auth: "API Key (x-resq-key header)",
+    frequency: "Every 30s",
+    lastSync: "28s ago",
+    response: "48ms",
+    errorRate: "0.00%",
+    mappings: [
+      ["vehicle_id", "unit_id"],
+      ["position_lat", "gps_latitude"],
+      ["position_lng", "gps_longitude"],
+      ["speed_kmh", "unit_speed"],
+      ["heading_deg", "unit_bearing"],
+    ],
+  },
+  {
+    id: "meteo",
+    name: "Meteo Rwanda — Weather API",
+    status: "DEGRADED",
+    endpoint: "https://api.meteo.gov.rw/v1/observations",
+    auth: "API Key (Authorization: Bearer)",
+    frequency: "Every 5 min",
+    lastSync: "18m ago",
+    response: "2400ms",
+    errorRate: "8.4%",
     errors: [
-      '[12:48:03] Timeout after 30s — station METEO-04 unreachable',
-      '[11:32:17] HTTP 503 — Service temporarily unavailable',
-      '[09:15:44] SSL cert warning — expires in 14 days',
+      "[12:48:03] Timeout after 30s — station METEO-04 (Kigali Intl) unreachable",
+      "[11:32:17] HTTP 503 — meteo.gov.rw upstream maintenance",
+      "[09:15:44] SSL cert warning — cert expires in 14 days",
     ],
-    mappings: [],
+    mappings: [
+      ["station_id", "weather_station_id"],
+      ["temp_celsius", "ambient_temperature"],
+      ["visibility_km", "road_visibility"],
+      ["wind_speed_mps", "wind_speed"],
+      ["precip_mm", "precipitation"],
+    ],
   },
   {
-    id: 'traffic',
-    name: 'KCC Traffic Data Feed',
-    status: 'OPERATIONAL',
-    endpoint: 'https://traffic.kcc.gov.rw/v1',
-    auth: 'Basic',
-    frequency: 'Every 2 min',
-    last_sync: '2m',
-    error_rate: '0.03%',
-    mappings: [],
+    id: "traffic",
+    name: "Rwanda National Police — Traffic Command",
+    status: "OPERATIONAL",
+    endpoint: "https://traffic.rnp.gov.rw/api/v1/alerts",
+    auth: "Basic Auth (service account)",
+    frequency: "Every 2 min",
+    lastSync: "1m 45s ago",
+    response: "310ms",
+    errorRate: "0.03%",
+    mappings: [
+      ["road_segment_id", "route_id"],
+      ["congestion_index", "traffic_level"],
+      ["incident_flag", "road_blocked"],
+      ["avg_speed_kmh", "road_avg_speed"],
+    ],
   },
   {
-    id: 'hospital',
-    name: 'RURA Hospital Capacity',
-    status: 'OPERATIONAL',
-    endpoint: 'https://hims.rura.gov.rw/api',
-    auth: 'OAuth2',
-    frequency: 'Every 10 min',
-    last_sync: '5m',
-    error_rate: '0.00%',
-    mappings: [],
+    id: "hospital",
+    name: "MoH HMIS — Hospital Capacity",
+    status: "OPERATIONAL",
+    endpoint: "https://hmis.moh.gov.rw/api/v2/facilities/capacity",
+    auth: "OAuth 2.0 (DHIS2 / OpenHIE)",
+    frequency: "Every 10 min",
+    lastSync: "4m ago",
+    response: "540ms",
+    errorRate: "0.00%",
+    mappings: [
+      ["facility_uid", "hospital_id"],
+      ["available_beds", "er_capacity"],
+      ["trauma_unit_open", "trauma_available"],
+      ["ambulance_bay_free", "receiving_ambulances"],
+    ],
   },
   {
-    id: 'sms',
-    name: 'SMS Gateway',
-    status: 'OPERATIONAL',
-    endpoint: 'https://sms.mtn.rw/api/send',
-    auth: 'API Key',
-    frequency: 'On-demand',
-    last_sync: '14:28',
-    error_rate: '0.00%',
-    mappings: [],
+    id: "sms",
+    name: "MTN Rwanda — SMS Gateway",
+    status: "OPERATIONAL",
+    endpoint: "https://api.mtn.com/v3/sms/messages/sms/outbound",
+    auth: "OAuth 2.0 (MTN Developer Portal)",
+    frequency: "On-demand",
+    lastSync: "14:28 (last alert sent)",
+    response: "180ms",
+    errorRate: "0.00%",
+    mappings: [
+      ["to", "recipient_msisdn"],
+      ["message", "alert_body"],
+      ["senderAddress", "resq_shortcode"],
+    ],
   },
-]
+  {
+    id: "rura",
+    name: "RURA — Telecoms & Utilities Registry",
+    status: "OPERATIONAL",
+    endpoint: "https://portal.rura.gov.rw/api/v1/licensees",
+    auth: "API Key (x-rura-token header)",
+    frequency: "Daily (02:00)",
+    lastSync: "Yesterday 02:01",
+    response: "820ms",
+    errorRate: "0.00%",
+    mappings: [
+      ["operator_code", "telecom_id"],
+      ["coverage_zone", "district_coverage"],
+      ["network_type", "connectivity_class"],
+    ],
+  },
+];
 
 // ip → ip_address; added log_id + user_id; status derived from activity log's new status field
 export const ADMIN_AUDIT_ROWS = ADMIN_ACTIVITY_LOG.map((e, i) => ({
-  log_id: `log-${String(i + 1).padStart(4, '0')}`,
-  user_id: `usr-${String((i % 8) + 1).padStart(4, '0')}`,
+  log_id: `log-${String(i + 1).padStart(4, "0")}`,
+  user_id: `usr-${String((i % 8) + 1).padStart(4, "0")}`,
   timestamp: `2026-05-28 ${e.time}`,
   action: e.action,
   user: e.user,
-  role: e.user.split('·')[0]?.trim() || 'System',
-  module: e.user.split('·')[1]?.trim() || 'System',
-  ip_address: i === 3 ? '41.222.18.44' : i === 10 ? '197.243.88.12' : '197.243.10.22',
+  role: e.user.split("·")[0]?.trim() || "System",
+  module: e.user.split("·")[1]?.trim() || "System",
+  ip_address:
+    i === 3 ? "41.222.18.44" : i === 10 ? "197.243.88.12" : "197.243.10.22",
   status: e.status,
-}))
+}));
 
 // event_type replaces type; description folds desc+detail; occurred_at replaces time
 export const ADMIN_SECURITY_EVENTS = [
-  { event_type: 'FAILED LOGIN CLUSTER',    description: '3 failed attempts from 41.222.xxx.xxx — targeting Dispatcher Bosco J.',   occurred_at: '14:24 today'     },
-  { event_type: 'ACCOUNT LOCKED',          description: 'Mugisha K. locked after 5 failed attempts — Kicukiro Dispatcher',         occurred_at: '10:12 today'     },
-  { event_type: 'UNUSUAL LOGIN LOCATION',  description: 'Login from Musanze — user Habimana J. is assigned to Kigali',             occurred_at: 'May 26, 22:14'  },
-  { event_type: 'CONFIG CHANGE',           description: 'AI model threshold changed by Super Admin',                               occurred_at: 'May 25, 11:30'  },
-  { event_type: 'MFA NOT ENABLED',         description: '2 active users without MFA: Habimana J. · Mutoni A.',                    occurred_at: 'Ongoing'        },
-]
+  {
+    event_type: "FAILED LOGIN CLUSTER",
+    description:
+      "3 failed attempts from 41.222.xxx.xxx — targeting Dispatcher Bosco J.",
+    occurred_at: "14:24 today",
+  },
+  {
+    event_type: "ACCOUNT LOCKED",
+    description:
+      "Mugisha K. locked after 5 failed attempts — Kicukiro Dispatcher",
+    occurred_at: "10:12 today",
+  },
+  {
+    event_type: "UNUSUAL LOGIN LOCATION",
+    description: "Login from Musanze — user Habimana J. is assigned to Kigali",
+    occurred_at: "May 26, 22:14",
+  },
+  {
+    event_type: "CONFIG CHANGE",
+    description: "AI model threshold changed by Super Admin",
+    occurred_at: "May 25, 11:30",
+  },
+  {
+    event_type: "MFA NOT ENABLED",
+    description: "2 active users without MFA: Habimana J. · Mutoni A.",
+    occurred_at: "Ongoing",
+  },
+];
 
 export const ADMIN_MFA_ROLES = [
-  { role: 'Dispatcher',        enabled: 8,  total: 9  },
-  { role: 'Field Responder',   enabled: 12, total: 12 },
-  { role: 'Ops Manager',       enabled: 4,  total: 4  },
-  { role: 'District Commander',enabled: 5,  total: 5  },
-  { role: 'Emergency Planner', enabled: 3,  total: 4  },
-  { role: 'Analyst',           enabled: 2,  total: 2  },
-  { role: 'Super Admin',       enabled: 1,  total: 1  },
-]
+  { role: "Dispatcher", enabled: 8, total: 9 },
+  { role: "Field Responder", enabled: 12, total: 12 },
+  { role: "Ops Manager", enabled: 4, total: 4 },
+  { role: "District Commander", enabled: 5, total: 5 },
+  { role: "Emergency Planner", enabled: 3, total: 4 },
+  { role: "Analyst", enabled: 2, total: 2 },
+  { role: "Super Admin", enabled: 1, total: 1 },
+];
 
 // session_id added; ip → ip_address; login → start_time; activity → last_activity
 export const ADMIN_ACTIVE_SESSIONS = [
-  { session_id: 'sess-0001', user: 'Jean Bosco Nkurunziza', role: 'dispatcher',         device: 'Chrome · Windows',    ip_address: '197.243.10.22', start_time: '14:31', last_activity: '14:32', self: false },
-  { session_id: 'sess-0002', user: 'Kagame R.',              role: 'ops_manager',        device: 'Firefox · macOS',     ip_address: '197.243.10.45', start_time: '14:20', last_activity: '14:28', self: false },
-  { session_id: 'sess-0003', user: 'Nkurunziza K.',         role: 'field_responder',    device: 'Mobile App · Android',ip_address: '41.186.22.88',  start_time: '08:00', last_activity: '14:15', self: false },
-  { session_id: 'sess-0004', user: 'Habimana J.',           role: 'field_responder',    device: 'Mobile App · iOS',    ip_address: '197.243.11.03', start_time: '07:45', last_activity: '12:30', self: false },
-  { session_id: 'sess-0005', user: 'Uwimana Aline',         role: 'district_commander', device: 'Chrome · Windows',    ip_address: '197.243.10.88', start_time: '09:14', last_activity: '09:45', self: false },
-  { session_id: 'sess-0006', user: 'Claudine Uwimana',      role: 'emergency_planner',  device: 'Chrome · Windows',    ip_address: '197.243.10.55', start_time: '11:00', last_activity: '13:20', self: false },
-  { session_id: 'sess-0007', user: 'Grace Ingabire',        role: 'analyst',            device: 'Edge · Windows',      ip_address: '197.243.10.60', start_time: '10:30', last_activity: '14:00', self: false },
-  { session_id: 'sess-0008', user: 'System Admin',          role: 'super_admin',        device: 'Chrome · Windows',    ip_address: '197.243.10.01', start_time: '08:00', last_activity: '14:32', self: true  },
-]
+  {
+    session_id: "sess-0001",
+    user: "Jean Bosco Nkurunziza",
+    role: "dispatcher",
+    device: "Chrome · Windows",
+    ip_address: "197.243.10.22",
+    start_time: "14:31",
+    last_activity: "14:32",
+    self: false,
+  },
+  {
+    session_id: "sess-0002",
+    user: "Kagame R.",
+    role: "OPERATIONS_MANAGER",
+    device: "Firefox · macOS",
+    ip_address: "197.243.10.45",
+    start_time: "14:20",
+    last_activity: "14:28",
+    self: false,
+  },
+  {
+    session_id: "sess-0003",
+    user: "Nkurunziza K.",
+    role: "field_responder",
+    device: "Mobile App · Android",
+    ip_address: "41.186.22.88",
+    start_time: "08:00",
+    last_activity: "14:15",
+    self: false,
+  },
+  {
+    session_id: "sess-0004",
+    user: "Habimana J.",
+    role: "field_responder",
+    device: "Mobile App · iOS",
+    ip_address: "197.243.11.03",
+    start_time: "07:45",
+    last_activity: "12:30",
+    self: false,
+  },
+  {
+    session_id: "sess-0005",
+    user: "Uwimana Aline",
+    role: "district_commander",
+    device: "Chrome · Windows",
+    ip_address: "197.243.10.88",
+    start_time: "09:14",
+    last_activity: "09:45",
+    self: false,
+  },
+  {
+    session_id: "sess-0006",
+    user: "Claudine Uwimana",
+    role: "emergency_planner",
+    device: "Chrome · Windows",
+    ip_address: "197.243.10.55",
+    start_time: "11:00",
+    last_activity: "13:20",
+    self: false,
+  },
+  {
+    session_id: "sess-0007",
+    user: "Grace Ingabire",
+    role: "analyst",
+    device: "Edge · Windows",
+    ip_address: "197.243.10.60",
+    start_time: "10:30",
+    last_activity: "14:00",
+    self: false,
+  },
+  {
+    session_id: "sess-0008",
+    user: "System Admin",
+    role: "super_admin",
+    device: "Chrome · Windows",
+    ip_address: "197.243.10.01",
+    start_time: "08:00",
+    last_activity: "14:32",
+    self: true,
+  },
+];
 
 export const ADMIN_IP_RANGES = [
-  { range: '197.243.0.0/16', label: 'RNP Kigali HQ' },
-  { range: '41.186.0.0/16',  label: 'RNP Regional Offices' },
-  { range: '10.0.0.0/8',     label: 'Internal VPN' },
-]
+  { range: "197.243.0.0/16", label: "RNP Kigali HQ" },
+  { range: "41.186.0.0/16", label: "RNP Regional Offices" },
+  { range: "10.0.0.0/8", label: "Internal VPN" },
+];

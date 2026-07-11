@@ -6,6 +6,7 @@ import {
   Map,
   Package,
   FileBarChart,
+  UserPlus,
   Settings,
   HelpCircle,
   LogOut,
@@ -14,7 +15,6 @@ import {
 } from 'lucide-react'
 import SidebarToggle from './SidebarToggle'
 import { useSidebarClasses } from '../../hooks/useSidebarClasses'
-import { getPendingShiftReportCount } from '../../data/mockDistrictCommanderData'
 
 const DISTRICT = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/district-commander/dashboard' },
@@ -24,8 +24,9 @@ const DISTRICT = [
 ]
 
 const HEADQUARTERS = [
-  { icon: Package, label: 'Resource Requests', href: '/district-commander/resources' },
-  { icon: FileBarChart, label: 'Executive Report', href: '/district-commander/executive-report' },
+  { icon: Package,      label: 'Resource Requests', href: '/district-commander/resources' },
+  { icon: FileBarChart, label: 'Executive Report',  href: '/district-commander/executive-report' },
+  { icon: UserPlus,     label: 'Create User',       href: '/district-commander/create-user' },
 ]
 
 const BOTTOM = [
@@ -91,7 +92,7 @@ function NavSection({ label, items, location, onClose, pendingReports }) {
 export default function DistrictCommanderSidebar({ mobileOpen, onClose }) {
   const location = useLocation()
   const sidebarClasses = useSidebarClasses(mobileOpen)
-  const pendingReports = getPendingShiftReportCount()
+  const pendingReports = 0
 
   return (
     <aside className={sidebarClasses}>

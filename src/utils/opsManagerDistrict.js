@@ -1,15 +1,17 @@
 const OM_DISTRICT_SESSION_KEY = 'resq-om-district'
-const DEFAULT_OM_DISTRICT = 'Nyarugenge'
 
-/** Assigned district for Operations Manager (admin provisioning or demo default). */
 export function getOpsManagerDistrict() {
   return (
+    sessionStorage.getItem('resq-district-name') ||
     sessionStorage.getItem(OM_DISTRICT_SESSION_KEY) ||
     sessionStorage.getItem('resq-invite-district') ||
-    DEFAULT_OM_DISTRICT
+    null
   )
 }
 
 export function getOpsManagerDistrictHeading() {
-  return `${getOpsManagerDistrict().toUpperCase()} DISTRICT`
+  const d = getOpsManagerDistrict()
+  if (!d) return 'DISTRICT COMMAND'
+  const name = d.toUpperCase()
+  return name.endsWith(' DISTRICT') ? name : `${name} DISTRICT`
 }

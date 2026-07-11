@@ -1,22 +1,49 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { Siren, Mail, Lock, Eye, EyeOff } from 'lucide-react'
-import { setDemoRole } from '../../utils/authSession'
 import FRAuthShell from '../../components/auth/FRAuthShell'
+import { login } from '../../api/auth'
+import { setSession } from '../../utils/authSession'
 
 export default function FRLogin() {
   const navigate = useNavigate()
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(() => sessionStorage.getItem('resq-login-email') || '')
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
   const [remember, setRemember] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    setDemoRole('field_responder')
-    sessionStorage.setItem('resq-login-email', email || 'responder@rnp.gov.rw')
-    sessionStorage.setItem('resq-demo-role', 'field_responder')
-    navigate('/fr/login/mfa')
+    setError('')
+    setLoading(true)
+    try {
+      const result = await login(email, password)
+      if (result.mfaRequired) {
+        sessionStorage.setItem('resq-login-email', email)
+        if (result.challengeToken) {
+          sessionStorage.setItem('resq-challenge-token', result.challengeToken)
+        }
+        navigate('/fr/login/mfa')
+        return
+      }
+      setSession({
+        access_token: result.accessToken,
+        refresh_token: result.refreshToken,
+        user: result.user ?? null,
+      })
+      if (remember) sessionStorage.setItem('resq-trusted-device', 'true')
+      navigate('/field-responder/shift-start')
+    } catch (err) {
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        'Login failed. Check your credentials.'
+      setError(msg)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -37,13 +64,19 @@ export default function FRLogin() {
           <h2 className="fr-auth-card-title">Welcome back</h2>
           <p className="fr-auth-card-sub">Sign in to your responder account</p>
 
-          <form onSubmit={handleSubmit} className="fr-auth-form">
+          {error && (
+            <p className="fr-auth-error" style={{ marginBottom: '0.75rem' }}>{error}</p>
+          )}
+
+          <form onSubmit={handleSubmit} className="fr-auth-form" autoComplete="on">
             <div className="fr-auth-field">
               <label className="fr-auth-field-label">Professional Email</label>
               <div className="fr-auth-input-wrap">
                 <Mail size={16} className="fr-auth-input-icon" />
                 <input
                   type="email"
+                  name="email"
+                  autoComplete="email"
                   className="fr-auth-input"
                   placeholder="responder@agency.gov"
                   value={email}
@@ -59,6 +92,8 @@ export default function FRLogin() {
                 <Lock size={16} className="fr-auth-input-icon" />
                 <input
                   type={showPass ? 'text' : 'password'}
+                  name="password"
+                  autoComplete="current-password"
                   className="fr-auth-input fr-auth-input--pr"
                   placeholder="••••••••••••"
                   value={password}
@@ -79,8 +114,8 @@ export default function FRLogin() {
               <a href="#" className="fr-auth-recover">Recover access</a>
             </div>
 
-            <button type="submit" className="fr-auth-btn fr-auth-btn--primary fr-auth-btn--full">
-              AUTHORIZE TERMINAL
+            <button type="submit" className="fr-auth-btn fr-auth-btn--primary fr-auth-btn--full" disabled={loading}>
+              {loading ? 'AUTHORIZING…' : 'AUTHORIZE TERMINAL'}
             </button>
           </form>
         </div>

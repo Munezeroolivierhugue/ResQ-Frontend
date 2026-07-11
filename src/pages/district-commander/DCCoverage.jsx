@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
-import { MapContainer, TileLayer, Circle, Tooltip } from 'react-leaflet'
+import { useMemo, useState, useEffect } from 'react'
+import { MapContainer, TileLayer, Circle, Tooltip, Marker, Popup } from 'react-leaflet'
+import L from 'leaflet'
 import { ArrowUp } from 'lucide-react'
 import { useThemeStore } from '../../store/themeStore'
 import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
@@ -11,12 +12,23 @@ import { DC_COVERAGE_SECTORS, DC_COVERAGE_RECOMMENDATIONS } from '../../data/moc
 import { mockReallocations } from '../../data/mockReallocations'
 import { getCurrentUser } from '../../utils/authSession'
 import { useNotificationsStore } from '../../store/notificationsStore'
+import { listVehicles } from '../../api/vehicles'
 import 'leaflet/dist/leaflet.css'
 
-/** Default view before MapFitBounds runs — Nyarugenge sector cluster */
 const COVERAGE_MAP_CENTER = [-1.961, 30.05]
 const COVERAGE_MAP_ZOOM = 15
 const COVERAGE_MAP_PADDING = [40, 40]
+
+// Simple colored circle icon for vehicle markers
+function vehicleIcon(status) {
+  const color = status === 'available' ? '#3DAA6A' : status === 'dispatched' ? '#F07820' : '#888'
+  return L.divIcon({
+    html: `<div style="width:10px;height:10px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,.4)"></div>`,
+    className: '',
+    iconSize: [10, 10],
+    iconAnchor: [5, 5],
+  })
+}
 
 function coverageFill(pct) {
   if (pct >= 85) return 'rgba(61, 170, 106, 0.25)'
@@ -33,13 +45,26 @@ function coverageStroke(pct) {
 export default function DCCoverage() {
   const { theme } = useThemeStore()
   const district = getDistrictCommanderDistrict()
+  const districtId = sessionStorage.getItem('resq-district-id') || undefined
+  const addNotification = useNotificationsStore((s) => s.addNotification)
+
   const [layers, setLayers] = useState({
     'Coverage Zones': true,
     'Unit Positions': true,
     'Sector Labels': true,
   })
   const [recs, setRecs] = useState(() => DC_COVERAGE_RECOMMENDATIONS.map((r) => ({ ...r })))
-  const addNotification = useNotificationsStore((s) => s.addNotification)
+
+  const [vehicles, setVehicles] = useState([])
+  const [vehiclesLoading, setVehiclesLoading] = useState(true)
+
+  useEffect(() => {
+    const params = districtId ? { districtId } : {}
+    listVehicles(params)
+      .then((vs) => setVehicles(vs.filter((v) => v.current_lat != null && v.current_lng != null)))
+      .catch(() => {})
+      .finally(() => setVehiclesLoading(false))
+  }, [])
 
   const toggle = (name) => setLayers((p) => ({ ...p, [name]: !p[name] }))
 
@@ -74,17 +99,14 @@ export default function DCCoverage() {
     DC_COVERAGE_SECTORS.reduce((s, x) => s + x.coverage, 0) / DC_COVERAGE_SECTORS.length
   )
 
-  const sectorPoints = useMemo(
-    () => DC_COVERAGE_SECTORS.map((s) => [s.lat, s.lng]),
-    []
-  )
+  const sectorPoints = useMemo(() => DC_COVERAGE_SECTORS.map((s) => [s.lat, s.lng]), [])
 
   return (
     <div className="portal-page flex flex-col gap-4">
       <DCPageHeader
         title="Coverage Analysis"
         eyebrow="District Commander"
-        subtitle={`Sector coverage map and gap recommendations for ${district} District.`}
+        subtitle={district ? `Sector coverage map and gap recommendations for ${district} District.` : 'Sector coverage map and gap recommendations.'}
       />
 
       <div className="dc-coverage-layout min-h-[520px]">
@@ -106,14 +128,19 @@ export default function DCCoverage() {
                 {name}
               </button>
             ))}
+            {vehiclesLoading && (
+              <span className="text-[11px] text-(--text-muted) self-center">Loading unit positions…</span>
+            )}
           </div>
           <div className="dispatcher-surface flex-1 map-panel-full relative overflow-hidden">
-            <div
-              className="absolute top-3 left-3 z-[1000] px-3 py-2 rounded-lg border border-(--border) bg-(--bg-surface) text-[10px] space-y-1"
-            >
+            <div className="absolute top-3 left-3 z-[1000] px-3 py-2 rounded-lg border border-(--border) bg-(--bg-surface) text-[10px] space-y-1">
               <div><span style={{ color: 'var(--status-low)' }}>●</span> Good (≥85%)</div>
               <div><span style={{ color: 'var(--status-medium)' }}>●</span> Moderate (65–84%)</div>
               <div><span style={{ color: 'var(--status-critical)' }}>●</span> Critical (&lt;65%)</div>
+              <div className="pt-1 border-t border-(--border-subtle)">
+                <span style={{ color: '#3DAA6A' }}>●</span> Available &nbsp;
+                <span style={{ color: '#F07820' }}>●</span> Dispatched
+              </div>
             </div>
             <MapContainer
               center={COVERAGE_MAP_CENTER}
@@ -155,6 +182,22 @@ export default function DCCoverage() {
                     )}
                   </Circle>
                 ))}
+              {layers['Unit Positions'] &&
+                vehicles.map((v) => (
+                  <Marker
+                    key={v.vehicle_id}
+                    position={[v.current_lat, v.current_lng]}
+                    icon={vehicleIcon(v.status)}
+                  >
+                    <Popup>
+                      <div className="text-[12px]">
+                        <div className="font-bold">{v.plate_number}</div>
+                        <div>{v.vehicle_type} · {v.agency_name ?? '—'}</div>
+                        <div className="capitalize">{v.status}</div>
+                      </div>
+                    </Popup>
+                  </Marker>
+                ))}
             </MapContainer>
           </div>
         </div>
@@ -170,6 +213,10 @@ export default function DCCoverage() {
               <div className="flex justify-between">
                 <span className="text-(--text-secondary)">Overall district coverage</span>
                 <span className="font-mono font-bold">{overall}%</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-(--text-secondary)">Units with GPS position</span>
+                <span className="font-mono font-bold">{vehiclesLoading ? '…' : vehicles.length}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-(--text-secondary)">Recommended unit moves</span>
@@ -192,12 +239,7 @@ export default function DCCoverage() {
                     disabled={rec.approved}
                     style={
                       rec.approved
-                        ? {
-                            background: 'var(--status-low-bg)',
-                            color: 'var(--status-low)',
-                            border: '1px solid var(--status-low)',
-                            cursor: 'default',
-                          }
+                        ? { background: 'var(--status-low-bg)', color: 'var(--status-low)', border: '1px solid var(--status-low)', cursor: 'default' }
                         : undefined
                     }
                     onClick={() => approveRec(rec)}

@@ -1,3 +1,5 @@
+// PARTIAL INTEGRATION: listCallers(), getCaller(), getCallerByPhone() wired to backend.
+// mockCallerProfiles in mockCallData.js used as fallback in callChannelStore.
 export const mockCallers = [
   {
     caller_id: "c1111111-0000-4000-8000-000000000001",

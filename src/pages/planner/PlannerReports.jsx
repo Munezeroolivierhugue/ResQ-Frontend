@@ -1,11 +1,51 @@
 import { useState, useRef } from 'react'
-import { Brain, TrendingUp, AlertCircle, Cpu, X } from 'lucide-react'
+import { Brain, TrendingUp, AlertCircle, Cpu, X, Download } from 'lucide-react'
+import { buildPdfHtml, openPdfWindow, sectionHtml } from '../../utils/pdfExport'
+
+function currentWeekLabel() {
+  const now = new Date()
+  const mon = new Date(now)
+  mon.setDate(now.getDate() - ((now.getDay() + 6) % 7))
+  const sun = new Date(mon)
+  sun.setDate(mon.getDate() + 6)
+  const fmt = (d) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  return `${fmt(mon)} – ${fmt(sun)}`
+}
+
+function exportPlannerPDF({ analysis, notes, generatedBy, stats }) {
+  const weekLabel = currentWeekLabel()
+  const sections = []
+  if (analysis?.trim())
+    sections.push(sectionHtml('Written Analysis', `<div style="font-size:12px;line-height:1.7;color:#333;white-space:pre-wrap">${analysis.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`))
+  if (notes?.trim())
+    sections.push(sectionHtml('Recommendations', `<div style="font-size:12px;line-height:1.7;color:#333;white-space:pre-wrap">${notes.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`))
+  openPdfWindow(buildPdfHtml({
+    title: 'Weekly Planning Report',
+    subtitle: weekLabel,
+    reportType: 'PLANNING REPORT',
+    idPrefix: 'PLN',
+    metaItems: [
+      { label: 'Period', value: weekLabel },
+    ],
+    kpis: [
+      { label: 'Plans Submitted', value: stats?.plansSubmitted ?? '7' },
+      { label: 'Plans Approved', value: stats?.plansApproved ?? '5 (71%)' },
+      { label: 'Hotspots Identified', value: stats?.hotspots ?? '4' },
+      { label: 'Simulations Run', value: stats?.simulations ?? '3' },
+      { label: 'Avg Model Accuracy', value: stats?.accuracy ?? '88%' },
+      { label: 'Coverage Change', value: stats?.coverageChange ?? '—' },
+    ],
+    sections,
+    generatedBy: generatedBy ?? 'Emergency Planner',
+    generatedRole: 'Emergency Planner',
+  }))
+}
 import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import { PLANNER_RECOMMENDATIONS, PLANNER_AI_INSIGHTS } from '../../data/mockPlannerData'
-import { mockReports } from '../../data/mockReports'
 import { getCurrentUser } from '../../utils/authSession'
 import { useNotificationsStore } from '../../store/notificationsStore'
+import { generateReport } from '../../api/reporting'
 
 const WEEKLY_STATS = [
   ['Plans submitted', '7'],
@@ -37,41 +77,43 @@ function recVariant(status) {
 export default function PlannerReports() {
   const [recFilter, setRecFilter] = useState('All')
   const [analysisLen, setAnalysisLen] = useState(0)
+  const [saving, setSaving] = useState(false)
+  const [saveToast, setSaveToast] = useState(null)
   const assessmentRef = useRef(null)
   const notesRef = useRef(null)
   const addNotification = useNotificationsStore((s) => s.addNotification)
 
-  function saveReport(isDraft) {
+  async function saveReport(isDraft) {
+    if (saving) return
+    setSaving(true)
+    setSaveToast(null)
     const currentUser = getCurrentUser()
-    const timestamp = new Date().toISOString()
-    const report = {
-      report_id: Math.random().toString(36).slice(2, 10),
-      report_type: 'PLANNER_INSIGHT',
-      created_by: currentUser?.user_id ?? null,
-      creator_role: 'emergency_planner',
-      district_id: currentUser?.district_id ?? null,
-      period: null,
-      total_incidents: null,
-      avg_response_time: null,
-      coverage_score: null,
-      dispatch_accuracy: null,
-      escalations: null,
-      content: assessmentRef.current?.value || notesRef.current?.value || '',
-      status: isDraft ? 'DRAFT' : 'PUBLISHED',
-      created_at: timestamp,
-      submitted_at: isDraft ? null : timestamp,
-    }
-    mockReports.push(report)
-    if (!isDraft) {
-      addNotification({
-        id: 'notif-' + Math.random().toString(36).slice(2, 10),
-        type: 'PLANNER_REPORT_PUBLISHED',
-        target_role: 'super_admin',
-        title: 'Planner Report Published',
-        message: 'Emergency Planner published a weekly insight report.',
-        timestamp,
-        read: false,
+    const now = new Date()
+    const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+    try {
+      await generateReport({
+        report_type: 'PLANNER_INSIGHT',
+        district_id: currentUser?.district_id ?? null,
+        period_start: firstOfMonth,
+        period_end: now.toISOString(),
+        content: assessmentRef.current?.value || notesRef.current?.value || '',
       })
+      setSaveToast(isDraft ? 'Draft saved.' : 'Report published.')
+      if (!isDraft) {
+        addNotification({
+          id: 'notif-' + Math.random().toString(36).slice(2, 10),
+          type: 'PLANNER_REPORT_PUBLISHED',
+          target_role: 'super_admin',
+          title: 'Planner Report Published',
+          message: 'Emergency Planner published a weekly insight report.',
+          timestamp: now.toISOString(),
+          read: false,
+        })
+      }
+    } catch {
+      setSaveToast('Failed to save. Please try again.')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -82,6 +124,11 @@ export default function PlannerReports() {
 
   return (
     <div className="portal-page flex flex-col gap-4 min-w-[1024px]">
+      {saveToast && (
+        <div className="fixed bottom-5 right-5 z-[9999] dispatcher-surface px-4 py-2.5 text-[13px] font-medium shadow-lg" style={{ borderLeft: '3px solid var(--accent)' }}>
+          {saveToast}
+        </div>
+      )}
       <PlannerPageHeader
         title="Reports & Recommendations"
         subtitle="Weekly analysis, tracking, and AI-detected insights."
@@ -93,7 +140,7 @@ export default function PlannerReports() {
             <span className="text-[11px] font-mono font-bold uppercase text-(--accent)">Weekly Planning Report</span>
             <StatusBadge label="DRAFT" variant="handover" />
           </div>
-          <p className="text-[12px] text-(--text-muted) m-0 mb-4">Week of May 26–Jun 1, 2026</p>
+          <p className="text-[12px] text-(--text-muted) m-0 mb-4">Week of {currentWeekLabel()}</p>
 
           <div className="rounded-lg p-4 mb-4" style={{ background: 'var(--bg-elevated)' }}>
             <div className="text-[10px] font-mono uppercase text-(--text-muted) mb-2">Auto-generated from week data</div>
@@ -123,9 +170,22 @@ export default function PlannerReports() {
           />
 
           <div className="flex flex-wrap gap-2 mt-4">
-            <button type="button" className="dispatcher-btn-ghost" onClick={() => saveReport(true)}>Save Draft</button>
-            <button type="button" className="dispatcher-btn-primary inline-flex items-center gap-1.5" onClick={() => saveReport(false)}>
-              Publish Report
+            <button type="button" className="dispatcher-btn-ghost" onClick={() => saveReport(true)} disabled={saving}>
+              {saving ? 'Saving…' : 'Save Draft'}
+            </button>
+            <button type="button" className="dispatcher-btn-primary inline-flex items-center gap-1.5" onClick={() => saveReport(false)} disabled={saving}>
+              {saving ? 'Publishing…' : 'Publish Report'}
+            </button>
+            <button type="button" className="dispatcher-btn-ghost inline-flex items-center gap-1.5"
+              onClick={() => {
+                const cu = getCurrentUser()
+                exportPlannerPDF({
+                  analysis: assessmentRef.current?.value || '',
+                  notes: notesRef.current?.value || '',
+                  generatedBy: cu?.fullName || sessionStorage.getItem('resq-full-name') || 'Emergency Planner',
+                })
+              }}>
+              <Download size={14} />Export PDF
             </button>
           </div>
           <p className="text-[11px] text-(--text-muted) m-0 mt-3">

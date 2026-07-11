@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Users, Monitor, Server, ShieldAlert, RefreshCw, Play } from 'lucide-react'
 import MetricCard from '../../components/dispatcher/MetricCard'
@@ -11,6 +12,7 @@ import {
   ADMIN_SCHEDULED_JOBS,
   logLevelColor,
 } from '../../data/mockAdminData'
+import { listUsers } from '../../api/users'
 
 function jobVariant(status) {
   if (status === 'COMPLETED') return 'resolved'
@@ -20,6 +22,19 @@ function jobVariant(status) {
 }
 
 export default function AdminDashboard() {
+  const [userStats, setUserStats] = useState({ total: '—', active: '—', suspended: '—', alerts: '—' })
+
+  useEffect(() => {
+    listUsers()
+      .then((users) => setUserStats({
+        total: String(users.length),
+        active: String(users.filter((u) => u.status === 'ACTIVE').length),
+        suspended: String(users.filter((u) => u.status === 'SUSPENDED').length),
+        alerts: String(users.filter((u) => u.status === 'SUSPENDED').length),
+      }))
+      .catch(() => {})
+  }, [])
+
   const dateStr = new Date().toLocaleDateString('en-GB', {
     weekday: 'long',
     day: 'numeric',
@@ -53,14 +68,14 @@ export default function AdminDashboard() {
       </div>
 
       <div className="portal-grid-4">
-        <MetricCard icon={Users} label="Total Active Users" value="47" hint="Across all roles" hintTone="neutral" />
-        <MetricCard icon={Monitor} label="Active Sessions Now" value="12" hint="3 dispatchers · 2 OMs · 7 others" hintTone="neutral" />
+        <MetricCard icon={Users} label="Total Users" value={userStats.total} hint="Across all roles" hintTone="neutral" />
+        <MetricCard icon={Monitor} label="Active Accounts" value={userStats.active} hint="Users with ACTIVE status" hintTone="neutral" />
         <MetricCard icon={Server} label="System Uptime (30 days)" value="99.8%" hint="↑ above SLA target" hintTone="positive" />
         <MetricCard
           icon={ShieldAlert}
-          label="Open Security Alerts"
-          value="2"
-          hint="1 failed login cluster"
+          label="Suspended Accounts"
+          value={userStats.suspended}
+          hint="Accounts suspended by admin"
           hintTone="warning"
           className="dispatcher-metric-card--alert"
         />

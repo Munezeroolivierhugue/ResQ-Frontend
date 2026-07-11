@@ -1,5 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { logout } from '../../utils/authSession'
+import { logout, getRefreshToken } from '../../utils/authSession'
+import { logoutApi } from '../../api/auth'
+import { disconnect } from '../../lib/wsClient'
 import {
   UserCircle,
   Palette,
@@ -19,7 +21,13 @@ import { useFieldResponderStore } from '../../store/fieldResponderStore'
 
 export default function FRProfile() {
   const navigate = useNavigate()
-  const handleLogout = () => { logout(); navigate('/login', { replace: true }) }
+  const handleLogout = () => {
+    const refreshToken = getRefreshToken()
+    logout()
+    disconnect()
+    navigate('/login', { replace: true })
+    if (refreshToken) logoutApi(refreshToken).catch(() => {})
+  }
   const dutyStatus = useFieldResponderStore((s) => s.dutyStatus)
   const gpsActive = useFieldResponderStore((s) => s.gpsActive)
 
