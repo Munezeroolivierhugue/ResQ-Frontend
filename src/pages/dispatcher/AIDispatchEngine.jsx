@@ -79,6 +79,10 @@ export default function AIDispatchEngine() {
       .then((rec) => {
         if (rec?.recommendations?.length) {
           setLiveRankedUnits(rec.recommendations)
+        } else if (rec?.reasoning === 'AI engine unavailable') {
+          // Backend reached the AI engine call but it failed (network error or a
+          // response it couldn't parse) — distinct from a genuinely empty fleet.
+          setAiError('AI engine unreachable. Choose a unit manually.')
         } else {
           setAiError(`No available units found in ${incident.district ?? 'this district'}.`)
         }

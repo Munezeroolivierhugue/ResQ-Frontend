@@ -334,7 +334,12 @@ export default function NewIncident() {
 
     const selectedDistrict = districts.find((d) => d.district_id === district)
     const incidentPayload  = {
-      incidentType,
+      // Backend and the AI dispatch engine key off the triage type code
+      // (MEDICAL/RTA/FIRE/SECURITY/...), not the UI category label — sending
+      // the raw label here meant every real incident's type never matched the
+      // AI engine's classification rules, silently degrading every recommendation
+      // to the generic "ANY unit" fallback instead of the correct required unit mix.
+      incidentType: CATEGORY_TO_TRIAGE_TYPE[incidentType] ?? incidentType,
       callerPhone:    callPhone ?? callerData?.phone_number ?? 'unknown',
       callerIdentity: callerData?.identity ?? null,
       districtId:     district || null,
