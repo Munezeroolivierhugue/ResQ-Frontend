@@ -5,8 +5,8 @@ import { FR_OFFICER, FR_ASSIGNMENT } from '../data/mockFieldResponderData'
 import { generateUuid, yesNoToBoolean } from '../utils/formHelpers'
 import { recordGpsPing, updateVehicleStatus, getVehicle } from '../api/vehicles'
 import { submitFieldReport } from '../api/fieldReports'
-import { updateIncidentStatus, listIncidents } from '../api/incidents'
-import { listDispatchesForIncident } from '../api/dispatches'
+import { updateIncidentStatus, listIncidents, getIncident } from '../api/incidents'
+import { listDispatchesForIncident, getMyDispatches } from '../api/dispatches'
 import { getAccessToken, getCurrentUser } from '../utils/authSession'
 
 const STAGES = ['dispatched', 'en_route', 'on_scene', 'incident_clear']
@@ -79,32 +79,28 @@ export const useFieldResponderStore = create(
         }
       },
 
-      // Poll active incidents to find one dispatched to this vehicle
+      // Poll for dispatches assigned to this responder
       pollForAssignment: async () => {
-        const { vehicleId, assignment } = get()
-        if (!vehicleId || vehicleId === MOCK_VEHICLE_ID) return
+        const { assignment } = get()
         if (assignment) return   // already have one
         try {
-          const statuses = ['DISPATCHED', 'EN_ROUTE', 'ON_SCENE']
-          for (const status of statuses) {
-            const incidents = await listIncidents({ status })
-            for (const inc of incidents) {
-              const dispatches = await listDispatchesForIncident(inc.incident_id)
-              const mine = dispatches.find(d => d.vehicle_id === vehicleId)
-              if (mine) {
-                set({
-                  incidentId: inc.incident_id,
-                  hasActiveAssignment: true,
-                  assignment: {
-                    incident: inc,
-                    dispatch: mine,
-                    otherDispatches: dispatches.filter(d => d.vehicle_id !== vehicleId),
-                  },
-                })
-                return
-              }
-            }
-          }
+          const dispatches = await getMyDispatches()
+          const active = dispatches.find(d => {
+            // pick any dispatch whose vehicle isn't in a terminal state
+            return true
+          })
+          if (!active) return
+          const inc = await getIncident(active.incident_id)
+          const sibling = await listDispatchesForIncident(active.incident_id)
+          set({
+            incidentId: active.incident_id,
+            hasActiveAssignment: true,
+            assignment: {
+              incident: inc,
+              dispatch: active,
+              otherDispatches: sibling.filter(d => d.dispatch_id !== active.dispatch_id),
+            },
+          })
         } catch { /* silent — will retry on next poll */ }
       },
 
@@ -133,11 +129,13 @@ export const useFieldResponderStore = create(
       submitReport: async (form) => {
         const { vehicleId, incidentId } = get()
         const user = getCurrentUser()
+        if (!incidentId) throw new Error('No active incident — cannot submit report.')
+        if (!vehicleId || vehicleId === MOCK_VEHICLE_ID) throw new Error('No real vehicle assigned — cannot submit report.')
         const payload = {
           report_id: generateUuid(),
-          incident_id: incidentId || FR_ASSIGNMENT.incident_id,
-          vehicle_id: vehicleId || FR_OFFICER.vehicle_id,
-          responder_id: user?.user_id || FR_OFFICER.user_id,
+          incident_id: incidentId,
+          vehicle_id: vehicleId,
+          responder_id: user?.user_id || null,
           persons_involved: parseInt(form.persons, 10) || 0,
           injuries: yesNoToBoolean(form.injuries),
           suspects: yesNoToBoolean(form.suspects),

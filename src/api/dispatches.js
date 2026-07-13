@@ -21,6 +21,11 @@ function transform(d) {
   }
 }
 
+export async function getMyDispatches() {
+  const { data } = await api.get('/api/dispatches/my')
+  return (data.data ?? data).map(transform)
+}
+
 export async function listDispatchesForIncident(incidentId) {
   const { data } = await api.get('/api/dispatches', { params: { incidentId } })
   return (data.data ?? data).map(transform)

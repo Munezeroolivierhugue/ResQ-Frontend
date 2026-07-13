@@ -7,20 +7,42 @@ import { FR_QUICK_REPLIES } from '../../data/mockFieldResponderData'
 import { useFieldResponderStore } from '../../store/fieldResponderStore'
 import { fmtDuration } from '../../data/mockAudioCommsData'
 import { updateIncidentStatus } from '../../api/incidents'
+import { subscribe, publish, connect } from '../../lib/wsClient'
+import { getAccessToken, getCurrentUser } from '../../utils/authSession'
 
 export default function FROnScene() {
   const navigate = useNavigate()
-  const messages = useFieldResponderStore((s) => s.messages)
-  const addMessage = useFieldResponderStore((s) => s.addMessage)
+  const addVoiceMessageToStore = useFieldResponderStore((s) => s.addVoiceMessage)
   const clearIncident = useFieldResponderStore((s) => s.clearIncident)
   const assignment    = useFieldResponderStore((s) => s.assignment)
   const incidentId    = useFieldResponderStore((s) => s.incidentId)
+  const otherDispatches = useFieldResponderStore((s) => s.assignment?.otherDispatches ?? [])
   const showToast = useFieldResponderStore((s) => s.showToast)
   const [backupOpen, setBackupOpen] = useState(false)
   const [draft, setDraft] = useState('')
   const [elapsed, setElapsed] = useState(504)
+  const [chatMessages, setChatMessages] = useState([]) // real-time chat via WebSocket
+  // Subscribe to real-time chat channel for this incident
+  useEffect(() => {
+    if (!incidentId) return
+    const token = getAccessToken()
+    connect(token)
+    const unsub = subscribe(`/topic/incidents/${incidentId}/chat`, (msg) => {
+      const now = new Date()
+      const time = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+      setChatMessages((prev) => [...prev, {
+        id: `ws-${Date.now()}-${Math.random()}`,
+        type: 'text',
+        from: msg.senderRole === 'FIELD_RESPONDER' ? 'officer' : 'dispatch',
+        text: msg.text,
+        senderName: msg.senderName,
+        time: msg.timestamp ?? time,
+      }])
+    })
+    return unsub
+  }, [incidentId])
+
   // Audio comms state
-  const addVoiceMessage = useFieldResponderStore((s) => s.addVoiceMessage)
   const [pttActive, setPttActive] = useState(false)
   const [pttSeconds, setPttSeconds] = useState(0)
   const pttRef = useRef(null)
@@ -42,7 +64,12 @@ export default function FROnScene() {
 
   const send = (text) => {
     if (!text.trim()) return
-    addMessage(text.trim())
+    const user = getCurrentUser()
+    publish(`/app/chat/${incidentId}`, {
+      text: text.trim(),
+      senderName: user?.full_name ?? 'Field Responder',
+      senderRole: 'FIELD_RESPONDER',
+    })
     setDraft('')
   }
 
@@ -56,7 +83,7 @@ export default function FROnScene() {
     clearInterval(pttRef.current)
     setPttActive(false)
     if (pttSeconds > 0) {
-      addVoiceMessage(pttSeconds, 'officer', 'YOU')
+      addVoiceMessageToStore(pttSeconds, 'officer', 'YOU')
     }
     setPttSeconds(0)
   }
@@ -116,7 +143,11 @@ export default function FROnScene() {
       >
         <div className="fr-scene-chips">
           <span className="fr-scene-chip font-mono">Elapsed: {formatElapsed(elapsed)}</span>
-          <span className="fr-scene-chip">P-19 also on scene</span>
+          {otherDispatches.map((d) => (
+            <span key={d.dispatch_id} className="fr-scene-chip">
+              {d.vehicle_plate ?? d.unit_id ?? 'Unit'} also on scene
+            </span>
+          ))}
         </div>
       </SeverityBanner>
 
@@ -143,7 +174,10 @@ export default function FROnScene() {
         </div>
         
         <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-[#0f151c]">
-          {messages.map((m) => {
+          {chatMessages.length === 0 && (
+            <p className="text-center text-[11px] text-(--text-muted) py-4">No messages yet. Start the conversation.</p>
+          )}
+          {chatMessages.map((m) => {
             const isSelf = m.from === 'officer' || m.role === 'field' || m.from === 'field';
             const unitColor = 'var(--accent)'; // Field UI often defaults dispatch to accent
             

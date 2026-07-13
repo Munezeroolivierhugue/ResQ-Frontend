@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { MapPin, ClipboardList, Play, Check, ChevronDown } from 'lucide-react'
+import { MapPin, ClipboardList, Play, Check, ChevronDown, Truck } from 'lucide-react'
 import { FR_BRIEFING } from '../../data/mockFieldResponderData'
 import { useFieldResponderStore } from '../../store/fieldResponderStore'
 import { listVehicles } from '../../api/vehicles'
+import { getMyProfile } from '../../api/users'
 import { getCurrentUser } from '../../utils/authSession'
 
 function initials(name) {
@@ -22,12 +23,32 @@ export default function FRShiftStart() {
   const displayName = user?.full_name ?? user?.email ?? 'Field Responder'
   const displayInitials = initials(displayName)
 
+  const [assignedVehicle, setAssignedVehicle] = useState(null) // pre-assigned from profile
   const [vehicles, setVehicles] = useState([])
   const [selectedVehicle, setSelectedVehicle] = useState(vehicleId ?? '')
 
   useEffect(() => {
-    listVehicles().then(setVehicles).catch(() => {})
-  }, [])
+    // Load pre-assigned vehicle from user profile first
+    getMyProfile()
+      .then(profile => {
+        if (profile.current_vehicle_id) {
+          setAssignedVehicle({
+            id: profile.current_vehicle_id,
+            plate: profile.current_vehicle_plate,
+            type: profile.current_vehicle_type,
+          })
+          setSelectedVehicle(profile.current_vehicle_id)
+          setVehicleId(profile.current_vehicle_id)
+        } else {
+          // No pre-assigned vehicle — fall back to picker
+          listVehicles().then(setVehicles).catch(() => {})
+        }
+      })
+      .catch(() => {
+        // Profile fetch failed — fall back to picker
+        listVehicles().then(setVehicles).catch(() => {})
+      })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const isOffline   = dutyStatus === 'offline'
   const isAvailable = dutyStatus === 'available'
@@ -56,13 +77,17 @@ export default function FRShiftStart() {
         </div>
         <div className="fr-divider" />
 
-        {/* Vehicle selector */}
+        {/* Vehicle assignment */}
         <div className="fr-gps-row">
           <div className="flex items-center gap-2">
-            <ChevronDown size={14} className="text-(--text-secondary)" />
+            <Truck size={14} className="text-(--text-secondary)" />
             <span className="text-[13px]">Assigned vehicle</span>
           </div>
-          {vehicles.length > 0 ? (
+          {assignedVehicle ? (
+            <span className="fr-pill fr-pill--ok font-mono text-[11px]">
+              {assignedVehicle.plate} · {assignedVehicle.type}
+            </span>
+          ) : vehicles.length > 0 ? (
             <select
               className="dispatcher-input dispatcher-select h-8 text-[12px] min-w-[140px]"
               value={selectedVehicle}
@@ -79,7 +104,7 @@ export default function FRShiftStart() {
                 ))}
             </select>
           ) : (
-            <span className="text-[11px] text-(--text-muted)">Loading vehicles…</span>
+            <span className="text-[11px] text-(--text-muted)">Loading…</span>
           )}
         </div>
 
@@ -126,7 +151,7 @@ export default function FRShiftStart() {
         type="button"
         className={`fr-availability-btn${isOffline ? ' fr-availability-btn--go' : ''}${isAvailable ? ' fr-availability-btn--on' : ''}${isOnScene ? ' fr-availability-btn--scene' : ''}`}
         onClick={isOffline ? handleGoAvailable : undefined}
-        disabled={!isOffline || (!selectedVehicle && vehicles.length > 0)}
+        disabled={!isOffline || (!selectedVehicle && !assignedVehicle && vehicles.length > 0)}
       >
         {isOffline && (
           <>
@@ -134,7 +159,7 @@ export default function FRShiftStart() {
             <div>
               <div>GO AVAILABLE</div>
               <div className="fr-availability-sub">
-                {!selectedVehicle && vehicles.length > 0
+                {!selectedVehicle && !assignedVehicle && vehicles.length > 0
                   ? 'Select a vehicle first'
                   : 'Tap to begin shift · You will appear on dispatcher map'}
               </div>

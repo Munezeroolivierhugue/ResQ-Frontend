@@ -1,26 +1,42 @@
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { logout, getRefreshToken } from '../../utils/authSession'
+import { logout, getRefreshToken, getCurrentUser } from '../../utils/authSession'
 import { logoutApi } from '../../api/auth'
 import { disconnect } from '../../lib/wsClient'
 import {
-  UserCircle,
-  Palette,
-  Bell,
-  MapPin,
-  Languages,
-  ShieldCheck,
-  Moon,
   BarChart3,
   LogOut,
   ChevronRight,
-  HelpCircle
+  HelpCircle,
+  Moon,
 } from 'lucide-react'
 import { FR_SETTINGS_NAV } from '../../components/settings/FieldResponderSettingsView'
-import { FR_OFFICER } from '../../data/mockFieldResponderData'
 import { useFieldResponderStore } from '../../store/fieldResponderStore'
+import { getMyProfile } from '../../api/users'
+
+function initials(name) {
+  return (name || '').split(' ').map(n => n[0]).filter(Boolean).join('').slice(0, 2).toUpperCase() || '?'
+}
+
+const SHIFT_LABELS = {
+  MORNING: '07:00 – 15:00',
+  EVENING: '15:00 – 23:00',
+  NIGHT: '23:00 – 07:00',
+  ROTATING: 'Rotating',
+}
 
 export default function FRProfile() {
   const navigate = useNavigate()
+  const [profile, setProfile] = useState(null)
+
+  useEffect(() => {
+    getMyProfile().then(setProfile).catch(() => {
+      // fall back to session data
+      const u = getCurrentUser()
+      if (u) setProfile({ full_name: u.full_name, email: u.email })
+    })
+  }, [])
+
   const handleLogout = () => {
     const refreshToken = getRefreshToken()
     logout()
@@ -38,18 +54,24 @@ export default function FRProfile() {
         ? 'On Scene'
         : 'Available'
 
+  const displayName = profile?.full_name || '…'
+  const displayUnit = profile?.current_vehicle_plate
+    ? `${profile.current_vehicle_plate} · ${(profile.current_vehicle_type || '').replace(/_/g, ' ')}`
+    : profile?.email || '—'
+  const displayShift = profile?.shift_type
+    ? `${SHIFT_LABELS[profile.shift_type] ?? profile.shift_type} · Today`
+    : '—'
+
   return (
     <div className="fr-page fr-page--fill">
       <div className="fr-page-fill-body">
         <div className="dispatcher-surface fr-card">
           <div className="fr-identity-row">
-            <span className="fr-avatar">{FR_OFFICER.initials}</span>
+            <span className="fr-avatar">{initials(displayName)}</span>
             <div className="fr-identity-info">
-              <div className="fr-identity-name">{FR_OFFICER.name}</div>
-              <div className="fr-identity-meta font-mono">
-                {FR_OFFICER.badge} · {FR_OFFICER.unit}
-              </div>
-              <div className="fr-identity-shift">{FR_OFFICER.shift}</div>
+              <div className="fr-identity-name">{displayName}</div>
+              <div className="fr-identity-meta font-mono">{displayUnit}</div>
+              <div className="fr-identity-shift">{displayShift}</div>
             </div>
           </div>
           <div className="fr-divider" />

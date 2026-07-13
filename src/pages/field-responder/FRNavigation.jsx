@@ -6,7 +6,6 @@ import { MapPin, Navigation } from 'lucide-react'
 import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
 import { RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../components/map/rwandaConstants'
 import FieldResponderProgressStrip from '../../components/field-responder/FieldResponderProgressStrip'
-import { FR_ASSIGNMENT } from '../../data/mockFieldResponderData'
 import { useFieldResponderStore } from '../../store/fieldResponderStore'
 import 'leaflet/dist/leaflet.css'
 
@@ -69,8 +68,6 @@ export default function FRNavigation() {
   const assignment  = useFieldResponderStore((s) => s.assignment)
   const mapRef = useRef(null)
 
-  // Fallback to mock data only when there is no real assignment yet
-  const a = FR_ASSIGNMENT
   const inc = assignment?.incident ?? null
 
   // Officer position — prefer browser geolocation, fallback to Kigali center
@@ -84,9 +81,9 @@ export default function FRNavigation() {
     )
   }, [])
 
-  // Incident position — use real if available, else mock
-  const incidentLat = inc?.lat ?? a.lat
-  const incidentLng = inc?.lng ?? a.lng
+  // Incident position — use real if available, else Kigali center as last resort
+  const incidentLat = inc?.lat ?? KIGALI_CENTER[0]
+  const incidentLng = inc?.lng ?? KIGALI_CENTER[1]
 
   const officerPos  = useMemo(() => officerCoords, [officerCoords])
   const incidentPos = useMemo(() => [incidentLat, incidentLng], [incidentLat, incidentLng])
@@ -98,6 +95,19 @@ export default function FRNavigation() {
     () => [...routePoints, officerPos, incidentPos],
     [routePoints, officerPos, incidentPos],
   )
+
+  const distanceKm = useMemo(() => {
+    const toRad = d => d * Math.PI / 180
+    const [lat1, lng1] = officerPos
+    const [lat2, lng2] = incidentPos
+    const R = 6371
+    const dLat = toRad(lat2 - lat1)
+    const dLng = toRad(lng2 - lng1)
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
+    return (R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(1)
+  }, [officerPos, incidentPos])
+
+  const etaMinutes = assignment?.dispatch?.eta_minutes ?? Math.ceil(distanceKm / 40 * 60)
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -166,30 +176,30 @@ export default function FRNavigation() {
         <div className="fr-nav-incident-bar">
           <div className="fr-nav-incident-head">
             <span className="fr-nav-incident-id font-mono">
-              {inc?.incident_ref ?? a.id}
+              {inc?.incident_ref ?? 'INCIDENT'}
             </span>
             <span className="fr-nav-severity-badge">
-              {(inc?.severity ?? a.severity).toUpperCase()}
+              {(inc?.severity ?? 'UNKNOWN').toUpperCase()}
             </span>
           </div>
-          <p className="fr-nav-incident-type">{inc?.incident_type ?? a.type}</p>
+          <p className="fr-nav-incident-type">{inc?.incident_type ?? 'Active Incident'}</p>
           <p className="fr-nav-incident-location">
             <MapPin size={14} aria-hidden />
-            {inc ? `${inc.district ?? ''}${inc.sector ? ' / ' + inc.sector : ''}` || inc.address || 'En route' : a.location}
+            {inc ? `${inc.district ?? ''}${inc.sector ? ' / ' + inc.sector : ''}` || inc.address || 'En route' : 'En route to incident'}
           </p>
         </div>
 
         <div className="fr-nav-turn-card">
           <div className="fr-nav-turn-row">
             <Navigation size={16} className="fr-nav-turn-icon" aria-hidden />
-            <p className="fr-nav-turn-main">{a.turnInstruction}</p>
+            <p className="fr-nav-turn-main">Head to incident location</p>
           </div>
-          <p className="fr-nav-turn-sub">{a.turnSub}</p>
+          <p className="fr-nav-turn-sub">{inc ? `${inc.district ?? ''}${inc.sector ? ' · ' + inc.sector : ''}` || 'En route' : 'En route to incident'}</p>
           <div className="fr-nav-turn-chips">
             <span className="fr-nav-turn-chip fr-nav-turn-chip--eta font-mono">
-              {assignment?.dispatch?.eta_minutes ?? a.eta_minutes} min
+              {etaMinutes} min
             </span>
-            <span className="fr-nav-turn-chip fr-nav-turn-chip--dist font-mono">{a.distanceKm} km</span>
+            <span className="fr-nav-turn-chip fr-nav-turn-chip--dist font-mono">{distanceKm} km</span>
           </div>
         </div>
       </div>

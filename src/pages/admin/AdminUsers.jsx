@@ -62,7 +62,7 @@ function UserEditModal({ user, agencies, districts, vehicles, onClose, onSaved }
     phone:      user.phone_number ?? '',
     districtId: user.district_id  ?? '',
     agencyId:   user.agency_id    ?? '',
-    vehicleId:  user.vehicle_id   ?? user.currentVehicleId ?? '',
+    vehicleId:  user.current_vehicle_id ?? user.vehicle_id ?? '',
     shiftType:  user.shift_type   ?? '',
   })
   const [saving, setSaving] = useState(false)
@@ -93,7 +93,16 @@ function UserEditModal({ user, agencies, districts, vehicles, onClose, onSaved }
         vehicle_id:  isFR && form.vehicleId ? form.vehicleId : undefined,
         shift_type:  form.shiftType || undefined,
       })
-      onSaved({ ...user, full_name: form.fullName, email: form.email, phone_number: form.phone })
+      onSaved({
+        ...user,
+        full_name: form.fullName,
+        email: form.email,
+        phone_number: form.phone,
+        district_id: form.districtId || user.district_id,
+        agency_id: form.agencyId || user.agency_id,
+        current_vehicle_id: form.vehicleId || user.current_vehicle_id,
+        shift_type: form.shiftType || user.shift_type,
+      })
     } catch (err) {
       setError(err?.response?.data?.message || 'Failed to save changes.')
     } finally {

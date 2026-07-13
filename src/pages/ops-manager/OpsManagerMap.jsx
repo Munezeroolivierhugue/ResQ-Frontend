@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Circle, Tooltip } from 'react-leaflet'
 import { Megaphone } from 'lucide-react'
 import OpsManagerDistrictLabel from '../../components/ops-manager/OpsManagerDistrictLabel'
@@ -6,12 +6,12 @@ import { getOpsManagerDistrict } from '../../utils/opsManagerDistrict'
 import { useThemeStore } from '../../store/themeStore'
 import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
 import { RWANDA_CENTER, RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../components/map/rwandaConstants'
-import { mockIncidents } from '../../data/mockIncidents'
-import { mockUnits } from '../../data/mockVehicles'
 import { mockBroadcasts } from '../../data/mockBroadcasts'
 import { generateUuid } from '../../utils/formHelpers'
 import { getCurrentUser } from '../../utils/authSession'
 import { useNotificationsStore } from '../../store/notificationsStore'
+import { listIncidents } from '../../api/incidents'
+import { listVehicles } from '../../api/vehicles'
 import 'leaflet/dist/leaflet.css'
 
 const LAYERS = ['All Units', 'Incidents', 'Coverage Rings', 'Traffic', 'Agency Units']
@@ -19,6 +19,16 @@ const LAYERS = ['All Units', 'Incidents', 'Coverage Rings', 'Traffic', 'Agency U
 export default function OpsManagerMap() {
   const { theme } = useThemeStore()
   const addNotification = useNotificationsStore((s) => s.addNotification)
+  const [incidents, setIncidents] = useState([])
+  const [units, setUnits] = useState([])
+
+  useEffect(() => {
+    const districtId = sessionStorage.getItem('resq-district-id')
+    const params = districtId ? { districtId } : {}
+    listIncidents(params).then(setIncidents).catch(() => {})
+    listVehicles(params).then(setUnits).catch(() => {})
+  }, [])
+
   const [layers, setLayers] = useState({
     'All Units': true,
     Incidents: true,
@@ -60,7 +70,7 @@ export default function OpsManagerMap() {
     setBroadcastOpen(false)
   }
 
-  const standbyUnits = mockUnits.filter((u) => u.status === 'available' || u.status === 'idle')
+  const standbyUnits = units.filter((u) => u.status === 'AVAILABLE' || u.status === 'available')
 
   const omDistrict = getOpsManagerDistrict()
 
@@ -105,10 +115,10 @@ export default function OpsManagerMap() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-mono px-2.5 py-1 rounded bg-(--bg-input) border border-(--border) text-(--text-secondary)">
-            34 units active
+            {units.length} units
           </span>
           <span className="text-[11px] font-mono px-2.5 py-1 rounded bg-(--bg-input) border border-(--border) text-(--text-secondary)">
-            12 incidents
+            {incidents.length} incidents
           </span>
           <button
             type="button"
@@ -181,25 +191,25 @@ export default function OpsManagerMap() {
             attribution="&copy; CARTO"
           />
           <RwandaBoundsEnforcer />
-          {layers.Incidents && mockIncidents.map((inc) => (
+          {layers.Incidents && incidents.filter(inc => inc.lat != null && inc.lng != null).map((inc) => (
             <CircleMarker
-              key={inc.id}
+              key={inc.incident_id}
               center={[inc.lat, inc.lng]}
               radius={8}
               pathOptions={{
                 color: 'var(--bg-surface)',
-                fillColor: inc.severity === 'critical' ? 'var(--status-critical)' : 'var(--status-high)',
+                fillColor: (inc.severity ?? inc.final_severity ?? '').toLowerCase() === 'critical' ? 'var(--status-critical)' : 'var(--status-high)',
                 fillOpacity: 0.9,
                 weight: 2,
               }}
             >
-              <Tooltip>{inc.id}</Tooltip>
+              <Tooltip>{inc.incident_ref} · {inc.incident_type}</Tooltip>
             </CircleMarker>
           ))}
-          {layers['All Units'] && mockUnits.map((u) => (
+          {layers['All Units'] && units.filter(u => u.current_lat != null && u.current_lng != null).map((u) => (
             <CircleMarker
-              key={u.id}
-              center={[u.lat, u.lng]}
+              key={u.vehicle_id}
+              center={[u.current_lat, u.current_lng]}
               radius={6}
               pathOptions={{
                 color: 'var(--bg-surface)',
@@ -208,13 +218,13 @@ export default function OpsManagerMap() {
                 weight: 1.5,
               }}
             >
-              <Tooltip>{u.id} · {u.type}</Tooltip>
+              <Tooltip>{u.plate_number} · {u.vehicle_type}</Tooltip>
             </CircleMarker>
           ))}
-          {layers['Coverage Rings'] && standbyUnits.map((u) => (
+          {layers['Coverage Rings'] && standbyUnits.filter(u => u.current_lat != null && u.current_lng != null).map((u) => (
             <Circle
-              key={`ring-${u.id}`}
-              center={[u.lat, u.lng]}
+              key={`ring-${u.vehicle_id}`}
+              center={[u.current_lat, u.current_lng]}
               radius={1200}
               pathOptions={{
                 color: 'var(--accent)',

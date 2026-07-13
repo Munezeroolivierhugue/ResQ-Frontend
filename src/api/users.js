@@ -15,7 +15,16 @@ function transform(u) {
     mfa_enabled: u.mfaEnabled ?? false,
     last_login: u.lastLogin ?? null,
     created_at: u.createdAt ?? null,
+    current_vehicle_id: u.currentVehicleId ?? null,
+    current_vehicle_plate: u.currentVehiclePlate ?? null,
+    current_vehicle_type: u.currentVehicleType ?? null,
+    shift_type: u.shiftType ?? null,
   }
+}
+
+export async function getMyProfile() {
+  const { data } = await api.get('/api/users/me')
+  return transform(data.data ?? data)
 }
 
 export async function listUsers() {
@@ -51,6 +60,7 @@ export async function updateUser(id, body) {
     agencyId:   body.agency_id    ?? undefined,
     vehicleId:  body.vehicle_id   ?? undefined,
     status:     body.status       ?? undefined,
+    shiftType:  body.shift_type   ?? undefined,
   }
   const { data } = await api.put(`/api/users/${id}`, payload)
   return transform(data.data ?? data)

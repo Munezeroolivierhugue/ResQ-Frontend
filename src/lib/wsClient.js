@@ -77,6 +77,14 @@ export function disconnect() {
   _pendingSubs.length = 0
 }
 
+export function publish(destination, body) {
+  if (!_client?.connected) {
+    console.warn('[wsClient] publish called while not connected:', destination)
+    return
+  }
+  _client.publish({ destination, body: JSON.stringify(body) })
+}
+
 export function getClient() {
   return _client
 }
