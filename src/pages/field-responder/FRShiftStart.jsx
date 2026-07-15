@@ -4,7 +4,7 @@ import { useFieldResponderStore } from '../../store/fieldResponderStore'
 import { listVehicles } from '../../api/vehicles'
 import { getMyProfile } from '../../api/users'
 import { startShift } from '../../api/shifts'
-import { listMyReports } from '../../api/fieldReports'
+import { getMyStats } from '../../api/fieldResponderStats'
 import { getCurrentUser } from '../../utils/authSession'
 
 function initials(name) {
@@ -54,15 +54,15 @@ export default function FRShiftStart() {
       })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Real count instead of a hardcoded "0" — the responder's own field reports
-  // submitted today are the closest available signal for incidents handled.
+  // Counts dispatches received today, not field reports filed — reports are
+  // only ever filed by RNP/police units (canFileFieldReports()), so a
+  // report-based count silently showed 0 for every non-police responder
+  // even on days they'd actually been dispatched and handled incidents.
+  // Dispatch count is the correct, agency-agnostic signal, and is the same
+  // source the My Stats page already uses for this exact number.
   useEffect(() => {
-    listMyReports()
-      .then((reports) => {
-        const today = new Date().toDateString()
-        const count = reports.filter((r) => r.submitted_at && new Date(r.submitted_at).toDateString() === today).length
-        setIncidentsToday(count)
-      })
+    getMyStats()
+      .then((stats) => setIncidentsToday(stats.incidents_today))
       .catch(() => {})
   }, [])
 

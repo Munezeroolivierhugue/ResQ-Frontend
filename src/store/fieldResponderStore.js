@@ -172,7 +172,7 @@ export const useFieldResponderStore = create(
         set({ assignmentStage: 'en_route', dutyStatus: 'available' })
         if (incidentId) updateIncidentStatus(incidentId, 'EN_ROUTE').catch(() => {})
       },
-      markOnScene: () => {
+      markOnScene: async () => {
         const { incidentId, vehicleId, assignment } = get()
         set({ assignmentStage: 'on_scene', dutyStatus: 'on_scene' })
         if (incidentId) updateIncidentStatus(incidentId, 'ON_SCENE').catch(() => {})
@@ -186,10 +186,37 @@ export const useFieldResponderStore = create(
         // position) once the responder is free to move again — see
         // submitReport()/clearIncident().
         stopGpsInterval()
-        const lat = assignment?.incident?.lat
-        const lng = assignment?.incident?.lng
+        // Prefer the responder's own live GPS fix (`latestGeo`, kept current
+        // by startGeoWatch() the whole time gpsActive) over the incident's
+        // static coordinates — it's literally where they're standing when
+        // they press this button.
+        let lat = latestGeo?.lat ?? assignment?.incident?.lat
+        let lng = latestGeo?.lng ?? assignment?.incident?.lng
+        // Both can still be missing — `assignment.incident` is whatever the
+        // store happened to be populated with (WS push vs polling fallback
+        // take different paths) and isn't guaranteed to carry a location at
+        // this exact moment. Previously that silently left the vehicle at
+        // whatever position it already had (e.g. still its home station from
+        // shift start, or nothing at all), so the status flipped to ON_SCENE
+        // but the pin never moved. Re-fetching the incident directly here
+        // guarantees a real location as long as the incident has one at all.
+        if ((lat == null || lng == null) && incidentId) {
+          try {
+            const inc = await getIncident(incidentId)
+            lat = lat ?? inc?.lat
+            lng = lng ?? inc?.lng
+          } catch { /* fall through with whatever we already had */ }
+        }
         if (vehicleId && vehicleId !== MOCK_VEHICLE_ID && lat != null && lng != null) {
           recordGpsPing(vehicleId, lat, lng).catch(() => {})
+        }
+        // The vehicle's own status row was never transitioned to ON_SCENE
+        // here — only the incident's status was updated, and a GPS ping only
+        // touches lat/lng, not status. Dispatcher screens read the vehicle's
+        // live status (not the incident's), so units never visibly turned
+        // "On Scene" there even though the incident itself had moved on.
+        if (vehicleId && vehicleId !== MOCK_VEHICLE_ID) {
+          updateVehicleStatus(vehicleId, 'on_scene', lat, lng).catch(() => {})
         }
       },
       clearIncident: async () => {

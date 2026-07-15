@@ -176,7 +176,10 @@ export default function IncidentHistory() {
     let cancelled = false
     Promise.all(paged.map((inc) =>
       listDispatchesForIncident(inc.incident_id)
-        .then((ds) => [inc.incident_id, ds.map((d) => d.vehicle_plate).filter(Boolean)])
+        .then((ds) => [inc.incident_id, ds.filter((d) => d.vehicle_plate).map((d) => ({
+          plate: d.vehicle_plate,
+          isBackup: d.override_reason === 'backup_request',
+        }))])
         .catch(() => [inc.incident_id, []])
     )).then((entries) => {
       if (cancelled) return
@@ -305,7 +308,22 @@ export default function IncidentHistory() {
                   </td>
                   <td className="px-3.5 text-[12px] text-(--text-secondary)" style={{ fontFamily: 'var(--font-mono)' }}>{fmtMinutes(inc.resolution_time_minutes)}</td>
                   <td className="px-3.5 text-[12px] text-(--status-info)" style={{ fontFamily: 'var(--font-mono)' }}>
-                    {(unitsByIncident[inc.incident_id] ?? []).join(', ') || '—'}
+                    {(unitsByIncident[inc.incident_id] ?? []).length === 0 ? '—' : (
+                      (unitsByIncident[inc.incident_id] ?? []).map((u, i) => (
+                        <span key={u.plate + i}>
+                          {i > 0 && ', '}
+                          {u.plate}
+                          {u.isBackup && (
+                            <span
+                              className="ml-1 text-[9px] font-bold uppercase tracking-wide px-1 py-0.5 rounded"
+                              style={{ background: 'var(--status-medium-bg)', color: 'var(--status-medium)', fontFamily: 'var(--font-body)' }}
+                            >
+                              Backup
+                            </span>
+                          )}
+                        </span>
+                      ))
+                    )}
                   </td>
                   <td className="px-3.5">
                     {respMins != null ? (

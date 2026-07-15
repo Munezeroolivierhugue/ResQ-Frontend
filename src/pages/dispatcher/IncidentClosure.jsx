@@ -15,6 +15,8 @@ import {
 } from '../../components/dispatcher/FormControls'
 import { listIncidents, createIncidentClosure, getIncident } from '../../api/incidents'
 import { submitFieldReport, uploadAttachment, getReportForIncident, getClosureForIncident, listAttachments, attachmentUrl } from '../../api/fieldReports'
+import { listDispatchesForIncident } from '../../api/dispatches'
+import { listVehicles } from '../../api/vehicles'
 import { formatIncidentType } from '../../utils/incidentTypeLabels'
 
 const DISPOSITION_OPTIONS = [
@@ -119,6 +121,30 @@ export default function IncidentClosure() {
     const incidentId = incident?.incident_id
     if (!incidentId) { setExistingClosure(null); return }
     getClosureForIncident(incidentId).then(setExistingClosure).catch(() => setExistingClosure(null))
+  }, [incident?.incident_id])
+
+  // All units that actually served this incident — previously this page only
+  // ever showed the single field responder's own report, giving no visibility
+  // into other units (e.g. backup police/ambulance dispatched by an Ops
+  // Manager) that also responded and should appear on the incident record.
+  const [respondingUnits, setRespondingUnits] = useState([])
+
+  useEffect(() => {
+    const incidentId = incident?.incident_id
+    if (!incidentId) { Promise.resolve().then(() => setRespondingUnits([])); return }
+    Promise.all([listDispatchesForIncident(incidentId), listVehicles()])
+      .then(([dispatches, vehicles]) => {
+        const vehicleMap = new Map(vehicles.map((v) => [v.vehicle_id, v]))
+        setRespondingUnits(dispatches.map((d) => {
+          const v = vehicleMap.get(d.vehicle_id) ?? {}
+          return {
+            id: d.vehicle_plate ?? v.plate_number ?? d.vehicle_id,
+            type: v.vehicle_type ?? 'Unit',
+            isBackup: d.override_reason === 'backup_request',
+          }
+        }))
+      })
+      .catch(() => setRespondingUnits([]))
   }, [incident?.incident_id])
 
   useEffect(() => {
@@ -304,6 +330,32 @@ export default function IncidentClosure() {
           <CheckCircle size={16} />
           Incident closed — record written. Redirecting to shift handover…
         </div>
+      )}
+
+      {/* All units that served this incident, not just the field responder */}
+      {respondingUnits.length > 0 && (
+        <SurfaceCard className="mb-5" padding="p-4">
+          <SectionTitle title="Responding units" className="mb-3" />
+          <div className="flex flex-col gap-2">
+            {respondingUnits.map((u, i) => (
+              <div
+                key={u.id + i}
+                className="flex flex-wrap items-center gap-2 py-1.5 text-[12px] border-b border-(--border-subtle) last:border-0"
+              >
+                <span className="font-mono font-bold text-(--accent)">{u.id}</span>
+                <span className="text-(--text-secondary)">· {u.type}</span>
+                {u.isBackup && (
+                  <span
+                    className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                    style={{ background: 'var(--status-medium-bg)', color: 'var(--status-medium)' }}
+                  >
+                    Backup
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </SurfaceCard>
       )}
 
       {/* Field responder's submitted report — read-only reference for the dispatcher */}

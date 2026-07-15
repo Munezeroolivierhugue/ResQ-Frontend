@@ -23,9 +23,14 @@ import { generateUuid } from "../../utils/formHelpers";
 import { getCurrentUser } from "../../utils/authSession";
 import { useNotificationsStore } from "../../store/notificationsStore";
 import DispatchUnitsModal from "../../components/ops-manager/DispatchUnitsModal";
+import { getIncident } from "../../api/incidents";
+import { listDispatchesForIncident } from "../../api/dispatches";
+import { listVehicles } from "../../api/vehicles";
+import { formatIncidentType } from "../../utils/incidentTypeLabels";
 import "leaflet/dist/leaflet.css";
 
 const NON_RNP_AGENCIES = OPS_AGENCIES.filter((a) => a.id !== "rnp");
+const TERMINAL_STATUSES = new Set(["RESOLVED", "PENDING_REPORT", "CLOSED"]);
 
 export default function OpsManagerEscalation() {
   const { incidentId } = useParams();
@@ -34,8 +39,50 @@ export default function OpsManagerEscalation() {
   const detail = getEscalationDetail(incidentId);
   const [elapsed, setElapsed] = useState(1542);
 
+  // The AI-reassessment/field-updates-timeline sections below are still
+  // built on mock detail data (getEscalationDetail always falls back to a
+  // generic sample incident for any ID it doesn't recognize, e.g. every
+  // real UUID this page is now actually linked with) — building those out
+  // for real (an actual AI reassessment engine, a real field-updates feed)
+  // is a bigger lift than this pass. The header identity, responding units,
+  // and map, however, now reflect the real incident/dispatches.
+  const [realIncident, setRealIncident] = useState(null);
+  useEffect(() => {
+    getIncident(incidentId).then(setRealIncident).catch(() => {});
+  }, [incidentId]);
+
   const incidentData = mockIncidents.find((i) => i.incident_ref === detail.id);
-  const incidentUuid = incidentData?.incident_id || detail.id;
+  const incidentUuid = realIncident?.incident_id || incidentData?.incident_id || detail.id;
+  const incidentRef = realIncident?.incident_ref || detail.id;
+  const isClosed = realIncident?.status && TERMINAL_STATUSES.has(realIncident.status);
+
+  // Responding units were always the mock detail.units array regardless of
+  // which real incident was open — every escalation showed the same fake
+  // 2-3 units at fixed coordinates. Real dispatches for this incident,
+  // enriched with each vehicle's live position/status/type, same pattern
+  // ActiveIncident.jsx already uses on the dispatcher side.
+  const [realUnits, setRealUnits] = useState([]);
+  useEffect(() => {
+    if (!incidentUuid || incidentUuid === detail.id) return; // still waiting on realIncident
+    Promise.all([listDispatchesForIncident(incidentUuid), listVehicles()])
+      .then(([dispatches, vehicles]) => {
+        const vehicleMap = new Map(vehicles.map((v) => [v.vehicle_id, v]));
+        setRealUnits(dispatches.map((d) => {
+          const v = vehicleMap.get(d.vehicle_id) ?? {};
+          return {
+            id: d.vehicle_plate ?? v.plate_number ?? d.vehicle_id,
+            type: v.vehicle_type ?? "Unit",
+            status: (v.status ?? "—").toUpperCase(),
+            isBackup: d.override_reason === "backup_request",
+            eta_minutes: d.eta_minutes,
+            lat: v.current_lat,
+            lng: v.current_lng,
+          };
+        }));
+      })
+      .catch(() => {});
+  }, [incidentUuid, detail.id]);
+  const unitsWithPos = realUnits.filter((u) => u.lat != null && u.lng != null);
 
   // Broadcast state
   const [broadcastOpen, setBroadcastOpen] = useState(false);
@@ -57,9 +104,13 @@ export default function OpsManagerEscalation() {
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
+    // Kept counting up forever even after the incident was actually closed
+    // by the dispatcher — this page had no idea the real incident's status
+    // had moved on, since it never checked it. Stop once we know it's done.
+    if (isClosed) return;
     const t = setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [isClosed]);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -172,18 +223,24 @@ export default function OpsManagerEscalation() {
       <DispatchUnitsModal
         isOpen={dispatchOpen}
         incidentId={incidentUuid}
-        incidentRef={detail.id}
+        incidentRef={incidentRef}
+        // Ops Manager should only ever see/dispatch units from their own
+        // district, not every district system-wide.
+        districtId={getCurrentUser()?.district_id}
         onClose={() => setDispatchOpen(false)}
         onConfirm={(units) =>
           setToast(
-            `${units.length} unit${units.length > 1 ? "s" : ""} dispatched to ${detail.id}`,
+            `${units.length} unit${units.length > 1 ? "s" : ""} dispatched to ${incidentRef}`,
           )
         }
       />
 
       {notifyOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
+          // Same Leaflet-vs-modal z-index conflict as DispatchUnitsModal —
+          // this page's live map panes render above z-50, so the map bled
+          // through this modal instead of being fully hidden behind it.
+          className="fixed inset-0 z-[9999] flex items-center justify-center"
           style={{ background: "rgba(0,0,0,0.45)" }}
           onClick={() => setNotifyOpen(false)}
         >
@@ -255,19 +312,24 @@ export default function OpsManagerEscalation() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="text-(--accent) font-mono font-bold text-[14px]">
-              COMMANDING: {detail.id}
+              COMMANDING: {incidentRef}
+              {realIncident?.incident_type && ` — ${formatIncidentType(realIncident.incident_type)}`}
             </div>
             <div className="flex items-center gap-2 mt-1">
               <StatusBadge
-                label={detail.reassessment.severity}
+                label={(realIncident?.severity ?? detail.reassessment.severity ?? '').toString().toUpperCase()}
                 variant="critical"
               />
               <span className="text-[13px] text-(--text-secondary)">
-                {detail.location}
+                {realIncident?.district ?? realIncident?.address ?? detail.location}
               </span>
             </div>
             <div className="text-[2rem] font-mono font-bold text-(--accent) mt-2">
-              {formatElapsed(elapsed)}
+              {isClosed ? (
+                <span style={{ color: "var(--status-low)" }}>CLOSED</span>
+              ) : (
+                formatElapsed(elapsed)
+              )}
             </div>
           </div>
           <button
@@ -278,7 +340,7 @@ export default function OpsManagerEscalation() {
               color: "var(--text-on-accent)",
             }}
             onClick={handleEscalateToBC}
-            disabled={dcEscalated}
+            disabled={dcEscalated || isClosed}
           >
             {dcEscalated ? "ESCALATED ✓" : "ESCALATE TO DISTRICT COMMANDER"}
           </button>
@@ -289,7 +351,7 @@ export default function OpsManagerEscalation() {
           style={{ height: 280 }}
         >
           <MapContainer
-            center={[detail.lat, detail.lng]}
+            center={[realIncident?.lat ?? detail.lat, realIncident?.lng ?? detail.lng]}
             zoom={15}
             minZoom={RWANDA_MIN_ZOOM}
             maxZoom={RWANDA_MAX_ZOOM}
@@ -305,7 +367,7 @@ export default function OpsManagerEscalation() {
             />
             <RwandaBoundsEnforcer />
             <CircleMarker
-              center={[detail.lat, detail.lng]}
+              center={[realIncident?.lat ?? detail.lat, realIncident?.lng ?? detail.lng]}
               radius={10}
               pathOptions={{
                 fillColor: "var(--status-critical)",
@@ -314,9 +376,9 @@ export default function OpsManagerEscalation() {
                 weight: 2,
               }}
             >
-              <Tooltip>{detail.id}</Tooltip>
+              <Tooltip>{incidentRef}</Tooltip>
             </CircleMarker>
-            {detail.units.map((u) => (
+            {unitsWithPos.map((u) => (
               <CircleMarker
                 key={u.id}
                 center={[u.lat, u.lng]}
@@ -459,27 +521,41 @@ export default function OpsManagerEscalation() {
 
         <div className="dispatcher-surface p-4">
           <div className="font-bold text-[13px] mb-3">Responding Units</div>
-          {detail.units.map((u) => (
-            <div
-              key={u.id}
-              className="flex flex-wrap items-center gap-2 py-2 border-b border-(--border-subtle) text-[12px] last:border-0"
-            >
-              <span className="font-mono font-bold text-(--accent)">
-                {u.id}
-              </span>
-              <span className="text-(--text-secondary)">· {u.type}</span>
-              <StatusBadge
-                label={u.status}
-                variant={u.status === "ON SCENE" ? "resolved" : "active"}
-              />
-              <span className="text-(--text-secondary)">
-                {u.eta_minutes != null ? `${u.eta_minutes} min` : "On scene"}
-              </span>
-              <span className="font-mono text-(--text-muted) ml-auto text-[10px]">
-                {u.lat.toFixed(4)}, {u.lng.toFixed(4)}
-              </span>
-            </div>
-          ))}
+          {realUnits.length === 0 ? (
+            <p className="text-[12px] text-(--text-muted) m-0">No units dispatched yet.</p>
+          ) : (
+            realUnits.map((u) => (
+              <div
+                key={u.id}
+                className="flex flex-wrap items-center gap-2 py-2 border-b border-(--border-subtle) text-[12px] last:border-0"
+              >
+                <span className="font-mono font-bold text-(--accent)">
+                  {u.id}
+                </span>
+                {u.isBackup && (
+                  <span
+                    className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                    style={{ background: "var(--status-medium-bg)", color: "var(--status-medium)" }}
+                  >
+                    Backup
+                  </span>
+                )}
+                <span className="text-(--text-secondary)">· {u.type}</span>
+                <StatusBadge
+                  label={u.status}
+                  variant={u.status === "ON_SCENE" ? "resolved" : "active"}
+                />
+                <span className="text-(--text-secondary)">
+                  {u.eta_minutes != null ? `${u.eta_minutes} min` : "—"}
+                </span>
+                {u.lat != null && u.lng != null && (
+                  <span className="font-mono text-(--text-muted) ml-auto text-[10px]">
+                    {u.lat.toFixed(4)}, {u.lng.toFixed(4)}
+                  </span>
+                )}
+              </div>
+            ))
+          )}
         </div>
 
         <Link

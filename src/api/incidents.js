@@ -28,6 +28,10 @@ function transform(i) {
     // Derived from timestamps when backend doesn't pre-compute them
     response_time_minutes:   i.responseTimeMinutes ?? minutesBetween(i.callTime, i.arrivalTime ?? i.dispatchTime),
     resolution_time_minutes: i.resolutionTimeMinutes ?? minutesBetween(i.callTime, i.closureTime),
+    escalated:               i.escalated ?? false,
+    escalated_at:            i.escalatedAt ?? null,
+    escalated_by_id:         i.escalatedById ?? null,
+    escalated_by_name:       i.escalatedByName ?? null,
   }
 }
 
@@ -76,6 +80,11 @@ export async function createIncident(body) {
 
 export async function updateIncidentStatus(id, status) {
   const { data } = await api.patch(`/api/incidents/${id}/status`, { status })
+  return transform(data.data ?? data)
+}
+
+export async function escalateIncident(id) {
+  const { data } = await api.post(`/api/incidents/${id}/escalate`)
   return transform(data.data ?? data)
 }
 

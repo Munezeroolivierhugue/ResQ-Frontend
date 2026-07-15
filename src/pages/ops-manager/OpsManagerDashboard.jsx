@@ -32,13 +32,11 @@ import OpsManagerDistrictLabel from "../../components/ops-manager/OpsManagerDist
 import OpsManagerMissedCallsPanel from "../../components/ops-manager/OpsManagerMissedCallsPanel";
 import DispatchUnitsModal from "../../components/ops-manager/DispatchUnitsModal";
 import { getOpsManagerDistrict } from "../../utils/opsManagerDistrict";
-import { mockBackupRequests } from "../../data/mockBackupRequests";
+import { listBackupRequests, acknowledgeBackupRequest } from "../../api/backup-requests";
 import { listVehicles } from "../../api/vehicles";
 import { listIncidents } from "../../api/incidents";
 import { mockVehicles } from "../../data/mockVehicles";
 import { mockIncidents } from "../../data/mockIncidents";
-import { mockAuditLogs } from "../../data/mockAuditLogs";
-import { generateUuid } from "../../utils/formHelpers";
 import { getCurrentUser } from "../../utils/authSession";
 
 function timeAgo(isoString) {
@@ -50,28 +48,29 @@ function timeAgo(isoString) {
 }
 
 function BackupRequestsPanel({ vehicles, incidents }) {
-  const [requests, setRequests] = useState(() => [...mockBackupRequests]);
+  const [requests, setRequests] = useState([]);
   const [dispatchTarget, setDispatchTarget] = useState(null);
   const [dispatchToast, setDispatchToast] = useState(null);
+
+  useEffect(() => {
+    listBackupRequests()
+      .then((all) => setRequests(all.filter((r) => r.status !== "ACKNOWLEDGED")))
+      .catch(() => {});
+  }, []);
 
   const showToast = (msg) => {
     setDispatchToast(msg);
     setTimeout(() => setDispatchToast(null), 3000);
   };
 
-  const handleAcknowledge = (backup) => {
-    const cu = getCurrentUser();
-    mockAuditLogs.push({
-      log_id: generateUuid(),
-      user_id: cu?.user_id || "demo-user-uuid",
-      timestamp: new Date().toISOString(),
-      action: `BACKUP_REQUEST_ACKNOWLEDGED: ${backup.backup_id}`,
-      module: "OPERATIONS_MANAGER",
-      ip_address: null,
-      status: "SUCCESS",
-    });
-    setRequests((prev) => prev.filter((r) => r.backup_id !== backup.backup_id));
-    showToast("Backup request acknowledged");
+  const handleAcknowledge = async (backup) => {
+    try {
+      await acknowledgeBackupRequest(backup.backup_id);
+      setRequests((prev) => prev.filter((r) => r.backup_id !== backup.backup_id));
+      showToast("Backup request acknowledged");
+    } catch {
+      showToast("Could not acknowledge — try again");
+    }
   };
 
   const openDispatch = (backup) => {
@@ -105,7 +104,10 @@ function BackupRequestsPanel({ vehicles, incidents }) {
           dispatchTarget?.incData?.incident_ref ||
           dispatchTarget?.backup?.incident_id
         }
-        districtId={dispatchTarget?.vehicle?.district_id}
+        // Ops Manager should only ever see/dispatch units from their own
+        // district, not whichever district the requesting unit happens to
+        // be in.
+        districtId={getCurrentUser()?.district_id}
         onClose={() => setDispatchTarget(null)}
         onConfirm={(units) => {
           setDispatchTarget(null);

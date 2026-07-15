@@ -4,6 +4,8 @@ import SectionTitle from './SectionTitle'
 import FieldReportCard from './FieldReportCard'
 import ClosureRecordCard from './ClosureRecordCard'
 import { getReportForIncident, getClosureForIncident, listAttachments } from '../../api/fieldReports'
+import { listDispatchesForIncident } from '../../api/dispatches'
+import { listVehicles } from '../../api/vehicles'
 import { formatIncidentType } from '../../utils/incidentTypeLabels'
 
 // Read-only "what was submitted" card — separate from IncidentClosure.jsx,
@@ -16,6 +18,11 @@ export default function ViewClosureModal({ incident, open, onClose }) {
   const [closure, setClosure] = useState(null)
   const [photos, setPhotos] = useState([])
   const [loading, setLoading] = useState(true)
+  // Every unit that served this incident — previously this read-only view
+  // only ever showed the single field responder's report, with no way to see
+  // other units (e.g. backup units an Ops Manager dispatched) that also
+  // responded to the same incident.
+  const [respondingUnits, setRespondingUnits] = useState([])
 
   useEffect(() => {
     if (!open || !incident?.incident_id) return
@@ -23,7 +30,9 @@ export default function ViewClosureModal({ incident, open, onClose }) {
     Promise.allSettled([
       getReportForIncident(incident.incident_id),
       getClosureForIncident(incident.incident_id),
-    ]).then(async ([frRes, clRes]) => {
+      listDispatchesForIncident(incident.incident_id),
+      listVehicles(),
+    ]).then(async ([frRes, clRes, dispRes, vehRes]) => {
       const fr = frRes.status === 'fulfilled' ? frRes.value : null
       setFieldReport(fr)
       setClosure(clRes.status === 'fulfilled' ? clRes.value : null)
@@ -32,6 +41,17 @@ export default function ViewClosureModal({ incident, open, onClose }) {
       } else {
         setPhotos([])
       }
+      const dispatches = dispRes.status === 'fulfilled' ? dispRes.value : []
+      const vehicles = vehRes.status === 'fulfilled' ? vehRes.value : []
+      const vehicleMap = new Map(vehicles.map((v) => [v.vehicle_id, v]))
+      setRespondingUnits(dispatches.map((d) => {
+        const v = vehicleMap.get(d.vehicle_id) ?? {}
+        return {
+          id: d.vehicle_plate ?? v.plate_number ?? d.vehicle_id,
+          type: v.vehicle_type ?? 'Unit',
+          isBackup: d.override_reason === 'backup_request',
+        }
+      }))
     }).finally(() => setLoading(false))
   }, [open, incident?.incident_id])
 
@@ -75,6 +95,30 @@ export default function ViewClosureModal({ incident, open, onClose }) {
           <p className="text-[13px] text-(--text-muted) mt-4">Loading…</p>
         ) : (
           <div className="flex flex-col gap-5 mt-4">
+            {respondingUnits.length > 0 && (
+              <div>
+                <SectionTitle title="Responding units" className="mb-3" />
+                <div className="flex flex-col gap-2">
+                  {respondingUnits.map((u, i) => (
+                    <div
+                      key={u.id + i}
+                      className="flex flex-wrap items-center gap-2 py-1.5 text-[12px] border-b border-(--border-subtle) last:border-0"
+                    >
+                      <span className="font-mono font-bold text-(--accent)">{u.id}</span>
+                      <span className="text-(--text-secondary)">· {u.type}</span>
+                      {u.isBackup && (
+                        <span
+                          className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                          style={{ background: 'var(--status-medium-bg)', color: 'var(--status-medium)' }}
+                        >
+                          Backup
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div>
               <SectionTitle title="Field responder's report" className="mb-3" />
               <FieldReportCard fieldReport={fieldReport} photos={photos} location={location} />

@@ -11,6 +11,17 @@ const MAX_DELAY = 30000
 // and drained once onConnect fires.
 const _pendingSubs = []
 
+// Every currently-active subscription (topic + handler), so it can be
+// replayed on reconnect. stompjs's `reconnectDelay` transparently reconnects
+// the underlying socket after a drop (network blip, laptop sleep, JWT
+// hiccup) and fires onConnect again, but a fresh STOMP session has none of
+// the old session's subscriptions — without replaying them here, every
+// screen relying on a long-lived topic (e.g. the dispatcher's Active
+// Incident page watching for backup units) would silently stop receiving
+// updates until a full page refresh, with no visible error anywhere.
+const _activeSubs = new Map() // id -> { topic, handler }
+let _activeSubId = 0
+
 // onConnected callbacks from callers that arrive after the first connect()
 // call already created the client, but before the handshake finishes. Only
 // the very first caller's callback was ever wired into the Client's own
@@ -47,7 +58,13 @@ export function connect(token, onConnected) {
   }
 
   _client = new Client({
-    webSocketFactory: () => new SockJS(WS_URL),
+    // Restricting to the native 'websocket' transport skips SockJS's legacy
+    // XHR-streaming/polling fallbacks, which is what was attaching an
+    // `unload` listener that Chrome's default Permissions-Policy now blocks
+    // ("unload is not allowed in this document") — harmless console noise,
+    // but avoidable since every browser this app targets supports native
+    // WebSocket, so the fallback transports are never actually needed here.
+    webSocketFactory: () => new SockJS(WS_URL, null, { transports: ['websocket'] }),
     connectHeaders: token ? { Authorization: `Bearer ${token}` } : {},
     reconnectDelay: _reconnectDelay,
     onConnect: () => {
@@ -56,6 +73,9 @@ export function connect(token, onConnected) {
       _pendingSubs.splice(0).forEach(({ topic, handler, setUnsub }) => {
         setUnsub(_doSubscribe(topic, handler))
       })
+      // Re-establish every subscription that survived from before a
+      // reconnect — see _activeSubs comment above.
+      _activeSubs.forEach(({ topic, handler }) => _doSubscribe(topic, handler))
       if (onConnected) onConnected(_client)
       // Every other caller whose connect() arrived after this client was
       // created but before this handshake completed.
@@ -74,20 +94,25 @@ export function connect(token, onConnected) {
 }
 
 export function subscribe(topic, handler) {
+  const id = ++_activeSubId
+  _activeSubs.set(id, { topic, handler })
+  const forget = () => _activeSubs.delete(id)
+
   if (_client?.connected) {
     // STOMP handshake complete — subscribe immediately
-    return _doSubscribe(topic, handler)
+    const unsub = _doSubscribe(topic, handler)
+    return () => { forget(); unsub() }
   }
 
   if (_client?.active) {
     // Client is activating but handshake not yet done — queue the subscription
     let unsub = () => {}
     _pendingSubs.push({ topic, handler, setUnsub: (fn) => { unsub = fn } })
-    return () => unsub()
+    return () => { forget(); unsub() }
   }
 
   console.warn('[wsClient] subscribe called before connect — call connect() first:', topic)
-  return () => {}
+  return forget
 }
 
 export function disconnect() {
@@ -96,6 +121,7 @@ export function disconnect() {
   _reconnectDelay = 1000
   _pendingSubs.length = 0
   _pendingOnConnected.length = 0
+  _activeSubs.clear()
 }
 
 export function publish(destination, body) {

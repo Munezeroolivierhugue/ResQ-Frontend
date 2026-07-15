@@ -40,7 +40,11 @@ export async function getVehicle(id) {
 }
 
 export async function updateVehicleStatus(id, status, lat, lng) {
-  const params = { status }
+  // Backend only accepts exact uppercase values (AVAILABLE, DISPATCHED,
+  // EN_ROUTE, ON_SCENE, OUT_OF_SERVICE) and 400s on anything else — callers
+  // like fieldResponderStore's goAvailable() were passing lowercase
+  // ('available'), so this call silently failed every time.
+  const params = { status: (status ?? '').toUpperCase() }
   if (lat != null) params.lat = lat
   if (lng != null) params.lng = lng
   const { data } = await api.patch(`/api/vehicles/${id}/status`, null, { params })

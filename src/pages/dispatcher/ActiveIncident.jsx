@@ -20,10 +20,9 @@ import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
 import MapFitBounds from '../../components/map/MapFitBounds'
 import { RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../components/map/rwandaConstants'
 import { useNotificationsStore } from '../../store/notificationsStore'
-import { getIncident, updateIncidentStatus } from '../../api/incidents'
+import { getIncident, updateIncidentStatus, escalateIncident } from '../../api/incidents'
 import { listDispatchesForIncident } from '../../api/dispatches'
 import { listVehicles } from '../../api/vehicles'
-import { requestBackup } from '../../api/backup-requests'
 import { getReportForIncident, listAttachments } from '../../api/fieldReports'
 import FieldReportCard from '../../components/dispatcher/FieldReportCard'
 import { connect, subscribe, publish } from '../../lib/wsClient'
@@ -136,6 +135,7 @@ function buildUnitsFromDispatches(dispatches, vehicles) {
       role: d.responder_name ?? 'Responder',
       colorKey: colorKeyFromType(vType),
       ...statusInfoFor(v.status),
+      isBackup: d.override_reason === 'backup_request',
       eta: d.eta_minutes != null ? `${d.eta_minutes} min` : null,
       current_lat: v.current_lat ?? null,
       current_lng: v.current_lng ?? null,
@@ -146,10 +146,16 @@ function buildUnitsFromDispatches(dispatches, vehicles) {
 
 function unitMarkerIcon(unit) {
   const hex = MARKER_HEX[unit.colorKey] || MARKER_HEX.medical
+  // The marker previously only ever encoded vehicle type (color), never
+  // status — a unit's pin looked identical whether it was DISPATCHED,
+  // EN_ROUTE, or ON_SCENE, so a dispatcher had no way to tell "on scene"
+  // from the map itself without opening the side panel. Add a filled dot +
+  // checkmark ring for on-scene units so it's visible at a glance.
+  const onScene = unit.status === 'on_scene'
   return L.divIcon({
-    html: `<div class="active-unit-marker" style="--unit-color:${hex}">
+    html: `<div class="active-unit-marker${onScene ? ' active-unit-marker-on-scene' : ''}" style="--unit-color:${hex}">
       <span class="active-unit-marker-dot"></span>
-      <span class="active-unit-marker-label">${unit.id}</span>
+      <span class="active-unit-marker-label">${unit.id}${onScene ? ' ✓' : ''}</span>
     </div>`,
     className: '',
     iconAnchor: [28, 14],
@@ -383,6 +389,33 @@ export default function ActiveIncident() {
     return () => unsubs.forEach((unsub) => unsub())
   }, [vehicleIdsKey])
 
+  // A unit added to this incident mid-stream (e.g. an Ops Manager dispatching
+  // backup in response to a request) previously never appeared on this map
+  // until a manual refresh — this page only ever fetched dispatches once on
+  // load, and the per-vehicle GPS subscription above only exists for units
+  // it already knows about. DispatchService now publishes a real
+  // "unit_dispatched" event on this incident's status channel when that
+  // happens; on it, just re-fetch dispatches+vehicles the same way this page
+  // already does on load, so the new unit shows up with real GPS/status
+  // exactly like a manual refresh would.
+  useEffect(() => {
+    const incidentId = incident?.incident_id
+    if (!incidentId) return
+    const token = getAccessToken()
+    connect(token)
+    const unsub = subscribe(`/topic/incidents/${incidentId}/status`, (evt) => {
+      if (evt?.type !== 'unit_dispatched') return
+      Promise.all([listDispatchesForIncident(incidentId), listVehicles()])
+        .then(([dispatches, vehicles]) => {
+          const enriched = buildUnitsFromDispatches(dispatches, vehicles)
+          setUnits(enriched)
+          saveUnitsToStorage(enriched)
+        })
+        .catch(() => {})
+    })
+    return unsub
+  }, [incident?.incident_id])
+
   // 'idle' | 'sending' | 'sent' | 'error'
   const [escalation, setEscalation] = useState('idle')
 
@@ -390,21 +423,13 @@ export default function ActiveIncident() {
     if (!incident?.incident_id || escalation === 'sending' || escalation === 'sent') return
     setEscalation('sending')
     try {
-      await requestBackup({
-        incidentId: incident.incident_id,
-        reason: 'ESCALATION',
-        notes: `Escalated to operations manager by dispatcher — ${incident.incident_ref ?? incident.incident_id}`,
-      })
+      // Real escalation now — marks the incident escalated server-side and
+      // notifies every Operations Manager in the incident's district (both
+      // persisted + live push), instead of the old requestBackup(reason:
+      // 'ESCALATION') call which never actually reached an Ops Manager (it
+      // only fired a local notification to the dispatcher's own screen).
+      await escalateIncident(incident.incident_id)
       setEscalation('sent')
-      addNotification({
-        id: `escalation-${Date.now()}`,
-        type: 'escalation',
-        title: `Escalated — ${incident.incident_ref ?? ''}`,
-        message: 'Operations manager has been alerted for this incident.',
-        time: new Date().toISOString(),
-        read: false,
-        target_role: 'dispatcher',
-      })
     } catch {
       setEscalation('error')
     }
@@ -755,8 +780,8 @@ export default function ActiveIncident() {
                 radius={14}
                 pathOptions={{
                   color: MARKER_HEX[unit.colorKey],
-                  fillColor: 'transparent',
-                  fillOpacity: 0,
+                  fillColor: MARKER_HEX[unit.colorKey],
+                  fillOpacity: unit.status === 'on_scene' ? 0.3 : 0,
                   weight: 2,
                   opacity: 0.45,
                 }}
@@ -771,6 +796,7 @@ export default function ActiveIncident() {
               >
                 <Tooltip direction="top" offset={[0, -18]}>
                   <strong>{unit.id}</strong> — {unit.vehicle_type}
+                  {unit.isBackup && ' · BACKUP'}
                   <br />
                   {unit.role}
                   <br />
@@ -849,8 +875,18 @@ export default function ActiveIncident() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1">
-                        <span className="text-[12px] font-bold text-(--accent)" style={{ fontFamily: 'var(--font-mono)' }}>
-                          {unit.id}
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-[12px] font-bold text-(--accent)" style={{ fontFamily: 'var(--font-mono)' }}>
+                            {unit.id}
+                          </span>
+                          {unit.isBackup && (
+                            <span
+                              className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded"
+                              style={{ background: 'var(--status-medium-bg)', color: 'var(--status-medium)', fontFamily: 'var(--font-display)' }}
+                            >
+                              Backup
+                            </span>
+                          )}
                         </span>
                         <StatusBadge label={unit.statusLabel} color={color} />
                       </div>

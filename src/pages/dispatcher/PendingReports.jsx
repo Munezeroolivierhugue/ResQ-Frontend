@@ -3,7 +3,6 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { FileCheck, Clock, ChevronRight, AlertTriangle, Search, Download } from 'lucide-react'
 import { listIncidents } from '../../api/incidents'
 import { listDispatchesForIncident } from '../../api/dispatches'
-import SeverityBadge from '../../components/dispatcher/SeverityBadge'
 import { formatIncidentType } from '../../utils/incidentTypeLabels'
 import { buildPdfHtml, openPdfWindow, sectionHtml, tableHtml } from '../../utils/pdfExport'
 
@@ -60,7 +59,9 @@ function exportCsv(rows) {
   URL.revokeObjectURL(url)
 }
 
-const SEV_UPPER = (s) => (s ?? '').toUpperCase()
+// Same severity color map + inline badge markup as IncidentHistory.jsx's
+// table, so both tables render severity identically.
+const severityColor = { critical: '#E8354A', high: '#F07820', medium: '#D4A017', low: '#3DAA6A' }
 
 function elapsedMinutes(callTime) {
   if (!callTime) return null
@@ -83,18 +84,6 @@ function ElapsedChip({ callTime }) {
       <Clock size={10} />
       {mins}m elapsed
     </span>
-  )
-}
-
-// Same layout/classes as IncidentHistory.jsx's local KpiCard — kept local
-// here too since no shared component exists yet for either page to import.
-function KpiCard({ label, value, sub }) {
-  return (
-    <div className="flex-1 min-w-40 bg-(--bg-surface) border border-(--border) rounded-xl p-5">
-      <div className="text-[12px] text-(--text-secondary) mb-1.5">{label}</div>
-      <div className="text-[28px] font-bold leading-none" style={{ fontFamily: 'var(--font-display)' }}>{value}</div>
-      {sub && <div className="text-[11px] text-(--text-muted) mt-1">{sub}</div>}
-    </div>
   )
 }
 
@@ -138,7 +127,10 @@ export default function PendingReports() {
     let cancelled = false
     Promise.all(pendingIncidents.map((inc) =>
       listDispatchesForIncident(inc.incident_id)
-        .then((ds) => [inc.incident_id, ds.map((d) => d.vehicle_plate).filter(Boolean)])
+        .then((ds) => [inc.incident_id, ds.filter((d) => d.vehicle_plate).map((d) => ({
+          plate: d.vehicle_plate,
+          isBackup: d.override_reason === 'backup_request',
+        }))])
         .catch(() => [inc.incident_id, []])
     )).then((entries) => {
       if (cancelled) return
@@ -202,24 +194,6 @@ export default function PendingReports() {
         </div>
       </div>
 
-      {/* KPI row */}
-      <div className="flex gap-3 mb-5">
-        <KpiCard label="Pending Reports" value={loading ? '…' : pendingIncidents.length} />
-        <KpiCard
-          label="Avg Elapsed"
-          value={loading ? '…' : (() => {
-            const mins = pendingIncidents.map((i) => elapsedMinutes(i.call_time)).filter((m) => m != null)
-            return mins.length ? `${Math.round(mins.reduce((s, m) => s + m, 0) / mins.length)}m` : 'N/A'
-          })()}
-          sub="Since call received"
-        />
-        <KpiCard
-          label="Overdue (>60m)"
-          value={loading ? '…' : pendingIncidents.filter((i) => (elapsedMinutes(i.call_time) ?? 0) > 60).length}
-          sub="Awaiting closure past 1 hour"
-        />
-      </div>
-
       {/* Filter bar */}
       <div className="bg-(--bg-surface) border border-(--border) rounded-xl px-4 py-3 mb-4">
         <div className="relative max-w-md">
@@ -251,7 +225,7 @@ export default function PendingReports() {
                 {['Incident', 'Type', 'District / Sector', 'Severity', 'Call Time', 'Elapsed', 'Unit', 'Action'].map((col) => (
                   <th
                     key={col}
-                    className="px-4 py-2.5 text-left field-label border-b border-(--border) whitespace-nowrap"
+                    className="px-3.5 py-2.5 text-left field-label border-b border-(--border) whitespace-nowrap"
                   >
                     {col}
                   </th>
@@ -274,10 +248,10 @@ export default function PendingReports() {
                       outlineOffset: isJustCompleted ? '-2px' : undefined,
                     }}
                   >
-                    <td className="px-4 h-12">
+                    <td className="px-3.5 h-12">
                       <div className="flex items-center gap-2">
                         <span
-                          className="text-[12px] font-bold text-(--accent)"
+                          className="text-[12px] font-semibold text-(--accent)"
                           style={{ fontFamily: 'var(--font-mono)' }}
                         >
                           {inc.incident_ref}
@@ -296,29 +270,55 @@ export default function PendingReports() {
                         )}
                       </div>
                     </td>
-                    <td className="px-4 text-[13px] text-(--text-primary)">{formatIncidentType(inc.incident_type)}</td>
-                    <td className="px-4 text-[12px] text-(--text-secondary)">
+                    <td className="px-3.5 text-[13px]">{formatIncidentType(inc.incident_type)}</td>
+                    <td className="px-3.5 text-[12px] text-(--text-secondary)">
                       {inc.district ? `${inc.district}${inc.sector ? ' / ' + inc.sector : ''}` : (inc.address ?? '—')}
                     </td>
-                    <td className="px-4">
-                      <SeverityBadge severity={SEV_UPPER(inc.severity)} />
+                    <td className="px-3.5">
+                      {(() => {
+                        const sev = inc.severity ?? 'medium'
+                        const c = severityColor[sev] || '#44474D'
+                        return (
+                          <span
+                            className="inline-flex items-center px-2.25 py-0.5 rounded text-[10px] font-bold uppercase tracking-[0.07em] border"
+                            style={{ background: c + '25', color: c, borderColor: c + '40', fontFamily: 'var(--font-body)' }}
+                          >
+                            {sev.toUpperCase()}
+                          </span>
+                        )
+                      })()}
                     </td>
                     <td
-                      className="px-4 text-[12px] text-(--text-secondary)"
+                      className="px-3.5 text-[12px] text-(--text-secondary)"
                       style={{ fontFamily: 'var(--font-mono)' }}
                     >
                       {inc.call_time ? new Date(inc.call_time).toLocaleString() : '—'}
                     </td>
-                    <td className="px-4">
+                    <td className="px-3.5">
                       <ElapsedChip callTime={inc.call_time} />
                     </td>
                     <td
-                      className="px-4 text-[12px] text-(--status-info)"
+                      className="px-3.5 text-[12px] text-(--status-info)"
                       style={{ fontFamily: 'var(--font-mono)' }}
                     >
-                      {(unitsByIncident[inc.incident_id] ?? []).join(', ') || '—'}
+                      {(unitsByIncident[inc.incident_id] ?? []).length === 0 ? '—' : (
+                        (unitsByIncident[inc.incident_id] ?? []).map((u, i) => (
+                          <span key={u.plate + i}>
+                            {i > 0 && ', '}
+                            {u.plate}
+                            {u.isBackup && (
+                              <span
+                                className="ml-1 text-[9px] font-bold uppercase tracking-wide px-1 py-0.5 rounded"
+                                style={{ background: 'var(--status-medium-bg)', color: 'var(--status-medium)', fontFamily: 'var(--font-body)' }}
+                              >
+                                Backup
+                              </span>
+                            )}
+                          </span>
+                        ))
+                      )}
                     </td>
-                    <td className="px-4">
+                    <td className="px-3.5">
                       <button
                         type="button"
                         onClick={() => navigate('/dispatcher/incident-report', { state: { incident: inc } })}

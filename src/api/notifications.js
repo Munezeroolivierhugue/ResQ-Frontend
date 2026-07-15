@@ -27,6 +27,8 @@ const ROLE_HREF = {
     // carries only a message string, no structured incidentId — so this
     // routes to the list of closed incidents rather than guessing which one.
     INCIDENT_CLOSED: "/ops-manager/closed-incidents",
+    INCIDENT_ESCALATED: "/ops-manager/escalations",
+    BACKUP_REQUESTED: "/ops-manager/dashboard",
   },
   ADMIN: {
     USER_INVITED: "/admin/users",

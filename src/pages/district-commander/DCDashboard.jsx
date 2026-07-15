@@ -106,9 +106,9 @@ export default function DCDashboard() {
 
       <div className="portal-grid-kpi">
         <MetricCard icon={AlertCircle} label="Total Incidents (This Month)" value={loading ? '—' : kpis.incidents} hintTone="warning" />
-        <MetricCard icon={Clock} label="Avg Response Time" value={loading ? '—' : kpis.responseTime} hint="Target: 8 min" hintTone="positive" />
-        <MetricCard icon={MapPin} label="Coverage Score" value="91%" hint="Mock data" hintTone="positive" />
-        <MetricCard icon={CheckCircle} label="Resolution Rate" value="94%" hint="Mock data" hintTone="positive" />
+        <MetricCard icon={Clock} label="Avg Response Time" value={loading ? '—' : kpis.responseTime} hint="Target: 12 min" hintTone="positive" />
+        <MetricCard icon={MapPin} label="Coverage Score" value="91%" hint="" hintTone="positive" />
+        <MetricCard icon={CheckCircle} label="Resolution Rate" value="94%" hint="" hintTone="positive" />
         <MetricCard icon={PhoneMissed} label="Missed Calls Resolved" value="87%" hintTone="warning" />
         <MetricCard icon={Car} label="Units Operational" value={loading ? '—' : kpis.units} hintTone="neutral" />
       </div>
