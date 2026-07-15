@@ -9,6 +9,7 @@ import { RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../component
 import AvailableUnitsModal from '../../components/dispatcher/AvailableUnitsModal'
 import { createDispatch } from '../../api/dispatches'
 import { getAiRecommendation } from '../../api/incidents'
+import { formatIncidentType } from '../../utils/incidentTypeLabels'
 
 const SEV_COLOR = { critical: '#FF2D44', high: '#FF7A00', medium: '#E6A817', low: '#879D1F' }
 
@@ -32,6 +33,10 @@ function buildRecommendations(liveRankedUnits = []) {
         type: u.vehicle_type,
         location: u.agency_name ?? 'District Station',
         eta: u.eta_minutes != null ? `${Math.round(u.eta_minutes)} min` : '—',
+        // Kept alongside the formatted `eta` string above so the dispatch
+        // payload can use the real number directly instead of re-parsing it
+        // back out of "12 min" with a digit-stripping regex.
+        etaMinutesRaw: u.eta_minutes != null ? Math.round(u.eta_minutes) : null,
         score: Math.round((u.confidence ?? u.score ?? 0.8) * 100),
         lat: u.current_lat,
         lng: u.current_lng,
@@ -51,6 +56,7 @@ export default function AIDispatchEngine() {
   const { state } = useLocation()
   const { theme } = useThemeStore()
   const [dispatched, setDispatched] = useState(false)
+  const [dispatchError, setDispatchError] = useState(null)
   const [isUnitsModalOpen, setIsUnitsModalOpen] = useState(false)
   const [selectedOption, setSelectedOption] = useState(null)
   const [liveRankedUnits, setLiveRankedUnits] = useState([])
@@ -60,7 +66,7 @@ export default function AIDispatchEngine() {
   // Read incident data passed from NewIncident
   const incident = state?.incident ?? {}
 
-  const incidentType   = incident.incident_type ?? 'Emergency'
+  const incidentType   = formatIncidentType(incident.incident_type) ?? 'Emergency'
   const severity       = (incident.final_severity ?? 'LOW').toLowerCase()
   const district       = incident.district ?? 'Unknown District'
   const sector         = incident.sector ?? ''
@@ -98,28 +104,62 @@ export default function AIDispatchEngine() {
   const activeOption = selectedOption ?? primary
 
   const handleDispatch = async () => {
-    setDispatched(true)
+    setDispatchError(null)
     const team = activeOption?.units ?? []
 
     // POST dispatches using real vehicle UUIDs from backend; skip mock units (no UUID)
     if (incident.incident_id) {
-      await Promise.allSettled(
-        team
-          .filter((u) => u.vehicle_id && /^[0-9a-f-]{36}$/i.test(u.vehicle_id)) // only real UUIDs
-          .map((u) => createDispatch({
-            incidentId: incident.incident_id,
-            vehicleId: u.vehicle_id,
-            aiRecommended: !selectedOption,
-            overridden: !!selectedOption,
-            confidence: (activeOption?.score ?? 80) / 100,
-            etaMinutes: parseInt(String(u.eta ?? '').replace(/\D/g, '')) || null,
-          }))
+      const realUnits = team.filter((u) => u.vehicle_id && /^[0-9a-f-]{36}$/i.test(u.vehicle_id)) // only real UUIDs
+      const results = await Promise.allSettled(
+        realUnits.map((u) => createDispatch({
+          incidentId: incident.incident_id,
+          vehicleId: u.vehicle_id,
+          responderId: null,
+          aiRecommended: !selectedOption,
+          overridden: !!selectedOption,
+          overrideReason: null,
+          confidence: (activeOption?.score ?? 80) / 100,
+          etaMinutes: u.etaMinutesRaw ?? null,
+          immediate: false,
+        }))
       )
+      // Every call site here used to ignore these results entirely and navigate
+      // away regardless — meaning a failed dispatch (e.g. vehicle no longer
+      // available) looked identical to a successful one, and nothing was ever
+      // actually persisted. Surface it instead of silently proceeding.
+      const failures = results.filter((r) => r.status === 'rejected')
+      if (failures.length > 0) {
+        setDispatchError(
+          realUnits.length === 1
+            ? 'Dispatch failed — the unit may no longer be available. Please retry.'
+            : `Dispatch failed for ${failures.length} of ${realUnits.length} unit(s). Please retry.`
+        )
+        return
+      }
     }
 
+    setDispatched(true)
     setTimeout(() => navigate('/dispatcher/active-incident', {
       state: { incident_id: incident.incident_id, incident, dispatchedTeam: team }
     }), 1800)
+  }
+
+  // Navigating here directly (sidebar, refresh, back button) with no
+  // incident in route state previously fell through to `incident = {}` and
+  // rendered a full fake incident card — "Unknown District", a Kigali-center
+  // fallback pin, "now" as the call time — same class of bug as Active
+  // Incident's stale-dummy-data issue. Mirror that page's fix: show nothing
+  // to recommend against until a real incident is actually navigated to.
+  if (!state?.incident?.incident_id) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full min-h-0 gap-3 bg-(--bg-base) text-center px-6">
+        <Bot size={36} style={{ color: 'var(--text-muted)' }} />
+        <p className="text-[15px] font-semibold text-(--text-primary) m-0">No incident to dispatch</p>
+        <p className="text-[13px] text-(--text-secondary) m-0 max-w-[420px]">
+          Open this from a new incident's triage flow to see AI-ranked unit recommendations.
+        </p>
+      </div>
+    )
   }
 
   return (
@@ -317,6 +357,12 @@ export default function AIDispatchEngine() {
 
         {/* Action buttons */}
         <div className="p-4 border-t border-(--border) flex flex-col gap-2">
+          {dispatchError && (
+            <div className="flex items-center justify-center gap-2 p-3.5 bg-[rgba(255,45,68,0.12)] rounded-[10px] border border-[rgba(255,45,68,0.35)]">
+              <AlertTriangle size={16} color="#FF2D44" />
+              <span className="text-sm font-semibold text-[#FF2D44]">{dispatchError}</span>
+            </div>
+          )}
           {dispatched ? (
             <div className="flex items-center justify-center gap-2 p-3.5 bg-[rgba(135,157,31,0.15)] rounded-[10px] border border-[rgba(176,213,1,0.3)]">
               <CheckCircle size={16} color="#879D1F" />
@@ -346,6 +392,28 @@ export default function AIDispatchEngine() {
       <AvailableUnitsModal
         isOpen={isUnitsModalOpen}
         onClose={() => setIsUnitsModalOpen(false)}
+        onSelectUnit={(v) => {
+          setSelectedOption({
+            id: `manual-${v.vehicle_id}`,
+            rank: null,
+            score: 80,
+            eta: '—',
+            units: [{
+              vehicle_id: v.vehicle_id,
+              unit: v.plate_number,
+              type: v.vehicle_type,
+              location: v.location,
+              eta: '—',
+              etaMinutesRaw: null,
+              score: 80,
+              lat: v.current_lat,
+              lng: v.current_lng,
+              reasoning: 'Manually selected by dispatcher',
+            }],
+            reasons: ['Manually selected by dispatcher, overriding AI recommendation'],
+          })
+          setIsUnitsModalOpen(false)
+        }}
       />
     </div>
   )

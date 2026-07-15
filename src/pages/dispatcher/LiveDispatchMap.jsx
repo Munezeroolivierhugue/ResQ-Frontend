@@ -16,6 +16,7 @@ import { listVehicles } from '../../api/vehicles'
 import { listDistricts } from '../../api/districts'
 import { createDispatch } from '../../api/dispatches'
 import SearchableSelect from '../../components/ui/SearchableSelect'
+import { formatIncidentType } from '../../utils/incidentTypeLabels'
 import 'leaflet/dist/leaflet.css'
 
 const SEV_COLOR    = { critical: '#E8354A', high: '#F07820', medium: '#D4A017', low: '#3DAA6A' }
@@ -119,8 +120,13 @@ function AssignUnitModal({ unit, incidents, onClose, onAssigned }) {
       await createDispatch({
         incidentId: incident.incident_id,
         vehicleId: unit.vehicle_id,
+        responderId: null,
         aiRecommended: false,
         overridden: false,
+        overrideReason: null,
+        confidence: null,
+        etaMinutes: null,
+        immediate: false,
       })
       onAssigned(unit, incident)
     } catch (err) {
@@ -175,7 +181,7 @@ function AssignUnitModal({ unit, incidents, onClose, onAssigned }) {
                 {inc.incident_ref}
               </span>
               <span className="text-[13px] text-(--text-primary) flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
-                {inc.incident_type} · {inc.district ?? inc.address ?? '—'}
+                {formatIncidentType(inc.incident_type)} · {inc.district ?? inc.address ?? '—'}
               </span>
               <span className="text-[11px] text-(--text-muted) shrink-0 uppercase">{inc.status}</span>
             </button>
@@ -286,6 +292,15 @@ export default function LiveDispatchMap() {
   const [showImmediateModal, setShowImmediateModal] = useState(false)
   const [incidents, setIncidents] = useState([])
   const [vehicles, setVehicles] = useState([])
+  // Separate from `vehicles` (status=AVAILABLE only, used for the "Available
+  // Units" side panel and assignment flow — correct as-is). The map markers
+  // below were sourced from that same AVAILABLE-only list, so any unit
+  // dropped off the map the instant it was dispatched — a unit on scene
+  // (ambulance or police) became invisible to the dispatcher right when
+  // monitoring it matters most. The map needs every unit with a position,
+  // not just idle ones; its marker styling already differentiates
+  // available vs. busy (radius/opacity) — it just never received busy units.
+  const [allVehicles, setAllVehicles] = useState([])
   const [assignUnit, setAssignUnit] = useState(null)
   const [assignToast, setAssignToast] = useState(null)
 
@@ -297,6 +312,7 @@ export default function LiveDispatchMap() {
   useEffect(() => {
     listIncidents().then(setIncidents).catch(() => {})
     listVehicles({ status: 'AVAILABLE' }).then(setVehicles).catch(() => {})
+    listVehicles().then(setAllVehicles).catch(() => {})
     listDistricts().then(setAllDistricts).catch(() => {})
   }, [])
 
@@ -325,6 +341,7 @@ export default function LiveDispatchMap() {
     setTimeout(() => setAssignToast(null), 4000)
     // Refresh so the unit's status/positions reflect the new dispatch
     listVehicles({ status: 'AVAILABLE' }).then(setVehicles).catch(() => {})
+    listVehicles().then(setAllVehicles).catch(() => {})
     listIncidents().then(setIncidents).catch(() => {})
   }
 
@@ -403,7 +420,7 @@ export default function LiveDispatchMap() {
               className={theme === 'dark' ? 'map-dark-tiles' : ''}
             />
             <RwandaBoundsEnforcer />
-            {vehicles.filter(u => u.status !== 'offline' && u.current_lat && u.current_lng).map(unit => (
+            {allVehicles.filter(u => u.status !== 'offline' && u.current_lat && u.current_lng).map(unit => (
               <CircleMarker
                 key={unit.vehicle_id}
                 center={[unit.current_lat, unit.current_lng]}

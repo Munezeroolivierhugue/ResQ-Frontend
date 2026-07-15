@@ -29,6 +29,7 @@ export async function startShift(body) {
   const payload = {
     userId: body.user_id,
     districtId: body.district_id,
+    vehicleId: body.vehicle_id,
     shiftStart: body.shift_start ?? new Date().toISOString(),
     roleOnShift: body.role_on_shift,
   }

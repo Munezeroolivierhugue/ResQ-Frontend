@@ -10,6 +10,8 @@ function transform(v) {
     agency_name: v.agencyName,
     station_id: v.stationId,
     station_name: v.stationName,
+    station_lat: v.stationLat,
+    station_lng: v.stationLng,
     district_id: v.districtId,
     district_name: v.districtName,
     status: (v.status ?? 'offline').toLowerCase(),

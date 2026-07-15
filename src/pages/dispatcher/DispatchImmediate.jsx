@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { MapContainer, TileLayer, CircleMarker, Tooltip } from "react-leaflet";
-import { Zap, MapPin, Route, Users, Check, ChevronDown } from "lucide-react";
+import { Zap, MapPin, Route, Users, Check } from "lucide-react";
 import { useThemeStore } from "../../store/themeStore";
 import RwandaBoundsEnforcer from "../../components/map/RwandaBoundsEnforcer";
 import {
@@ -13,18 +13,32 @@ import StatusBadge from "../../components/dispatcher/StatusBadge";
 import { useNotificationsStore } from "../../store/notificationsStore";
 import DispatchImmediateHeader from "../../components/dispatcher/DispatchImmediateHeader";
 import DispatchImmediateTypeStep from "../../components/dispatcher/DispatchImmediateTypeStep";
+import DispatchImmediateLocationStep from "../../components/dispatcher/DispatchImmediateLocationStep";
 import {
-  getImmediateIncident,
-  mockNearestUnits,
   mockImmediateAssessment,
-  getAvailableUnitsForMap,
   mockDispatchCallTranscript,
   detectIncidentTypeFromTranscript,
 } from "../../data/mockDispatchImmediateData";
-import { getIncident, listIncidents } from "../../api/incidents";
+import { createIncident } from "../../api/incidents";
 import { listVehicles } from "../../api/vehicles";
 import { createDispatch } from "../../api/dispatches";
+import { formatIncidentType } from "../../utils/incidentTypeLabels";
 import "leaflet/dist/leaflet.css";
+
+// The type grid (DispatchImmediateTypeStep) uses its own scenario ids
+// ("armed-robbery", "active-shooting", ...) for fast recognition — these
+// need mapping onto the backend's actual incident-type codes before an
+// incident can be created.
+const IMMEDIATE_TYPE_TO_BACKEND_CODE = {
+  "armed-robbery": "SECURITY",
+  "active-shooting": "SECURITY",
+  "structure-fire": "FIRE",
+  "medical-emergency": "MEDICAL",
+  "traffic-accident": "RTA",
+  "public-disturbance": "SECURITY",
+  assault: "SECURITY",
+  "other-critical": "OTHER",
+};
 
 // Map a real vehicle from the API to the shape this UI expects
 function vehicleToUnit(v, incLat, incLng) {
@@ -42,6 +56,10 @@ function vehicleToUnit(v, incLat, incLng) {
     type: v.vehicle_type ?? "Vehicle",
     distance: `${distKm.toFixed(1)} km`,
     eta: `~${etaMin} min`,
+    // Kept alongside the formatted `eta` string so the dispatch payload can
+    // use the real number directly instead of re-parsing it back out of a
+    // "~12 min" string with a digit-stripping regex.
+    etaMinutesRaw: etaMin,
     status: "AVAILABLE",
     lat,
     lng,
@@ -55,7 +73,7 @@ function incidentToBase(inc) {
   return {
     id: inc.incident_ref ?? inc.incident_id,
     incident_id: inc.incident_id,
-    type: inc.incident_type ?? "Emergency",
+    type: formatIncidentType(inc.incident_type) ?? "Emergency",
     location:
       [inc.district, inc.sector, inc.address].filter(Boolean).join(", ") ||
       "Unknown location",
@@ -64,12 +82,11 @@ function incidentToBase(inc) {
     reportedBy: inc.caller_id
       ? `Caller ${inc.caller_id.slice(0, 6)}`
       : "Anonymous",
-    description: `${inc.incident_type ?? "Incident"} reported in ${inc.district ?? "district"}`,
+    description: `${formatIncidentType(inc.incident_type) ?? "Incident"} reported in ${inc.district ?? "district"}`,
   };
 }
 
 export default function DispatchImmediate() {
-  const { incidentId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const { theme } = useThemeStore();
@@ -77,75 +94,12 @@ export default function DispatchImmediate() {
     (state) => state.addNotification,
   );
 
-  // Real data state
-  const [realIncident, setRealIncident] = useState(null);
-  const [nearestUnits, setNearestUnits] = useState(null); // null = not yet loaded
-  const [loadingData, setLoadingData] = useState(true);
-
-  // Fallback mock incident (used if API fails or incidentId is mock)
-  const mockBaseIncident = useMemo(
-    () => getImmediateIncident(incidentId),
-    [incidentId],
-  );
-
-  // Load real incident + available vehicles on mount
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      setLoadingData(true);
-      try {
-        // Fetch incident — by ID if provided and looks like a UUID, else first RECEIVED
-        let inc = null;
-        const looksLikeUuid =
-          incidentId && incidentId.includes("-") && incidentId.length > 30;
-        if (looksLikeUuid) {
-          inc = await getIncident(incidentId).catch(() => null);
-        }
-        if (!inc) {
-          const list = await listIncidents({ status: "RECEIVED" }).catch(
-            () => [],
-          );
-          inc = list[0] ?? null;
-        }
-        if (!cancelled && inc) setRealIncident(inc);
-
-        // Fetch available vehicles
-        const vehicles = await listVehicles({ status: "AVAILABLE" }).catch(
-          () => [],
-        );
-        if (!cancelled && vehicles.length > 0) {
-          const incLat = inc?.lat ?? -1.9441;
-          const incLng = inc?.lng ?? 30.0619;
-          // Sort by proximity and take top 3
-          const units = vehicles
-            .map((v) => vehicleToUnit(v, incLat, incLng))
-            .sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance))
-            .slice(0, 3);
-          setNearestUnits(units);
-        }
-      } catch {
-        // Silently fall back to mock
-      } finally {
-        if (!cancelled) setLoadingData(false);
-      }
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [incidentId]);
-
-  // Derived: use real data when available, otherwise fall back to mock
-  const units =
-    nearestUnits && nearestUnits.length > 0 ? nearestUnits : mockNearestUnits;
-  const baseIncident = realIncident
-    ? incidentToBase(realIncident)
-    : mockBaseIncident;
-
-  // Pre-select type when navigating from LiveDispatchMap IMMEDIATE DISPATCH button
+  // Pre-select type when navigating from LiveDispatchMap's IMMEDIATE DISPATCH
+  // button — location is never known at this point, so the flow always goes
+  // through select-location next, whether or not a type was pre-picked.
   const immediateTypeFromState = location.state?.immediateType;
   const [step, setStep] = useState(
-    immediateTypeFromState ? "dispatch" : "select-type",
+    immediateTypeFromState ? "select-location" : "select-type",
   );
   const [selectedType, setSelectedType] = useState(() => {
     if (!immediateTypeFromState) return null;
@@ -158,19 +112,70 @@ export default function DispatchImmediate() {
       }),
     };
   });
+
+  // Real data state — this incident is CREATED from the dispatcher's own
+  // type+location pick (see handleLocationConfirm), never guessed from
+  // whatever else happens to exist in the system. Previously this screen
+  // grabbed the first RECEIVED-status incident (or a hardcoded mock) and
+  // used ITS coordinates — a dispatcher had no way to know where the
+  // "nearest units" distance/ETA numbers were even being measured from.
+  const [realIncident, setRealIncident] = useState(null);
+  const [creatingIncident, setCreatingIncident] = useState(false);
+  const [createError, setCreateError] = useState(null);
+  const [nearestUnits, setNearestUnits] = useState(null); // null = not yet loaded
+
+  const handleLocationConfirm = async (picked) => {
+    setCreatingIncident(true);
+    setCreateError(null);
+    try {
+      const inc = await createIncident({
+        incidentType: IMMEDIATE_TYPE_TO_BACKEND_CODE[selectedType?.id] ?? "OTHER",
+        callerPhone: "unknown",
+        districtId: picked.districtId,
+        latitude: picked.lat,
+        longitude: picked.lng,
+        sector: picked.sector || null,
+        landmark: picked.address || null,
+        finalSeverity: "CRITICAL",
+      });
+      setRealIncident(inc);
+
+      const vehicles = await listVehicles({ status: "AVAILABLE" }).catch(() => []);
+      if (vehicles.length > 0) {
+        const units = vehicles
+          .map((v) => vehicleToUnit(v, inc.lat, inc.lng))
+          .sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance))
+          .slice(0, 6);
+        setNearestUnits(units);
+      } else {
+        setNearestUnits([]);
+      }
+      setStep("dispatch");
+    } catch {
+      setCreateError("Could not create the incident — check your connection and try again.");
+    } finally {
+      setCreatingIncident(false);
+    }
+  };
+
+  const units = nearestUnits ?? [];
+  const baseIncident = realIncident ? incidentToBase(realIncident) : null;
+
   const [elapsed, setElapsed] = useState(227);
   const [omNotified, setOmNotified] = useState(false);
-  const [selectedUnitId, setSelectedUnitId] = useState(null); // set after units load
+  const [selectedUnitIds, setSelectedUnitIds] = useState([]); // multi-select
   const [dispatched, setDispatched] = useState(false);
-  const [showOverride, setShowOverride] = useState(false);
   const [dispatchTime, setDispatchTime] = useState("");
+  const [dispatchedUnits, setDispatchedUnits] = useState([]);
 
-  // Set default selected unit once units are available
-  useEffect(() => {
-    if (units.length > 0 && !selectedUnitId) {
-      setSelectedUnitId(units[0].id);
-    }
-  }, [units, selectedUnitId]);
+  const toggleUnit = (id) => {
+    setSelectedUnitIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  };
+  const toggleSelectAll = () => {
+    setSelectedUnitIds((prev) => (prev.length === units.length ? [] : units.map((u) => u.id)));
+  };
 
   const detectedTypeId = useMemo(
     () => detectIncidentTypeFromTranscript(mockDispatchCallTranscript),
@@ -197,17 +202,6 @@ export default function DispatchImmediate() {
     return () => clearTimeout(t);
   }, []);
 
-  if (!loadingData && !baseIncident) {
-    return (
-      <div className="portal-page text-(--text-secondary)">
-        Incident not found.{" "}
-        <Link to="/dispatcher" className="text-(--accent)">
-          Return to map
-        </Link>
-      </div>
-    );
-  }
-
   const handleTypeSelect = (type) => {
     const now = new Date();
     setSelectedType({
@@ -218,21 +212,23 @@ export default function DispatchImmediate() {
         second: "2-digit",
       }),
     });
-    setStep("dispatch");
+    setStep("select-location");
   };
 
-  const selectedUnit =
-    units.find((u) => u.id === selectedUnitId) ||
-    units[0] ||
-    mockNearestUnits[0];
+  const selectedUnits = units.filter((u) => selectedUnitIds.includes(u.id));
+  const selectedUnit = selectedUnits[0] ?? null;
   const unitLabel =
-    selectedUnit?.id === units[0]?.id
-      ? selectedUnit?.vehicle_id
+    selectedUnits.length > 1
+      ? `${selectedUnits.length} units selected`
+      : selectedUnit
         ? `${selectedUnit.id} — ${selectedUnit.type}`
-        : mockImmediateAssessment.recommendedLabel
-      : `${selectedUnit?.id} — ${selectedUnit?.type}`;
+        : mockImmediateAssessment.recommendedLabel;
 
+  // Dispatches every currently-selected unit at once — a dispatcher can pick
+  // one, several, or all of them (via "Select all") and send them together
+  // in a single action, since the entire point of this screen is speed.
   const handleDispatch = async () => {
+    if (selectedUnits.length === 0) return;
     const now = new Date();
     const timeStr = now.toLocaleTimeString("en-GB", {
       hour: "2-digit",
@@ -240,27 +236,49 @@ export default function DispatchImmediate() {
       second: "2-digit",
     });
     setDispatchTime(timeStr);
+    setDispatchedUnits(selectedUnits);
     setDispatched(true);
 
-    // Post real dispatch if we have real IDs
     const realIncidentId = realIncident?.incident_id;
-    const realVehicleId = selectedUnit?.vehicle_id;
-    if (realIncidentId && realVehicleId) {
-      createDispatch({
-        incidentId: realIncidentId,
-        vehicleId: realVehicleId,
-        aiRecommended: false,
-        overridden: false,
-        immediate: true,
-        etaMinutes: parseInt(selectedUnit.eta?.replace(/\D/g, "")) || null,
-      }).catch(() => {});
+    if (realIncidentId) {
+      const results = await Promise.allSettled(
+        selectedUnits
+          .filter((u) => u.vehicle_id)
+          .map((u) =>
+            createDispatch({
+              incidentId: realIncidentId,
+              vehicleId: u.vehicle_id,
+              responderId: null,
+              aiRecommended: false,
+              overridden: false,
+              overrideReason: null,
+              confidence: null,
+              immediate: true,
+              etaMinutes: u.etaMinutesRaw ?? null,
+            }),
+          ),
+      );
+      const failedUnits = selectedUnits.filter((_, i) => results[i]?.status === "rejected");
+      if (failedUnits.length > 0) {
+        addNotification({
+          id: `dispatch-imm-failed-${Date.now()}`,
+          type: "immediate_dispatch_failed",
+          title: `Dispatch of ${failedUnits.map((u) => u.id).join(", ")} did not save`,
+          message: `The immediate dispatch shown at ${timeStr} was not recorded by the backend for these units. Re-confirm their assignment.`,
+          time: now.toISOString(),
+          read: false,
+          target_role: "DISPATCHER",
+          is_immediate: true,
+          ai_recommended: false,
+        });
+      }
     }
 
     addNotification({
       id: `dispatch-imm-${Date.now()}`,
       type: "immediate_dispatch",
-      title: `${selectedUnit?.id} dispatched — ${incident?.type ?? "Immediate"}`,
-      message: `Immediate dispatch confirmed at ${timeStr}. ETA ${selectedUnit?.eta}. Location: ${incident?.location ?? "Unknown"}.`,
+      title: `${selectedUnits.map((u) => u.id).join(", ")} dispatched — ${incident?.type ?? "Immediate"}`,
+      message: `Immediate dispatch confirmed at ${timeStr} for ${selectedUnits.length} unit${selectedUnits.length > 1 ? "s" : ""}. Location: ${incident?.location ?? "Unknown"}.`,
       time: now.toISOString(),
       read: false,
       target_role: "OPERATIONS_MANAGER",
@@ -269,10 +287,7 @@ export default function DispatchImmediate() {
     });
   };
 
-  const mapUnits =
-    nearestUnits && nearestUnits.length > 0
-      ? nearestUnits.map((u) => ({ id: u.id, lat: u.lat, lng: u.lng }))
-      : getAvailableUnitsForMap();
+  const mapUnits = units.map((u) => ({ id: u.id, lat: u.lat, lng: u.lng }));
 
   return (
     <div
@@ -283,7 +298,7 @@ export default function DispatchImmediate() {
     >
       <DispatchImmediateHeader
         elapsed={elapsed}
-        incidentId={baseIncident.id}
+        incidentId={baseIncident?.id ?? "NEW"}
         omNotified={omNotified}
       />
 
@@ -292,6 +307,21 @@ export default function DispatchImmediate() {
           detectedTypeId={detectedTypeId}
           onSelect={handleTypeSelect}
         />
+      )}
+
+      {step === "select-location" && (
+        <>
+          <DispatchImmediateLocationStep
+            selectedType={selectedType}
+            onConfirm={handleLocationConfirm}
+          />
+          {creatingIncident && (
+            <p className="text-center text-[13px] text-(--text-muted) pb-4">Creating incident…</p>
+          )}
+          {createError && (
+            <p className="text-center text-[13px] pb-4" style={{ color: "var(--status-critical)" }}>{createError}</p>
+          )}
+        </>
       )}
 
       {step === "dispatch" && incident && selectedType && (
@@ -388,54 +418,67 @@ export default function DispatchImmediate() {
             </div>
 
             <div className="dispatcher-surface p-4">
-              <div
-                className="text-[11px] font-bold uppercase tracking-wider text-(--text-muted) mb-3"
-                style={{ fontFamily: "var(--font-mono)" }}
-              >
-                NEAREST AVAILABLE UNITS
+              <div className="flex items-center justify-between mb-3">
+                <div
+                  className="text-[11px] font-bold uppercase tracking-wider text-(--text-muted)"
+                  style={{ fontFamily: "var(--font-mono)" }}
+                >
+                  NEAREST AVAILABLE UNITS
+                </div>
+                {units.length > 0 && (
+                  <button
+                    type="button"
+                    className="text-[11px] font-semibold text-(--accent) bg-transparent border-none cursor-pointer p-0"
+                    onClick={toggleSelectAll}
+                  >
+                    {selectedUnitIds.length === units.length ? "Deselect all" : `Select all (${units.length})`}
+                  </button>
+                )}
               </div>
-              <div className="flex flex-col gap-2">
-                {units.map((unit) => (
-                  <label
-                    key={unit.id}
-                    className="flex items-center gap-3 p-2.5 rounded-lg border border-(--border-subtle) cursor-pointer hover:border-(--accent) transition-colors"
-                    style={{
-                      background:
-                        selectedUnitId === unit.id
+              {units.length === 0 ? (
+                <p className="text-[12px] text-(--text-muted) m-0">No available units found near this location.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {units.map((unit) => (
+                    <label
+                      key={unit.id}
+                      className="flex items-center gap-3 p-2.5 rounded-lg border border-(--border-subtle) cursor-pointer hover:border-(--accent) transition-colors"
+                      style={{
+                        background: selectedUnitIds.includes(unit.id)
                           ? "var(--accent-ghost)"
                           : "var(--bg-input)",
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="nearest-unit"
-                      checked={selectedUnitId === unit.id}
-                      onChange={() => setSelectedUnitId(unit.id)}
-                      className="accent-(--accent)"
-                    />
-                    <div className="flex-1 min-w-0 text-[13px]">
-                      <span
-                        className="font-bold text-(--accent) mr-1"
-                        style={{ fontFamily: "var(--font-mono)" }}
-                      >
-                        {unit.id}
-                      </span>
-                      <span className="text-(--text-secondary)">
-                        · {unit.type} · {unit.distance} ·{" "}
-                      </span>
-                      <span className="font-bold text-(--text-primary)">
-                        ETA {unit.eta}
-                      </span>
-                    </div>
-                    <StatusBadge
-                      label={unit.status}
-                      variant={
-                        unit.status === "AVAILABLE" ? "resolved" : "handover"
-                      }
-                    />
-                  </label>
-                ))}
-              </div>
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedUnitIds.includes(unit.id)}
+                        onChange={() => toggleUnit(unit.id)}
+                        className="accent-(--accent)"
+                      />
+                      <div className="flex-1 min-w-0 text-[13px]">
+                        <span
+                          className="font-bold text-(--accent) mr-1"
+                          style={{ fontFamily: "var(--font-mono)" }}
+                        >
+                          {unit.id}
+                        </span>
+                        <span className="text-(--text-secondary)">
+                          · {unit.type} · {unit.distance} ·{" "}
+                        </span>
+                        <span className="font-bold text-(--text-primary)">
+                          ETA {unit.eta}
+                        </span>
+                      </div>
+                      <StatusBadge
+                        label={unit.status}
+                        variant={
+                          unit.status === "AVAILABLE" ? "resolved" : "handover"
+                        }
+                      />
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -464,56 +507,32 @@ export default function DispatchImmediate() {
                 </span>
               </div>
               <div className="text-xl font-bold text-(--text-primary) mb-1">
-                {unitLabel}
+                {selectedUnits.length > 0 ? unitLabel : "No units selected"}
               </div>
-              <p className="text-[13px] text-(--text-secondary) m-0 mb-3">
-                Nearest unit · {selectedUnit.distance} · ETA {selectedUnit.eta}
-              </p>
-              <div className="flex flex-col gap-1.5 text-[13px] text-(--text-secondary) mb-2">
-                <span className="flex items-center gap-2">
-                  <Route size={14} className="text-(--accent) shrink-0" />
-                  Route: {selectedUnit?.route ?? mockImmediateAssessment.route}
-                </span>
-                <span className="flex items-center gap-2">
-                  <Users size={14} className="text-(--accent) shrink-0" />
-                  Crew: {selectedUnit?.crew ?? mockImmediateAssessment.crew}
-                </span>
-              </div>
-              <p className="text-[11px] text-(--text-muted) m-0">
-                Dispatcher-confirmed dispatch. Automated analysis bypassed for
-                life-critical response.
-              </p>
-            </div>
-
-            <div>
-              <button
-                type="button"
-                className="text-[12px] text-(--accent) bg-transparent border-none cursor-pointer flex items-center gap-1 font-semibold p-0"
-                onClick={() => setShowOverride((v) => !v)}
-              >
-                Select different unit
-                <ChevronDown
-                  size={14}
-                  className={showOverride ? "rotate-180" : ""}
-                />
-              </button>
-              {showOverride && (
-                <div className="dispatcher-surface p-3 mt-2 flex flex-col gap-2">
-                  {units.map((unit) => (
-                    <button
-                      key={unit.id}
-                      type="button"
-                      className="text-left text-[13px] px-2 py-1.5 rounded-lg border border-(--border) bg-(--bg-input) cursor-pointer hover:border-(--accent)"
-                      onClick={() => {
-                        setSelectedUnitId(unit.id);
-                        setShowOverride(false);
-                      }}
-                    >
-                      {unit.id} — {unit.type} · {unit.distance}
-                    </button>
-                  ))}
+              {selectedUnit && (
+                <p className="text-[13px] text-(--text-secondary) m-0 mb-3">
+                  {selectedUnits.length > 1
+                    ? `${selectedUnits.length} units checked in the list on the left`
+                    : `Nearest unit · ${selectedUnit.distance} · ETA ${selectedUnit.eta}`}
+                </p>
+              )}
+              {selectedUnits.length <= 1 && (
+                <div className="flex flex-col gap-1.5 text-[13px] text-(--text-secondary) mb-2">
+                  <span className="flex items-center gap-2">
+                    <Route size={14} className="text-(--accent) shrink-0" />
+                    Route: {selectedUnit?.route ?? mockImmediateAssessment.route}
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <Users size={14} className="text-(--accent) shrink-0" />
+                    Crew: {selectedUnit?.crew ?? mockImmediateAssessment.crew}
+                  </span>
                 </div>
               )}
+              <p className="text-[11px] text-(--text-muted) m-0">
+                Dispatcher-confirmed dispatch. Automated analysis bypassed for
+                life-critical response. Check units on the left to select one,
+                several, or all of them.
+              </p>
             </div>
 
             {!dispatched ? (
@@ -531,14 +550,22 @@ export default function DispatchImmediate() {
                     boxShadow:
                       "0 4px 24px color-mix(in srgb, var(--status-critical) 35%, transparent)",
                     fontFamily: "var(--font-display)",
+                    opacity: selectedUnits.length === 0 ? 0.5 : 1,
+                    cursor: selectedUnits.length === 0 ? "not-allowed" : "pointer",
                   }}
                   onClick={handleDispatch}
+                  disabled={selectedUnits.length === 0}
                 >
                   <Zap size={22} />
-                  DISPATCH NOW — {selectedUnit.id}
+                  {selectedUnits.length > 1
+                    ? `DISPATCH ${selectedUnits.length} UNITS NOW`
+                    : selectedUnit
+                      ? `DISPATCH NOW — ${selectedUnit.id}`
+                      : "SELECT A UNIT TO DISPATCH"}
                 </button>
                 <p className="text-[11px] text-(--text-muted) text-center m-0">
-                  Unit will receive immediate field order. Operations Manager
+                  Selected unit{selectedUnits.length !== 1 ? "s" : ""} will receive
+                  immediate field order{selectedUnits.length !== 1 ? "s" : ""}. Operations Manager
                   has been notified.
                 </p>
               </>
@@ -557,17 +584,17 @@ export default function DispatchImmediate() {
                   />
                   <div>
                     <div className="font-bold text-(--text-primary) text-[15px]">
-                      {selectedUnit.id} Dispatched — {dispatchTime}
+                      {dispatchedUnits.map((u) => u.id).join(", ")} Dispatched — {dispatchTime}
                     </div>
                     <p className="text-[13px] text-(--text-secondary) m-0 mt-1">
-                      Unit notified · ETA {selectedUnit.eta.replace("~", "")} ·
-                      OM alerted
+                      {dispatchedUnits.length} unit{dispatchedUnits.length !== 1 ? "s" : ""} notified · OM alerted
                     </p>
                   </div>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <Link
                     to="/dispatcher/active-incident"
+                    state={{ incident: realIncident }}
                     className="dispatcher-btn-primary flex-1 no-underline text-center"
                   >
                     Open Full Incident View

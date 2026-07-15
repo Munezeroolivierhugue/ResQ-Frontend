@@ -17,6 +17,7 @@ export default function MfaSetup() {
   const [verifying, setVerifying] = useState(false)
   const [success, setSuccess] = useState(false)
   const refs = useRef([])
+  const setupStarted = useRef(false)
 
   // Guard: redirect to login if not authenticated
   useEffect(() => {
@@ -27,15 +28,19 @@ export default function MfaSetup() {
 
   useEffect(() => {
     if (!getAccessToken()) return   // skip if not authenticated (redirect pending)
-    let cancelled = false
+    // StrictMode double-invokes this effect in dev; setupMfa() is not idempotent
+    // (it mints a new code + sends a new email every call), so guard against
+    // firing the request twice on the same mount. Unlike a `cancelled` flag tied
+    // to cleanup, this guard is never reset, so the one request that does fire
+    // is always allowed to update state when it resolves.
+    if (setupStarted.current) return
+    setupStarted.current = true
     setupMfa()
       .then((res) => {
-        if (cancelled) return
         setChallengeToken(res.challengeToken)
         setMessage(res.message || 'A 6-digit verification code has been sent to your email.')
       })
       .catch((err) => {
-        if (cancelled) return
         const status = err?.response?.status
         const msg = err?.response?.data?.message
         if (status === 503) {
@@ -44,8 +49,7 @@ export default function MfaSetup() {
           setError(msg || 'Failed to initiate MFA setup. Please try again.')
         }
       })
-      .finally(() => { if (!cancelled) setSetupLoading(false) })
-    return () => { cancelled = true }
+      .finally(() => { setSetupLoading(false) })
   }, [])
 
   const handleChange = (i, val) => {

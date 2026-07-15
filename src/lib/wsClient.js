@@ -11,6 +11,17 @@ const MAX_DELAY = 30000
 // and drained once onConnect fires.
 const _pendingSubs = []
 
+// onConnected callbacks from callers that arrive after the first connect()
+// call already created the client, but before the handshake finishes. Only
+// the very first caller's callback was ever wired into the Client's own
+// onConnect handler — every later caller's callback was silently dropped if
+// the client hadn't finished connecting yet at that exact synchronous
+// instant (near-guaranteed given real network handshake timing), so e.g.
+// notificationsStore.js and callChannelStore.js — both calling connect() at
+// module-load time — would race, and whichever lost never got its
+// subscriptions (like /topic/calls) set up at all.
+const _pendingOnConnected = []
+
 function _doSubscribe(topic, handler) {
   const sub = _client.subscribe(topic, (message) => {
     try {
@@ -24,8 +35,14 @@ function _doSubscribe(topic, handler) {
 
 export function connect(token, onConnected) {
   if (_client?.active) {
-    // Already activating/connected — call onConnected immediately if already up
-    if (_client.connected && onConnected) onConnected(_client)
+    if (_client.connected) {
+      // Already fully connected — call back immediately.
+      if (onConnected) onConnected(_client)
+    } else if (onConnected) {
+      // Still mid-handshake — queue it so it fires once onConnect below runs,
+      // instead of being silently dropped.
+      _pendingOnConnected.push(onConnected)
+    }
     return _client
   }
 
@@ -40,6 +57,9 @@ export function connect(token, onConnected) {
         setUnsub(_doSubscribe(topic, handler))
       })
       if (onConnected) onConnected(_client)
+      // Every other caller whose connect() arrived after this client was
+      // created but before this handshake completed.
+      _pendingOnConnected.splice(0).forEach((cb) => cb(_client))
     },
     onDisconnect: () => {
       _reconnectDelay = Math.min(_reconnectDelay * 2, MAX_DELAY)
@@ -75,6 +95,7 @@ export function disconnect() {
   _client = null
   _reconnectDelay = 1000
   _pendingSubs.length = 0
+  _pendingOnConnected.length = 0
 }
 
 export function publish(destination, body) {

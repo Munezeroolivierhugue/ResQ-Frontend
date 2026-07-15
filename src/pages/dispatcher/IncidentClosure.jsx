@@ -6,13 +6,16 @@ import SurfaceCard from '../../components/dispatcher/SurfaceCard'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
 import VerticalTimeline from '../../components/dispatcher/VerticalTimeline'
 import MediaAttachmentGrid from '../../components/dispatcher/MediaAttachmentGrid'
+import FieldReportCard from '../../components/dispatcher/FieldReportCard'
+import ClosureRecordCard from '../../components/dispatcher/ClosureRecordCard'
 import {
   FormSelect,
   FormTextarea,
   FormInput,
 } from '../../components/dispatcher/FormControls'
-import { listIncidents, createIncidentClosure } from '../../api/incidents'
-import { submitFieldReport, uploadAttachment } from '../../api/fieldReports'
+import { listIncidents, createIncidentClosure, getIncident } from '../../api/incidents'
+import { submitFieldReport, uploadAttachment, getReportForIncident, getClosureForIncident, listAttachments, attachmentUrl } from '../../api/fieldReports'
+import { formatIncidentType } from '../../utils/incidentTypeLabels'
 
 const DISPOSITION_OPTIONS = [
   { value: 'arrests', label: 'Arrest(s) made' },
@@ -22,16 +25,40 @@ const DISPOSITION_OPTIONS = [
   { value: 'no_action', label: 'No action required' },
 ]
 
+// Persists which incident this closure form is for across page refresh/back-
+// forward navigation — react-router's route `state` (the only thing this
+// page used to rely on) is lost on a hard refresh, which silently fell back
+// to "the first PENDING_REPORT incident found," often a stale/unrelated test
+// incident rather than the one the dispatcher was actually working on.
+const CLOSURE_INCIDENT_KEY = 'resq-closure-incident-id'
+
 export default function IncidentClosure() {
   const navigate = useNavigate()
   const { state: navState } = useLocation()
+  const storedIncidentId = navState?.incident ? null : sessionStorage.getItem(CLOSURE_INCIDENT_KEY)
   const [incident, setIncident] = useState(navState?.incident ?? null)
   const [loadingIncident, setLoadingIncident] = useState(!navState?.incident)
 
   useEffect(() => {
-    if (navState?.incident) return
+    if (navState?.incident) {
+      sessionStorage.setItem(CLOSURE_INCIDENT_KEY, navState.incident.incident_id)
+      return
+    }
+    if (storedIncidentId) {
+      getIncident(storedIncidentId)
+        .then((inc) => setIncident(inc))
+        .catch(() => sessionStorage.removeItem(CLOSURE_INCIDENT_KEY))
+        .finally(() => setLoadingIncident(false))
+      return
+    }
+    // Truly no context (fresh navigation, nothing in session) — last resort
+    // fallback to whatever's oldest pending, same as before.
     listIncidents({ status: 'PENDING_REPORT' })
-      .then((incs) => setIncident(incs[0] ?? null))
+      .then((incs) => {
+        const first = incs[0] ?? null
+        setIncident(first)
+        if (first) sessionStorage.setItem(CLOSURE_INCIDENT_KEY, first.incident_id)
+      })
       .catch(() => {})
       .finally(() => setLoadingIncident(false))
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -40,12 +67,81 @@ export default function IncidentClosure() {
   const [submitted, setSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState(null)
 
+  // The field responder's own submission — previously nothing on this page
+  // ever fetched or displayed it, so the dispatcher had no way to see what
+  // was actually reported from the scene before writing the formal closure.
+  const [fieldReport, setFieldReport] = useState(null)
+  const [fieldReportLoading, setFieldReportLoading] = useState(false)
+  const [fieldReportPhotos, setFieldReportPhotos] = useState([])
+  // If this incident was already closed (e.g. the dispatcher navigated back
+  // here to double-check what was submitted), show the final closure record
+  // read-only instead of leaving no trace of it anywhere on this page.
+  const [existingClosure, setExistingClosure] = useState(null)
+
   // Structured mode fields
   const [personsInvolved, setPersonsInvolved] = useState('')
   const [casualties, setCasualties] = useState('0')
   const [arrests, setArrests] = useState('0')
   const [finalDisposition, setFinalDisposition] = useState('scene_cleared')
   const [closureNotes, setClosureNotes] = useState('')
+  // "Save as draft" was a dead button — clicking it did nothing. Persist the
+  // in-progress form to localStorage per-incident so a dispatcher can leave
+  // this page mid-write (e.g. to check something on Active Incident) and
+  // come back to exactly what they'd typed.
+  const [draftSaved, setDraftSaved] = useState(false)
+  const draftKey = incident?.incident_id ? `resq-closure-draft-${incident.incident_id}` : null
+
+  useEffect(() => {
+    if (!draftKey) return
+    try {
+      const raw = localStorage.getItem(draftKey)
+      if (!raw) return
+      const draft = JSON.parse(raw)
+      if (draft.personsInvolved != null) setPersonsInvolved(draft.personsInvolved)
+      if (draft.casualties != null) setCasualties(draft.casualties)
+      if (draft.arrests != null) setArrests(draft.arrests)
+      if (draft.finalDisposition != null) setFinalDisposition(draft.finalDisposition)
+      if (draft.closureNotes != null) setClosureNotes(draft.closureNotes)
+    } catch { /* ignore corrupt draft */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey])
+
+  const handleSaveDraft = () => {
+    if (!draftKey) return
+    localStorage.setItem(draftKey, JSON.stringify({
+      personsInvolved, casualties, arrests, finalDisposition, closureNotes,
+    }))
+    setDraftSaved(true)
+    setTimeout(() => setDraftSaved(false), 2500)
+  }
+
+  useEffect(() => {
+    const incidentId = incident?.incident_id
+    if (!incidentId) { setExistingClosure(null); return }
+    getClosureForIncident(incidentId).then(setExistingClosure).catch(() => setExistingClosure(null))
+  }, [incident?.incident_id])
+
+  useEffect(() => {
+    const incidentId = incident?.incident_id
+    if (!incidentId) { setFieldReport(null); setFieldReportPhotos([]); return }
+    setFieldReportLoading(true)
+    getReportForIncident(incidentId)
+      .then((r) => {
+        setFieldReport(r)
+        if (r?.persons_involved != null) setPersonsInvolved(String(r.persons_involved))
+        // Photos the responder attached were uploaded successfully server-side
+        // but this page (and every other dispatcher screen) never fetched
+        // them — the "Media attachments" panel below always rendered an
+        // empty, hardcoded [] regardless of what was actually submitted.
+        if (r?.report_id) {
+          listAttachments(r.report_id).then(setFieldReportPhotos).catch(() => setFieldReportPhotos([]))
+        } else {
+          setFieldReportPhotos([])
+        }
+      })
+      .catch(() => { setFieldReport(null); setFieldReportPhotos([]) })
+      .finally(() => setFieldReportLoading(false))
+  }, [incident?.incident_id])
 
   // Manual upload state
   const [uploadedFile, setUploadedFile] = useState(null)
@@ -78,6 +174,8 @@ export default function IncidentClosure() {
   const handleStructuredClose = async () => {
     const ok = await submitClosure('dispatcher_portal')
     if (!ok) return
+    sessionStorage.removeItem(CLOSURE_INCIDENT_KEY)
+    if (draftKey) localStorage.removeItem(draftKey)
     setSubmitted(true)
     setTimeout(() => navigate('/dispatcher/shift-handover'), 1800)
   }
@@ -130,6 +228,8 @@ export default function IncidentClosure() {
     const ok = await submitClosure('manual_upload', fileNote ?? closureNotes)
     setUploading(false)
     if (!ok) return
+    sessionStorage.removeItem(CLOSURE_INCIDENT_KEY)
+    if (draftKey) localStorage.removeItem(draftKey)
     setSubmitted(true)
     setTimeout(() => navigate('/dispatcher/shift-handover'), 1800)
   }
@@ -171,7 +271,7 @@ export default function IncidentClosure() {
       <PageHeader
         breadcrumbCurrent="Incident report"
         title="Incident outcome & closure"
-        subtitle={`${incident.incident_ref} · ${incident.incident_type} · ${incident.address ?? incident.district ?? ''}`}
+        subtitle={`${incident.incident_ref} · ${formatIncidentType(incident.incident_type)} · ${incident.address ?? incident.district ?? ''}`}
         badges={<span className="dispatcher-eyebrow">Incident closure</span>}
       />
 
@@ -204,6 +304,30 @@ export default function IncidentClosure() {
           <CheckCircle size={16} />
           Incident closed — record written. Redirecting to shift handover…
         </div>
+      )}
+
+      {/* Field responder's submitted report — read-only reference for the dispatcher */}
+      {fieldReportLoading && (
+        <SurfaceCard className="mb-5" padding="p-4">
+          <p className="text-[12px] text-(--text-muted) m-0">Loading field responder&apos;s report…</p>
+        </SurfaceCard>
+      )}
+      {!fieldReportLoading && fieldReport && (
+        <SurfaceCard className="mb-5" padding="p-4 md:p-5">
+          <SectionTitle title="Field responder's report" className="mb-3" />
+          <FieldReportCard
+            fieldReport={fieldReport}
+            location={incident?.address ?? (incident?.district ? `${incident.district}${incident.sector ? ' / ' + incident.sector : ''}` : null)}
+          />
+        </SurfaceCard>
+      )}
+      {!fieldReportLoading && !fieldReport && (
+        <SurfaceCard className="mb-5" padding="p-4">
+          <p className="text-[12px] text-(--text-muted) m-0">
+            No field report has been submitted for this incident yet — you can still close it using structured entry
+            or an uploaded report below.
+          </p>
+        </SurfaceCard>
       )}
 
       {/* Mode switcher */}
@@ -288,21 +412,6 @@ export default function IncidentClosure() {
             style={{ fontFamily: 'var(--font-mono)' }}
           >
             data_source: <strong>dispatcher_portal</strong> · closed_by: Jean Bosco
-          </div>
-          <div className="dispatcher-form-actions">
-            <button
-              type="button"
-              onClick={handleStructuredClose}
-              disabled={submitted}
-              className="dispatcher-btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Lock size={16} />
-              Close incident
-            </button>
-            <button type="button" className="dispatcher-btn-ghost">
-              <Save size={14} />
-              Save as draft
-            </button>
           </div>
         </SurfaceCard>
       )}
@@ -404,9 +513,39 @@ export default function IncidentClosure() {
           <VerticalTimeline events={[]} />
         </SurfaceCard>
         <SurfaceCard padding="p-5 md:p-6">
-          <MediaAttachmentGrid items={[]} />
+          <MediaAttachmentGrid items={fieldReportPhotos.map((p) => ({
+            id: p.attachment_id,
+            image: p.file_type === 'IMAGE' ? attachmentUrl(p.file_url) : '',
+            label: p.file_type ?? 'File',
+            caption: p.caption ?? '',
+          }))} />
         </SurfaceCard>
       </div>
+
+      {existingClosure && (
+        <SurfaceCard className="mt-5" padding="p-5 md:p-6">
+          <SectionTitle title="Closure record" className="mb-4" />
+          <ClosureRecordCard closure={existingClosure} />
+        </SurfaceCard>
+      )}
+
+      {mode === 'structured' && !existingClosure && (
+        <div className="dispatcher-form-actions mt-5">
+          <button
+            type="button"
+            onClick={handleStructuredClose}
+            disabled={submitted}
+            className="dispatcher-btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Lock size={16} />
+            Close incident
+          </button>
+          <button type="button" className="dispatcher-btn-ghost" onClick={handleSaveDraft} disabled={submitted}>
+            <Save size={14} />
+            {draftSaved ? 'Draft saved ✓' : 'Save as draft'}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

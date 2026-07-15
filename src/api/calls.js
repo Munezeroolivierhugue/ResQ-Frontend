@@ -20,6 +20,11 @@ export async function listCalls(status) {
   return (data.data ?? data).map(transform)
 }
 
+export async function simulateCall() {
+  const { data } = await api.post('/api/calls/simulate')
+  return transform(data.data ?? data)
+}
+
 export async function claimCall(sessionId) {
   const { data } = await api.post(`/api/calls/${sessionId}/claim`)
   return transform(data.data ?? data)

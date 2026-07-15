@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Globe, FileText, Rocket, BadgeCheck, Siren, Clock, CheckCircle, AlertTriangle } from 'lucide-react'
+import { FileText, Rocket, BadgeCheck, Siren, Clock, CheckCircle, AlertTriangle } from 'lucide-react'
 import PageHeader from '../../components/dispatcher/PageHeader'
 import SurfaceCard from '../../components/dispatcher/SurfaceCard'
 import MetricCard from '../../components/dispatcher/MetricCard'
@@ -8,9 +8,11 @@ import SectionTitle from '../../components/dispatcher/SectionTitle'
 import DataTable from '../../components/dispatcher/DataTable'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import { FormTextarea } from '../../components/dispatcher/FormControls'
-import { getMyShifts, saveShiftNotes } from '../../api/shifts'
+import { getMyShifts, saveShiftNotes, startShift } from '../../api/shifts'
 import { listIncidents } from '../../api/incidents'
+import { getResponseTimeTarget } from '../../api/admin'
 import { getCurrentUser } from '../../utils/authSession'
+import { buildPdfHtml, openPdfWindow, sectionHtml, tableHtml } from '../../utils/pdfExport'
 
 function fmtDate(iso) {
   if (!iso) return '—'
@@ -38,14 +40,35 @@ export default function ShiftHandover() {
   const [shift, setShift] = useState(null)
   const [incidents, setIncidents] = useState([])
   const [loading, setLoading] = useState(true)
+  const [slaTargetMinutes, setSlaTargetMinutes] = useState(8)
   const currentUser = getCurrentUser()
 
   useEffect(() => {
+    getResponseTimeTarget().then(setSlaTargetMinutes).catch(() => {})
+  }, [])
+
+  useEffect(() => {
     setLoading(true)
-    Promise.allSettled([getMyShifts(), listIncidents()]).then(([shiftsResult, incsResult]) => {
+    Promise.allSettled([getMyShifts(), listIncidents()]).then(async ([shiftsResult, incsResult]) => {
       const shifts = shiftsResult.status === 'fulfilled' ? shiftsResult.value : []
       const incs   = incsResult.status === 'fulfilled'  ? incsResult.value  : []
-      const latest = shifts.sort((a, b) => new Date(b.shift_start) - new Date(a.shift_start))[0] ?? null
+      let latest = shifts.sort((a, b) => new Date(b.shift_start) - new Date(a.shift_start))[0] ?? null
+      // Dispatchers never had a shift-start action anywhere in the app (only
+      // field responders do, via "Go Available") — so this page always found
+      // zero shift records and "Save notes" stayed permanently disabled,
+      // meaning a handover summary could never actually be submitted or
+      // reach the district commander. Start one silently on first visit so
+      // the rest of this page's existing flow (which already assumes a
+      // shift exists) works the way it was designed to.
+      if (!latest && currentUser?.user_id) {
+        try {
+          latest = await startShift({
+            user_id: currentUser.user_id,
+            district_id: currentUser.district_id,
+            role_on_shift: currentUser.role ?? 'DISPATCHER',
+          })
+        } catch { /* non-fatal — page still works read-only */ }
+      }
       setShift(latest)
       if (latest?.handover_notes) setOfficerNote(latest.handover_notes)
       if (latest?.shift_start) {
@@ -60,7 +83,7 @@ export default function ShiftHandover() {
         setIncidents(incs.filter(i => i.call_time && new Date(i.call_time) >= startOfDay))
       }
     }).finally(() => setLoading(false))
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const resolved = incidents.filter(i => ['RESOLVED', 'resolved', 'CLOSED', 'closed'].includes(i.status)).length
   const critical = incidents.filter(i => i.severity === 'critical').length
@@ -102,6 +125,47 @@ export default function ShiftHandover() {
     return new Date(b.call_time ?? 0) - new Date(a.call_time ?? 0)
   })
 
+  const handleGeneratePdf = () => {
+    const generatedBy = currentUser?.full_name ?? currentUser?.email ?? 'Dispatcher'
+    const rows20 = sortedIncidents.slice(0, 20)
+    const tableSection = sectionHtml(
+      `Incident Log${sortedIncidents.length > 20 ? ` (first 20 of ${sortedIncidents.length})` : ''}`,
+      tableHtml(
+        ['Incident ID', 'Type', 'Time', 'Location', 'Status'],
+        rows20.map((r) => [
+          `<span style="font-family:monospace;font-weight:700">${r.incident_ref ?? '—'}</span>`,
+          r.incident_type ?? '—',
+          r.call_time ? new Date(r.call_time).toLocaleString() : '—',
+          r.district ?? r.address ?? '—',
+          r.status ?? '—',
+        ])
+      )
+    )
+    const notesSection = officerNote
+      ? sectionHtml('Commanding Officer Notes', `<p style="font-size:12px;line-height:1.6;white-space:pre-wrap">${officerNote}</p>`)
+      : ''
+
+    openPdfWindow(buildPdfHtml({
+      title: 'Shift Handover Summary',
+      subtitle: `${period}. Generated on ${generatedAt}.`,
+      reportType: 'HANDOVER REPORT',
+      idPrefix: 'HDO',
+      metaItems: [
+        { label: 'Dispatcher', value: generatedBy },
+        { label: 'Period', value: period },
+      ],
+      kpis: [
+        { label: 'Total Incidents', value: incidents.length, sub: 'This shift' },
+        { label: 'Resolved', value: resolved, sub: `${incidents.length ? Math.round((resolved / incidents.length) * 100) : 0}% of shift` },
+        { label: 'Critical', value: critical, sub: 'High-priority incidents' },
+        { label: 'Avg Response', value: avgResp != null ? `${avgResp} min` : 'N/A', sub: `Target: ${slaTargetMinutes} min` },
+      ],
+      sections: [tableSection, notesSection].filter(Boolean),
+      generatedBy,
+      generatedRole: 'Dispatcher',
+    }))
+  }
+
   return (
     <div className="portal-page dispatcher-page">
       <PageHeader
@@ -110,16 +174,10 @@ export default function ShiftHandover() {
         subtitle={`Comprehensive performance report for ${period}. Generated on ${generatedAt}.`}
         badges={<span className="dispatcher-eyebrow">Post-shift analysis</span>}
         actions={
-          <>
-            <button type="button" className="dispatcher-btn-ghost">
-              <Globe size={14} />
-              Review past shifts
-            </button>
-            <button type="button" className="dispatcher-btn-primary">
-              <FileText size={14} />
-              Generate handover PDF
-            </button>
-          </>
+          <button type="button" className="dispatcher-btn-primary" onClick={handleGeneratePdf}>
+            <FileText size={14} />
+            Generate handover PDF
+          </button>
         }
       />
 
@@ -127,7 +185,7 @@ export default function ShiftHandover() {
         <MetricCard icon={Siren} label="Total Incidents" value={loading ? '…' : incidents.length} hint="This shift" hintTone="neutral" />
         <MetricCard icon={CheckCircle} label="Resolved" value={loading ? '…' : resolved} hint={`${incidents.length ? Math.round((resolved / incidents.length) * 100) : 0}% of shift`} hintTone="positive" />
         <MetricCard icon={AlertTriangle} label="Critical" value={loading ? '…' : critical} hint="High-priority incidents" hintTone={critical > 0 ? 'critical' : 'neutral'} />
-        <MetricCard icon={Clock} label="Avg Response" value={loading ? '…' : (avgResp != null ? `${avgResp}m` : 'N/A')} hint="Target: 10 min" hintTone={avgResp != null && avgResp <= 10 ? 'positive' : 'critical'} />
+        <MetricCard icon={Clock} label="Avg Response" value={loading ? '…' : (avgResp != null ? `${avgResp}m` : 'N/A')} hint={`Target: ${slaTargetMinutes} min`} hintTone={avgResp != null && avgResp <= slaTargetMinutes ? 'positive' : 'critical'} />
       </div>
 
       <SurfaceCard className="mb-5" padding="p-0 overflow-hidden">

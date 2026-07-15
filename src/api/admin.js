@@ -20,6 +20,16 @@ export async function getSystemSettings() {
   return data.data ?? data
 }
 
+// The full settings set is SUPER_ADMIN-only, but any dispatcher-facing
+// screen showing "response time vs target" needs to read the admin-set SLA
+// target — every such screen previously hardcoded its own guess (8, 10...)
+// instead of the value actually configured in Admin Settings, so changing
+// the setting there never propagated anywhere.
+export async function getResponseTimeTarget() {
+  const { data } = await api.get('/api/settings/response-time-target')
+  return (data.data ?? data).responseTimeTargetMinutes
+}
+
 export async function saveSystemSettings(payload) {
   const { data } = await api.put('/api/admin/settings', payload)
   return data.data ?? data

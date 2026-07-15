@@ -159,24 +159,31 @@ export default function AdminUnits() {
   const [search, setSearch] = useState('')
   const [agencyFilter, setAgencyFilter] = useState('')
   const [districtFilter, setDistrictFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
   const [modal, setModal] = useState(null)
   const [page, setPage] = useState(1)
 
-  const load = () => {
-    setLoading(true)
+  // silent=true for the background poll — this page previously only fetched
+  // once on mount, so a unit's status change (e.g. dispatched) never showed
+  // up without a manual page reload. silent avoids re-showing the full-page
+  // "Loading units…" state on every poll tick.
+  const load = (silent = false) => {
+    if (!silent) setLoading(true)
     setError(null)
     // Auto-sync stale statuses silently, then reload
     api.post('/api/admin/vehicles/sync-statuses').catch(() => {})
     listVehicles()
       .then(setUnits)
-      .catch(() => setError('Failed to load units.'))
-      .finally(() => setLoading(false))
+      .catch(() => { if (!silent) setError('Failed to load units.') })
+      .finally(() => { if (!silent) setLoading(false) })
   }
 
   useEffect(() => {
     load()
     listAgencies().then(setAgencies).catch(() => {})
     listDistricts().then(setDistricts).catch(() => {})
+    const t = setInterval(() => load(true), 15000)
+    return () => clearInterval(t)
   }, [])
 
   const filtered = units.filter((u) => {
@@ -190,7 +197,8 @@ export default function AdminUnits() {
     const matchAgency = !agencyFilter || u.agency_id === agencyFilter
     const matchDistrict = !districtFilter ||
       (districtFilter === '__unassigned__' ? !u.district_id : u.district_id === districtFilter)
-    return matchSearch && matchAgency && matchDistrict
+    const matchStatus = !statusFilter || u.status === statusFilter
+    return matchSearch && matchAgency && matchDistrict && matchStatus
   })
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
@@ -237,6 +245,14 @@ export default function AdminUnits() {
           <option value="">All districts</option>
           <option value="__unassigned__">Unassigned</option>
           {districts.map((d) => <option key={d.district_id} value={d.district_id}>{d.name}</option>)}
+        </select>
+        <select
+          className="dispatcher-input h-9 text-[13px] min-w-[160px]"
+          value={statusFilter}
+          onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
+        >
+          <option value="">All statuses</option>
+          {Object.keys(STATUS_LABELS).map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
         </select>
         <span className="text-[12px] text-(--text-muted) ml-auto">
           {filtered.length} unit{filtered.length !== 1 ? 's' : ''}

@@ -13,7 +13,7 @@ function maskPhone(phone) {
 }
 
 export default function IncomingCallBanner() {
-  const { incomingCall, showIncomingBanner, answerCall, declineCall } = useCallChannelStore()
+  const { incomingCall, showIncomingBanner, answerCall, declineCall, expireCall } = useCallChannelStore()
   const navigate = useNavigate()
   const [elapsed, setElapsed] = useState(0)
   const intervalRef = useRef(null)
@@ -30,7 +30,7 @@ export default function IncomingCallBanner() {
       setElapsed((s) => {
         if (s + 1 >= TIMEOUT_S) {
           clearInterval(intervalRef.current)
-          declineCall()
+          expireCall()
           return s + 1
         }
         return s + 1
@@ -38,7 +38,7 @@ export default function IncomingCallBanner() {
     }, 1000)
 
     return () => clearInterval(intervalRef.current)
-  }, [showIncomingBanner, declineCall])
+  }, [showIncomingBanner, expireCall])
 
   if (!showIncomingBanner || !incomingCall) return null
 

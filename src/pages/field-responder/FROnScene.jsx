@@ -3,31 +3,49 @@ import { useNavigate } from 'react-router-dom'
 import { MapPin, AlertTriangle, Check, MessageSquare, FileText, Send, Mic, Square, Play } from 'lucide-react'
 import SeverityBanner from '../../components/field-responder/SeverityBanner'
 import BackupRequestModal from '../../components/field-responder/BackupRequestModal'
+import ConfirmModal from '../../components/field-responder/ConfirmModal'
 import { FR_QUICK_REPLIES } from '../../data/mockFieldResponderData'
 import { useFieldResponderStore } from '../../store/fieldResponderStore'
 import { fmtDuration } from '../../data/mockAudioCommsData'
 import { updateIncidentStatus } from '../../api/incidents'
 import { subscribe, publish, connect } from '../../lib/wsClient'
-import { getAccessToken, getCurrentUser } from '../../utils/authSession'
+import { getAccessToken, getCurrentUser, canFileFieldReports } from '../../utils/authSession'
+import { formatIncidentType } from '../../utils/incidentTypeLabels'
+
+// Zustand/useSyncExternalStore requires a selector to return a stable
+// reference when nothing changed — `assignment?.otherDispatches ?? []`
+// allocated a brand-new array on every render whenever assignment was null,
+// which React treats as "the store changed," triggering another render,
+// which allocates another new array, forever ("Maximum update depth
+// exceeded"). This was always latent but only actually fired once something
+// set assignment to null while this component was still mounted (e.g. a
+// non-police responder clearing an incident, which does exactly that before
+// navigating away).
+const EMPTY_DISPATCHES = []
 
 export default function FROnScene() {
   const navigate = useNavigate()
   const addVoiceMessageToStore = useFieldResponderStore((s) => s.addVoiceMessage)
   const clearIncident = useFieldResponderStore((s) => s.clearIncident)
+  const clearAssignmentLocal = useFieldResponderStore((s) => s.clearAssignmentLocal)
   const assignment    = useFieldResponderStore((s) => s.assignment)
   const incidentId    = useFieldResponderStore((s) => s.incidentId)
-  const otherDispatches = useFieldResponderStore((s) => s.assignment?.otherDispatches ?? [])
+  const otherDispatches = useFieldResponderStore((s) => s.assignment?.otherDispatches ?? EMPTY_DISPATCHES)
   const showToast = useFieldResponderStore((s) => s.showToast)
   const [backupOpen, setBackupOpen] = useState(false)
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
   const [draft, setDraft] = useState('')
   const [elapsed, setElapsed] = useState(504)
   const [chatMessages, setChatMessages] = useState([]) // real-time chat via WebSocket
-  // Subscribe to real-time chat channel for this incident
+  const dispatchId = assignment?.dispatch?.dispatch_id
+  // Scoped by dispatch_id (this responder's own unit-assignment), not
+  // incidentId — an incident-scoped topic would have shown every field
+  // responder assigned to a multi-unit incident the same shared thread.
   useEffect(() => {
-    if (!incidentId) return
+    if (!dispatchId) return
     const token = getAccessToken()
     connect(token)
-    const unsub = subscribe(`/topic/incidents/${incidentId}/chat`, (msg) => {
+    const unsub = subscribe(`/topic/dispatches/${dispatchId}/chat`, (msg) => {
       const now = new Date()
       const time = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
       setChatMessages((prev) => [...prev, {
@@ -40,7 +58,7 @@ export default function FROnScene() {
       }])
     })
     return unsub
-  }, [incidentId])
+  }, [dispatchId])
 
   // Audio comms state
   const [pttActive, setPttActive] = useState(false)
@@ -63,9 +81,9 @@ export default function FROnScene() {
   }
 
   const send = (text) => {
-    if (!text.trim()) return
+    if (!text.trim() || !dispatchId) return
     const user = getCurrentUser()
-    publish(`/app/chat/${incidentId}`, {
+    publish(`/app/chat/dispatch/${dispatchId}`, {
       text: text.trim(),
       senderName: user?.full_name ?? 'Field Responder',
       senderRole: 'FIELD_RESPONDER',
@@ -114,8 +132,10 @@ export default function FROnScene() {
 
   useEffect(() => () => { clearInterval(pttRef.current); clearInterval(playRef.current) }, [])
 
-  const handleClear = async () => {
-    if (!window.confirm('Submit field report before clearing incident?')) return
+  const handleClear = () => setClearConfirmOpen(true)
+
+  const confirmClear = async () => {
+    setClearConfirmOpen(false)
     if (incidentId) {
       try {
         await updateIncidentStatus(incidentId, 'RESOLVED')
@@ -123,13 +143,25 @@ export default function FROnScene() {
         // Continue even if status update fails — field report will set PENDING_REPORT
       }
     }
-    navigate('/field-responder/report')
+    // Non-police (non-RNP agency) responders don't file field reports —
+    // only RNP units do — so send them back to their assignment instead of
+    // a report page they have no access to. submitReport() (the police path)
+    // clears the store's stale incident/assignment state as part of
+    // completing the report; since this path skips the report entirely,
+    // clear it here instead so the assignment screen shows "no active
+    // assignment" rather than the incident that was just cleared.
+    if (canFileFieldReports()) {
+      navigate('/field-responder/report')
+    } else {
+      clearAssignmentLocal()
+      navigate('/field-responder/assignment')
+    }
   }
 
   const inc = assignment?.incident
   const a = {
     severity: inc?.severity ?? inc?.final_severity ?? 'medium',
-    type: inc?.incident_type ?? 'Incident',
+    type: formatIncidentType(inc?.incident_type) ?? 'Incident',
     location: inc?.district ?? inc?.address ?? 'Unknown location',
   }
 
@@ -173,7 +205,7 @@ export default function FROnScene() {
           <span className="fr-live-chip font-mono ml-auto">LIVE</span>
         </div>
         
-        <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-[#0f151c]">
+        <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-(--bg-base)">
           {chatMessages.length === 0 && (
             <p className="text-center text-[11px] text-(--text-muted) py-4">No messages yet. Start the conversation.</p>
           )}
@@ -188,9 +220,9 @@ export default function FROnScene() {
                   <div
                     className="max-w-[85%] rounded-2xl px-3.5 py-2.5 border shadow-sm relative"
                     style={{
-                      background: isSelf ? '#a2cc29' : 'transparent',
+                      background: isSelf ? '#a2cc29' : 'var(--bg-surface)',
                       color: isSelf ? '#000000' : 'var(--text-primary)',
-                      borderColor: isSelf ? '#a2cc29' : 'var(--border-light)',
+                      borderColor: isSelf ? '#a2cc29' : 'var(--border-subtle)',
                       borderBottomRightRadius: isSelf ? '4px' : '16px',
                       borderBottomLeftRadius: isSelf ? '16px' : '4px',
                     }}
@@ -214,14 +246,14 @@ export default function FROnScene() {
                   <div
                     className="max-w-[85%] rounded-3xl px-1.5 py-1.5 border shadow-sm flex items-center gap-2 relative"
                     style={{
-                      background: isSelf ? '#a2cc29' : 'transparent',
-                      borderColor: isSelf ? '#a2cc29' : 'var(--border-light)',
+                      background: isSelf ? '#a2cc29' : 'var(--bg-surface)',
+                      borderColor: isSelf ? '#a2cc29' : 'var(--border-subtle)',
                       borderBottomRightRadius: isSelf ? '6px' : '24px',
                       borderBottomLeftRadius: isSelf ? '24px' : '6px',
                       minWidth: '200px'
                     }}
                   >
-                    {m.isNew && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-(--status-critical) border border-[#0f151c]" />}
+                    {m.isNew && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-(--status-critical) border border-(--bg-base)" />}
                     <button
                       type="button"
                       className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-none transition-transform active:scale-95"
@@ -344,16 +376,26 @@ export default function FROnScene() {
         </div>
       </div>
 
-      <button
-        type="button"
-        className="dispatcher-btn-outline fr-report-btn"
-        onClick={() => navigate('/field-responder/report')}
-      >
-        <FileText size={18} />
-        Begin Field Report
-      </button>
+      {canFileFieldReports() && (
+        <button
+          type="button"
+          className="dispatcher-btn-outline fr-report-btn"
+          onClick={() => navigate('/field-responder/report')}
+        >
+          <FileText size={18} />
+          Begin Field Report
+        </button>
+      )}
 
       <BackupRequestModal open={backupOpen} onClose={() => setBackupOpen(false)} />
+      <ConfirmModal
+        open={clearConfirmOpen}
+        title="Clear Incident"
+        message={canFileFieldReports() ? 'Submit field report before clearing incident?' : 'Mark this incident as resolved?'}
+        confirmLabel={canFileFieldReports() ? 'Continue to Report' : 'Clear Incident'}
+        onConfirm={confirmClear}
+        onCancel={() => setClearConfirmOpen(false)}
+      />
     </div>
   )
 }

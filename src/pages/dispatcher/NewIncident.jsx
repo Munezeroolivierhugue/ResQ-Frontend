@@ -129,6 +129,7 @@ export default function NewIncident() {
   const [districts, setDistricts]                 = useState([])
   const [district, setDistrict]                   = useState('')
   const [districtError, setDistrictError]         = useState(false)
+  const [locationError, setLocationError]         = useState(false)
   const [sector, setSector]                       = useState('')
   const [streetAddress, setStreetAddress]         = useState('')
   const [notes, setNotes]                         = useState('')
@@ -188,6 +189,7 @@ export default function NewIncident() {
     setLocation(loc)
     setDetectedLocation(loc)
     setDuplicateAction(null)
+    setLocationError(false)
   }, [])
 
   // ── Address found from map search (street/landmark geocode) ─────────────────
@@ -328,6 +330,12 @@ export default function NewIncident() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!district) { setDistrictError(true); return }
+    // A dispatcher confirming district/sector by typing alone (without ever
+    // placing the map pin) leaves location.lat/lng null — the incident then
+    // persists with no coordinates, and every downstream consumer (field-
+    // responder navigation map, dispatcher's own Active Incident map) has
+    // nothing real to show and silently falls back to a default location.
+    if (location?.lat == null || location?.lng == null) { setLocationError(true); return }
     if (severityOverrideActive && !overrideReason.trim()) { setOverrideReasonError(true); return }
     setSubmitting(true)
     setSubmitError(null)
@@ -349,6 +357,12 @@ export default function NewIncident() {
       landmark:       streetAddress || location?.landmark || null,
       occurrenceTime: occurrenceTime || null,
       peopleCount:    peopleCount || 1,
+      // Previously dropped entirely — the backend had no way to know the
+      // client-computed severity, so it persisted as NULL and every later
+      // view (Active Incident, live map) fell back to a hardcoded "medium".
+      finalSeverity:         effectiveSeverity || null,
+      severityOverridden:    severityOverrideActive,
+      severityOverrideReason: severityOverrideActive ? (overrideReason || null) : null,
     }
 
     let createdIncident = null
@@ -940,6 +954,12 @@ export default function NewIncident() {
                 return d?.lat && d?.lng ? [d.lat, d.lng] : null
               })()}
             />
+            {locationError && (
+              <p className="m-0" style={{ fontSize: '11px', color: 'var(--status-critical)' }}>
+                Pin the incident location on the map before submitting — field responders and
+                the live map rely on it to show the correct place.
+              </p>
+            )}
 
             {/* People involved */}
             <IntakePanel className="p-4 md:p-5 shrink-0">
@@ -967,9 +987,17 @@ export default function NewIncident() {
                   <button
                     type="button"
                     onClick={() => {
+                      // toISOString() converts to UTC before formatting — Kigali
+                      // is UTC+2, so this was always writing a time 2 hours
+                      // behind the real local time into a <input
+                      // type="datetime-local"> field, which expects (and
+                      // renders) local wall-clock time with no timezone
+                      // conversion at all. Build the string from local
+                      // getters instead.
                       const now = new Date()
-                      now.setSeconds(0, 0)
-                      setOccurrenceTime(now.toISOString().slice(0, 16))
+                      const pad = (n) => String(n).padStart(2, '0')
+                      const local = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`
+                      setOccurrenceTime(local)
                     }}
                     className="text-[11px] font-semibold px-2 py-0.5 rounded border cursor-pointer shrink-0"
                     style={{ borderColor: 'var(--accent)', color: 'var(--accent)', background: 'var(--accent-ghost)', fontFamily: 'var(--font-display)' }}

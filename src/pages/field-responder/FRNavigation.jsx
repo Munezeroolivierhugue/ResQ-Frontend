@@ -7,6 +7,8 @@ import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
 import { RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../components/map/rwandaConstants'
 import FieldResponderProgressStrip from '../../components/field-responder/FieldResponderProgressStrip'
 import { useFieldResponderStore } from '../../store/fieldResponderStore'
+import { formatIncidentType } from '../../utils/incidentTypeLabels'
+import { getVehicle } from '../../api/vehicles'
 import 'leaflet/dist/leaflet.css'
 
 const MAP_HEIGHT = '100vh'
@@ -21,12 +23,31 @@ const MARKER_HEX = {
   route: '#2563eb',
 }
 
-function buildRoutePoints(from, to) {
+function buildStraightLinePoints(from, to) {
   const steps = 6
   return Array.from({ length: steps + 1 }, (_, i) => {
     const t = i / steps
     return [from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t]
   })
+}
+
+// Was drawing a pure straight line ("as the crow flies") between officer and
+// incident regardless of actual streets — nothing like a real turn-by-turn
+// route. OSRM's public demo router returns an actual road-following geometry
+// plus real distance/duration; fall back to the straight line (and the
+// haversine estimate) only if the request fails, so the map never goes blank.
+async function fetchRoadRoute(from, to, signal) {
+  const url = `https://router.project-osrm.org/route/v1/driving/${from[1]},${from[0]};${to[1]},${to[0]}?overview=full&geometries=geojson`
+  const res = await fetch(url, { signal })
+  if (!res.ok) throw new Error('routing service unavailable')
+  const data = await res.json()
+  const route = data?.routes?.[0]
+  if (!route?.geometry?.coordinates?.length) throw new Error('no route found')
+  return {
+    points: route.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
+    distanceKm: route.distance / 1000,
+    durationMin: route.duration / 60,
+  }
 }
 
 function MapReady({ points }) {
@@ -66,20 +87,52 @@ export default function FRNavigation() {
   const navigate    = useNavigate()
   const markOnScene = useFieldResponderStore((s) => s.markOnScene)
   const assignment  = useFieldResponderStore((s) => s.assignment)
+  const vehicleId   = useFieldResponderStore((s) => s.vehicleId)
   const mapRef = useRef(null)
+  const hasRealFixRef = useRef(false)
 
   const inc = assignment?.incident ?? null
 
-  // Officer position — prefer browser geolocation, fallback to Kigali center
+  // Officer position — prefer browser geolocation, fallback to Kigali center.
+  // Was a one-shot getCurrentPosition() call, so the marker/route was frozen
+  // at wherever the officer was standing when the page first mounted and
+  // never reflected actual movement afterward. watchPosition keeps it live.
   const [officerCoords, setOfficerCoords] = useState(KIGALI_CENTER)
   useEffect(() => {
     if (!navigator.geolocation) return
-    navigator.geolocation.getCurrentPosition(
-      pos => setOfficerCoords([pos.coords.latitude, pos.coords.longitude]),
+    const watchId = navigator.geolocation.watchPosition(
+      pos => { hasRealFixRef.current = true; setOfficerCoords([pos.coords.latitude, pos.coords.longitude]) },
       () => {},
-      { enableHighAccuracy: true, timeout: 5000 },
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 10000 },
     )
+    return () => navigator.geolocation.clearWatch(watchId)
   }, [])
+
+  // Seed the starting marker from the assigned vehicle's own known position
+  // (the same current_lat/current_lng the dispatcher's map and Admin Unit
+  // Management already show for this vehicle) instead of a generic
+  // city-wide default. On a test/demo device, browser geolocation can
+  // resolve somewhere that has nothing to do with which district the
+  // vehicle actually operates in, so without this the map opened centered
+  // in the wrong place until a live GPS fix happened to arrive.
+  useEffect(() => {
+    if (!vehicleId) return
+    getVehicle(vehicleId)
+      .then((v) => {
+        if (hasRealFixRef.current) return // a live geolocation fix already won
+        // Prefer the vehicle's station coordinates (fixed, always correct
+        // for its assigned district) over current_lat/current_lng — that
+        // field is live-tracked GPS and can be stale/wrong between shifts
+        // (e.g. last pinged from an unrelated location before this shift
+        // started), which is exactly what showed the wrong district here.
+        if (v.station_lat != null && v.station_lng != null) {
+          setOfficerCoords([v.station_lat, v.station_lng])
+        } else if (v.current_lat != null && v.current_lng != null) {
+          setOfficerCoords([v.current_lat, v.current_lng])
+        }
+      })
+      .catch(() => {})
+  }, [vehicleId])
 
   // Incident position — use real if available, else Kigali center as last resort
   const incidentLat = inc?.lat ?? KIGALI_CENTER[0]
@@ -87,16 +140,8 @@ export default function FRNavigation() {
 
   const officerPos  = useMemo(() => officerCoords, [officerCoords])
   const incidentPos = useMemo(() => [incidentLat, incidentLng], [incidentLat, incidentLng])
-  const routePoints = useMemo(
-    () => buildRoutePoints(officerPos, incidentPos),
-    [officerPos, incidentPos],
-  )
-  const fitPoints = useMemo(
-    () => [...routePoints, officerPos, incidentPos],
-    [routePoints, officerPos, incidentPos],
-  )
 
-  const distanceKm = useMemo(() => {
+  const straightLineKm = useMemo(() => {
     const toRad = d => d * Math.PI / 180
     const [lat1, lng1] = officerPos
     const [lat2, lng2] = incidentPos
@@ -104,10 +149,30 @@ export default function FRNavigation() {
     const dLat = toRad(lat2 - lat1)
     const dLng = toRad(lng2 - lng1)
     const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
-    return (R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(1)
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
   }, [officerPos, incidentPos])
 
-  const etaMinutes = assignment?.dispatch?.eta_minutes ?? Math.ceil(distanceKm / 40 * 60)
+  // Road route from OSRM, refreshed whenever the officer's live position
+  // moves meaningfully — falls back to the straight line above on failure.
+  const [roadRoute, setRoadRoute] = useState(null)
+  useEffect(() => {
+    const controller = new AbortController()
+    fetchRoadRoute(officerPos, incidentPos, controller.signal)
+      .then(setRoadRoute)
+      .catch(() => setRoadRoute(null))
+    return () => controller.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Math.round(officerPos[0] * 1000), Math.round(officerPos[1] * 1000), incidentPos[0], incidentPos[1]])
+
+  const routePoints = roadRoute?.points ?? buildStraightLinePoints(officerPos, incidentPos)
+  const fitPoints = useMemo(
+    () => [...routePoints, officerPos, incidentPos],
+    [routePoints, officerPos, incidentPos],
+  )
+
+  const distanceKm = (roadRoute?.distanceKm ?? straightLineKm).toFixed(1)
+  const etaMinutes = assignment?.dispatch?.eta_minutes
+    ?? Math.ceil(roadRoute?.durationMin ?? (straightLineKm / 40 * 60))
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -182,10 +247,16 @@ export default function FRNavigation() {
               {(inc?.severity ?? 'UNKNOWN').toUpperCase()}
             </span>
           </div>
-          <p className="fr-nav-incident-type">{inc?.incident_type ?? 'Active Incident'}</p>
+          <p className="fr-nav-incident-type">{formatIncidentType(inc?.incident_type) ?? 'Active Incident'}</p>
           <p className="fr-nav-incident-location">
             <MapPin size={14} aria-hidden />
-            {inc ? `${inc.district ?? ''}${inc.sector ? ' / ' + inc.sector : ''}` || inc.address || 'En route' : 'En route to incident'}
+            {/* The `|| inc.address` fallback here never actually ran — the
+                district/sector template string is always truthy even with
+                both pieces empty, so the specific street/place the
+                dispatcher captured (e.g. "National Archives of Rwanda, Mini
+                Ubumwe") was silently dropped and only the broad sector
+                ("Kacyiru") ever showed. */}
+            {inc ? (inc.address || `${inc.district ?? ''}${inc.sector ? ' / ' + inc.sector : ''}`.trim() || 'En route') : 'En route to incident'}
           </p>
         </div>
 
@@ -194,7 +265,7 @@ export default function FRNavigation() {
             <Navigation size={16} className="fr-nav-turn-icon" aria-hidden />
             <p className="fr-nav-turn-main">Head to incident location</p>
           </div>
-          <p className="fr-nav-turn-sub">{inc ? `${inc.district ?? ''}${inc.sector ? ' · ' + inc.sector : ''}` || 'En route' : 'En route to incident'}</p>
+          <p className="fr-nav-turn-sub">{inc ? `${inc.district ?? ''}${inc.sector ? ' · ' + inc.sector : ''}`.trim() || 'En route' : 'En route to incident'}</p>
           <div className="fr-nav-turn-chips">
             <span className="fr-nav-turn-chip fr-nav-turn-chip--eta font-mono">
               {etaMinutes} min

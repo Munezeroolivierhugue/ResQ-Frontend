@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { UserPlus, Users, Monitor, Mail, UserX, ShieldCheck, ShieldX, Pencil, Key, Upload, Download, UserCheck, X } from 'lucide-react'
+import { UserPlus, Users, Monitor, Mail, UserX, ShieldCheck, ShieldX, Pencil, Send, Upload, Download, UserCheck, X } from 'lucide-react'
 import MetricCard from '../../components/dispatcher/MetricCard'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import { adminRoleBadge } from '../../data/mockAdminData'
-import { listUsers, updateUser } from '../../api/users'
+import { listUsers, updateUser, resendInvite } from '../../api/users'
 import { listAgencies } from '../../api/agencies'
 import { listDistricts } from '../../api/districts'
 import { listVehicles } from '../../api/vehicles'
@@ -263,6 +263,15 @@ export default function AdminUsers() {
     }
   }
 
+  async function handleResendInvite(u) {
+    try {
+      await resendInvite(u.user_id)
+      showToast(setToast, `Invitation resent to ${u.email}`)
+    } catch (err) {
+      showToast(setToast, err?.response?.data?.message ?? 'Failed to resend invitation')
+    }
+  }
+
   function handleEditSaved(updated) {
     setUsers((prev) => prev.map((u) => u.user_id === updated.user_id ? adaptUser({ ...u, ...updated }) : u))
     setEditingUser(null)
@@ -430,14 +439,16 @@ export default function AdminUsers() {
                           <UserX size={14} />
                         </button>
                       )}
-                      <button
-                        type="button"
-                        title="Reset password — re-invite with same email"
-                        className="dispatcher-btn-icon"
-                        onClick={() => showToast(setToast, 'To reset password: invite this user again using the same email address')}
-                      >
-                        <Key size={14} />
-                      </button>
+                      {u.status === 'PENDING' && (
+                        <button
+                          type="button"
+                          title="Resend invitation link"
+                          className="dispatcher-btn-icon"
+                          onClick={() => handleResendInvite(u)}
+                        >
+                          <Send size={14} />
+                        </button>
+                      )}
                       <button
                         type="button"
                         title="Edit user details"

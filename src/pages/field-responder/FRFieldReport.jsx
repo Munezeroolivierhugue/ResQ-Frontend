@@ -1,12 +1,19 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ClipboardList, FileText, Camera, Building2, Mic, Send, X } from 'lucide-react'
 import {
-  FR_INCIDENT_TYPES,
   FR_SCENE_STATUSES,
   FR_AGENCY_OPTIONS,
 } from '../../data/mockFieldResponderData'
 import { useFieldResponderStore } from '../../store/fieldResponderStore'
+import { uploadAttachment } from '../../api/fieldReports'
+import { canFileFieldReports } from '../../utils/authSession'
+
+// Canonical incident type codes — matches CATEGORY_TO_TRIAGE_TYPE in
+// NewIncident.jsx and the AI engine's classification rules. The previous
+// FR_INCIDENT_TYPES mock list ('Armed Robbery', 'Traffic Accident', ...) had
+// no relationship to these and its value was never even sent to the backend.
+const INCIDENT_TYPES = ['MEDICAL', 'RTA', 'FIRE', 'SECURITY', 'DISASTER', 'OTHER']
 
 function YesNoToggle({ value, onChange, label }) {
   return (
@@ -32,8 +39,11 @@ export default function FRFieldReport() {
   const navigate = useNavigate()
   const submitReport = useFieldResponderStore((s) => s.submitReport)
   const showToast = useFieldResponderStore((s) => s.showToast)
+  const assignmentIncident = useFieldResponderStore((s) => s.assignment?.incident)
 
-  const [incidentType, setIncidentType] = useState('Armed Robbery')
+  // Default to the dispatched incident's own type when known, rather than a
+  // hardcoded value unrelated to any real incident.
+  const [incidentType, setIncidentType] = useState(assignmentIncident?.incident_type ?? INCIDENT_TYPES[0])
   const [persons, setPersons] = useState('2')
   const [injuries, setInjuries] = useState('')
   const [suspects, setSuspects] = useState('YES')
@@ -43,7 +53,18 @@ export default function FRFieldReport() {
   const [supportNeeded, setSupportNeeded] = useState('')
   const [followUp, setFollowUp] = useState('')
   const [agencies, setAgencies] = useState([])
-  const [hasPhoto, setHasPhoto] = useState(true)
+  const [photoFile, setPhotoFile] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
+  const fileInputRef = useRef(null)
+
+  // Previously the "thumbnail" was just the filename in a plain gray box —
+  // no actual image preview, so there was no way to confirm the right photo
+  // was selected before submitting.
+  const photoPreviewUrl = useMemo(
+    () => (photoFile ? URL.createObjectURL(photoFile) : null),
+    [photoFile]
+  )
+  useEffect(() => () => { if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl) }, [photoPreviewUrl])
 
   const showAgency = sceneStatus === 'Requires Specialist' || suspects === 'YES'
 
@@ -53,10 +74,49 @@ export default function FRFieldReport() {
     )
   }
 
-  const handleSubmit = () => {
-    submitReport({ persons, injuries, suspects, sceneStatus, description, actions, supportNeeded, followUp, agencies })
-    showToast('Report submitted · Status: Available', 'success')
-    navigate('/field-responder/shift-start')
+  const handleSubmit = async () => {
+    if (submitting) return
+    setSubmitting(true)
+    try {
+      const saved = await submitReport({
+        persons, injuries, suspects, sceneStatus, incidentType,
+        description, actions, supportNeeded, followUp, agencies,
+      })
+      // Photo can only be attached to a report that already exists server-side
+      // — sequence the upload after a successful submission, using the real
+      // report_id returned by the backend (not a locally-generated one).
+      if (photoFile && saved?.report_id) {
+        try {
+          await uploadAttachment(saved.report_id, photoFile)
+        } catch {
+          showToast('Report submitted, but the photo failed to upload.', 'critical')
+          navigate('/field-responder/shift-start')
+          return
+        }
+      }
+      showToast('Report submitted · Status: Available', 'success')
+      navigate('/field-responder/shift-start')
+    } catch {
+      showToast('Could not submit report — check your connection and try again.', 'critical')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // Only RNP/police units file field reports — other agencies' responders
+  // (ambulance, fire) don't, so a direct URL visit is blocked the same way
+  // the "Begin Field Report" entry points are already hidden for them.
+  if (!canFileFieldReports()) {
+    return (
+      <div className="fr-page fr-page--report">
+        <div className="dispatcher-surface fr-card fr-card--tight text-center py-10">
+          <ClipboardList size={24} className="text-(--text-muted) mx-auto mb-2" />
+          <p className="text-[13px] text-(--text-secondary) m-0">
+            Field reports are only filed by RNP units.
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -74,8 +134,8 @@ export default function FRFieldReport() {
             value={incidentType}
             onChange={(e) => setIncidentType(e.target.value)}
           >
-            {FR_INCIDENT_TYPES.map((t) => (
-              <option key={t}>{t}</option>
+            {INCIDENT_TYPES.map((t) => (
+              <option key={t} value={t}>{t}</option>
             ))}
           </select>
         </label>
@@ -153,16 +213,30 @@ export default function FRFieldReport() {
           <span className="text-[11px] text-(--text-muted) ml-auto">Optional</span>
         </div>
         <div className="fr-photo-grid">
-          <button type="button" className="fr-photo-add">
+          <input
+            type="file"
+            accept="image/*"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
+          />
+          <button type="button" className="fr-photo-add" onClick={() => fileInputRef.current?.click()}>
             <Camera size={24} className="text-(--text-muted)" />
             <span>Add Photo</span>
           </button>
-          {hasPhoto && (
-            <div className="fr-photo-thumb">
-              <button type="button" className="fr-photo-remove" onClick={() => setHasPhoto(false)} aria-label="Remove">
+          {photoFile && (
+            <div
+              className="fr-photo-thumb"
+              style={{
+                backgroundImage: `url(${photoPreviewUrl})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }}
+            >
+              <button type="button" className="fr-photo-remove" onClick={() => setPhotoFile(null)} aria-label="Remove">
                 <X size={10} />
               </button>
-              <div className="fr-photo-meta font-mono">14:28 · -1.9441, 30.0619</div>
+              <div className="fr-photo-meta font-mono">{photoFile.name}</div>
             </div>
           )}
         </div>
@@ -193,9 +267,9 @@ export default function FRFieldReport() {
       )}
 
       <div className="fr-submit-bar">
-        <button type="button" className="dispatcher-btn-primary fr-submit-btn" onClick={handleSubmit}>
+        <button type="button" className="dispatcher-btn-primary fr-submit-btn" onClick={handleSubmit} disabled={submitting}>
           <Send size={18} />
-          Submit Report
+          {submitting ? 'Submitting…' : 'Submit Report'}
         </button>
       </div>
     </div>

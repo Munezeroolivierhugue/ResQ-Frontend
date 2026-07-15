@@ -48,6 +48,8 @@ import OpsManagerEscalation from './pages/ops-manager/OpsManagerEscalation'
 import OpsManagerResources from './pages/ops-manager/OpsManagerResources'
 import OpsManagerMultiAgency from './pages/ops-manager/OpsManagerMultiAgency'
 import OpsManagerDispatchers from './pages/ops-manager/OpsManagerDispatchers'
+import OpsManagerClosedIncidents from './pages/ops-manager/OpsManagerClosedIncidents'
+import OpsManagerIncidentClosureReview from './pages/ops-manager/OpsManagerIncidentClosureReview'
 import OpsManagerShift from './pages/ops-manager/OpsManagerShift'
 import OpsManagerProfile from './pages/ops-manager/OpsManagerProfile'
 import OpsManagerSettings from './pages/ops-manager/OpsManagerSettings'
@@ -227,6 +229,8 @@ export default function App() {
             <Route path="resources" element={<OpsManagerResources />} />
             <Route path="multi-agency" element={<OpsManagerMultiAgency />} />
             <Route path="dispatchers" element={<OpsManagerDispatchers />} />
+            <Route path="closed-incidents" element={<OpsManagerClosedIncidents />} />
+            <Route path="incident-closure" element={<OpsManagerIncidentClosureReview />} />
             <Route path="shift" element={<OpsManagerShift />} />
             <Route path="profile" element={<OpsManagerProfile />} />
             <Route path="settings" element={<Navigate to="/ops-manager/settings/profile" replace />} />

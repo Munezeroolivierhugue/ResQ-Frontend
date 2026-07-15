@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { MapPin, ClipboardList, Play, Check, ChevronDown, Truck } from 'lucide-react'
-import { FR_BRIEFING } from '../../data/mockFieldResponderData'
+import { MapPin, Play, Check, ChevronDown, Truck, CloudRain } from 'lucide-react'
 import { useFieldResponderStore } from '../../store/fieldResponderStore'
 import { listVehicles } from '../../api/vehicles'
 import { getMyProfile } from '../../api/users'
+import { startShift } from '../../api/shifts'
+import { listMyReports } from '../../api/fieldReports'
 import { getCurrentUser } from '../../utils/authSession'
 
 function initials(name) {
@@ -18,6 +19,7 @@ export default function FRShiftStart() {
   const goAvailable   = useFieldResponderStore((s) => s.goAvailable)
   const setGpsActive  = useFieldResponderStore((s) => s.setGpsActive)
   const setVehicleId  = useFieldResponderStore((s) => s.setVehicleId)
+  const showToast     = useFieldResponderStore((s) => s.showToast)
 
   const user = getCurrentUser()
   const displayName = user?.full_name ?? user?.email ?? 'Field Responder'
@@ -26,6 +28,8 @@ export default function FRShiftStart() {
   const [assignedVehicle, setAssignedVehicle] = useState(null) // pre-assigned from profile
   const [vehicles, setVehicles] = useState([])
   const [selectedVehicle, setSelectedVehicle] = useState(vehicleId ?? '')
+  const [startingShift, setStartingShift] = useState(false)
+  const [incidentsToday, setIncidentsToday] = useState(0)
 
   useEffect(() => {
     // Load pre-assigned vehicle from user profile first
@@ -50,13 +54,44 @@ export default function FRShiftStart() {
       })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Real count instead of a hardcoded "0" — the responder's own field reports
+  // submitted today are the closest available signal for incidents handled.
+  useEffect(() => {
+    listMyReports()
+      .then((reports) => {
+        const today = new Date().toDateString()
+        const count = reports.filter((r) => r.submitted_at && new Date(r.submitted_at).toDateString() === today).length
+        setIncidentsToday(count)
+      })
+      .catch(() => {})
+  }, [])
+
   const isOffline   = dutyStatus === 'offline'
   const isAvailable = dutyStatus === 'available'
   const isOnScene   = dutyStatus === 'on_scene'
 
-  const handleGoAvailable = () => {
-    if (selectedVehicle) setVehicleId(selectedVehicle)
-    goAvailable()
+  const handleGoAvailable = async () => {
+    const vehicle = selectedVehicle || assignedVehicle?.id
+    setStartingShift(true)
+    try {
+      // Persist the shift server-side so User.currentVehicle gets set — this is
+      // what lets a dispatcher's later createDispatch(vehicleId) resolve back to
+      // this responder (see DispatchService.create()). Without this call, going
+      // available only ever updated local/client state and the vehicle status,
+      // so the responder never actually became reachable for assignment.
+      await startShift({
+        user_id:      user?.user_id,
+        district_id:  user?.district_id,
+        vehicle_id:   vehicle || null,
+        role_on_shift: user?.role ?? 'FIELD_RESPONDER',
+      })
+      if (vehicle) setVehicleId(vehicle)
+      goAvailable()
+    } catch {
+      showToast('Could not start shift — check your connection and try again.', 'critical')
+    } finally {
+      setStartingShift(false)
+    }
   }
 
   return (
@@ -135,15 +170,13 @@ export default function FRShiftStart() {
       {/* Shift briefing */}
       <div className="dispatcher-surface fr-card">
         <div className="fr-card-header">
-          <ClipboardList size={16} className="text-(--accent)" />
-          <span className="font-semibold text-[13px]">Shift Briefing</span>
-          <span className="text-[11px] text-(--text-muted) ml-auto">From Operations Manager</span>
+          <CloudRain size={16} className="text-(--accent)" />
+          <span className="font-semibold text-[13px]">Weather Advisory</span>
         </div>
         <div className="fr-divider" />
-        <p className="fr-briefing-text">{FR_BRIEFING.text}</p>
-        <div className="fr-briefing-meta font-mono">
-          {FR_BRIEFING.time} · {FR_BRIEFING.author}
-        </div>
+        <p className="fr-briefing-text">
+          If there are any weather changes affecting your route, you will be notified here for rerouting.
+        </p>
       </div>
 
       {/* Go Available button */}
@@ -151,17 +184,19 @@ export default function FRShiftStart() {
         type="button"
         className={`fr-availability-btn${isOffline ? ' fr-availability-btn--go' : ''}${isAvailable ? ' fr-availability-btn--on' : ''}${isOnScene ? ' fr-availability-btn--scene' : ''}`}
         onClick={isOffline ? handleGoAvailable : undefined}
-        disabled={!isOffline || (!selectedVehicle && !assignedVehicle && vehicles.length > 0)}
+        disabled={!isOffline || startingShift || (!selectedVehicle && !assignedVehicle && vehicles.length > 0)}
       >
         {isOffline && (
           <>
             <Play size={24} />
             <div>
-              <div>GO AVAILABLE</div>
+              <div>{startingShift ? 'STARTING…' : 'GO AVAILABLE'}</div>
               <div className="fr-availability-sub">
-                {!selectedVehicle && !assignedVehicle && vehicles.length > 0
-                  ? 'Select a vehicle first'
-                  : 'Tap to begin shift · You will appear on dispatcher map'}
+                {startingShift
+                  ? 'Starting shift…'
+                  : !selectedVehicle && !assignedVehicle && vehicles.length > 0
+                    ? 'Select a vehicle first'
+                    : 'Tap to begin shift · You will appear on dispatcher map'}
               </div>
             </div>
           </>
@@ -183,16 +218,8 @@ export default function FRShiftStart() {
       {(isAvailable || isOnScene) && (
         <div className="fr-stat-tiles">
           <div className="fr-stat-tile">
-            <div className="fr-stat-value">0</div>
+            <div className="fr-stat-value">{incidentsToday}</div>
             <div className="fr-stat-label">Incidents today</div>
-          </div>
-          <div className="fr-stat-tile">
-            <div className="fr-stat-value">—</div>
-            <div className="fr-stat-label">Avg response</div>
-          </div>
-          <div className="fr-stat-tile">
-            <div className="fr-stat-value">{isOnScene ? 'On Scene' : 'Available'}</div>
-            <div className="fr-stat-label">Current status</div>
           </div>
         </div>
       )}

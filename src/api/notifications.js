@@ -9,6 +9,12 @@ const ROLE_HREF = {
     UNIT_OFFLINE: "/dispatcher",
     SHIFT: "/dispatcher/shift-handover",
     USER_INVITED: null,
+    // Notifications don't carry a structured incidentId today (just a
+    // message string), so we can't deep-link straight to this incident's
+    // closure form — Pending Reports already lists every PENDING_REPORT
+    // incident and its "File Report" button correctly passes the specific
+    // incident to /dispatcher/incident-report via route state.
+    FIELD_REPORT_SUBMITTED: "/dispatcher/pending-reports",
   },
   OPERATIONS_MANAGER: {
     INCIDENT: "/ops-manager/incidents",
@@ -17,6 +23,10 @@ const ROLE_HREF = {
     UNIT_OFFLINE: "/ops-manager",
     SHIFT: "/ops-manager/shift-reports",
     USER_INVITED: null,
+    // Same limitation as FIELD_REPORT_SUBMITTED above — the notification
+    // carries only a message string, no structured incidentId — so this
+    // routes to the list of closed incidents rather than guessing which one.
+    INCIDENT_CLOSED: "/ops-manager/closed-incidents",
   },
   ADMIN: {
     USER_INVITED: "/admin/users",

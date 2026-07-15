@@ -20,10 +20,15 @@ import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
 import MapFitBounds from '../../components/map/MapFitBounds'
 import { RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../components/map/rwandaConstants'
 import { useNotificationsStore } from '../../store/notificationsStore'
-import { listIncidents, getIncident, updateIncidentStatus } from '../../api/incidents'
+import { getIncident, updateIncidentStatus } from '../../api/incidents'
 import { listDispatchesForIncident } from '../../api/dispatches'
 import { listVehicles } from '../../api/vehicles'
 import { requestBackup } from '../../api/backup-requests'
+import { getReportForIncident, listAttachments } from '../../api/fieldReports'
+import FieldReportCard from '../../components/dispatcher/FieldReportCard'
+import { connect, subscribe, publish } from '../../lib/wsClient'
+import { getAccessToken, getCurrentUser } from '../../utils/authSession'
+import { formatIncidentType } from '../../utils/incidentTypeLabels'
 import 'leaflet/dist/leaflet.css'
 
 const MAP_TILES =
@@ -58,6 +63,26 @@ const MARKER_HEX = {
 }
 
 const ACTIVE_STATUSES = ['DISPATCHED', 'EN_ROUTE', 'ON_SCENE', 'active', 'pending', 'RECEIVED']
+
+// v.status from listVehicles()/GpsUpdateEvent is lowercase (available/dispatched/
+// en_route/on_scene/out_of_service) — map it to the badge label + internal
+// status key. Previously hardcoded to 'En Route' regardless of the vehicle's
+// real status, so a unit marking ON_SCENE never visibly changed on this map.
+const VEHICLE_STATUS_LABELS = {
+  available:      'Available',
+  dispatched:     'Dispatched',
+  en_route:       'En Route',
+  on_scene:       'On Scene',
+  out_of_service: 'Out of Service',
+}
+
+function statusInfoFor(rawStatus) {
+  const key = (rawStatus ?? 'en_route').toLowerCase()
+  return {
+    status: key,
+    statusLabel: VEHICLE_STATUS_LABELS[key] ?? 'En Route',
+  }
+}
 
 function fmtDuration(s) {
   const m = Math.floor(s / 60)
@@ -106,11 +131,11 @@ function buildUnitsFromDispatches(dispatches, vehicles) {
     return {
       id: d.vehicle_plate ?? v.plate_number ?? d.vehicle_id,
       vehicle_id: d.vehicle_id,
+      dispatch_id: d.dispatch_id,
       vehicle_type: vType,
       role: d.responder_name ?? 'Responder',
       colorKey: colorKeyFromType(vType),
-      statusLabel: 'En Route',
-      status: 'enroute',
+      ...statusInfoFor(v.status),
       eta: d.eta_minutes != null ? `${d.eta_minutes} min` : null,
       current_lat: v.current_lat ?? null,
       current_lng: v.current_lng ?? null,
@@ -168,8 +193,13 @@ export default function ActiveIncident() {
   const [message, setMessage] = useState('')
   const [comms, setComms] = useState([])
   const [sceneComplete, setSceneComplete] = useState(false)
+  const [sceneCompleteError, setSceneCompleteError] = useState(null)
   const [incident, setIncident] = useState(null)
+  const [loadingIncident, setLoadingIncident] = useState(true)
   const [units, setUnits] = useState([])
+  const [selectedUnitId, setSelectedUnitId] = useState(null) // vehicle_id of the unit whose chat thread is shown
+  const [fieldReport, setFieldReport] = useState(null)
+  const [fieldReportPhotos, setFieldReportPhotos] = useState([])
   const [, setElapsedTick] = useState(0)
   const addNotification = useNotificationsStore((state) => state.addNotification)
 
@@ -200,7 +230,25 @@ export default function ActiveIncident() {
         listVehicles(),
       ])
         .then(([inc, dispatches, vehicles]) => {
+          // A stored incident_id from an earlier, now-finished visit (e.g.
+          // testing weeks ago, or a dispatch that was already marked scene-
+          // complete) previously got displayed as-is regardless of its real
+          // status — showing an ancient CLOSED incident with a nonsensical
+          // multi-hundred-hour elapsed time and no dispatched units. This
+          // page should only ever show a genuinely active incident that was
+          // explicitly navigated to (a fresh dispatch) — not silently
+          // resurrect whatever's stored, and not go hunting for some other
+          // "still active" incident elsewhere in the system either. If the
+          // stored one isn't trustworthy, just go empty.
+          if (!navState?.incident && !ACTIVE_STATUSES.includes(inc.status)) {
+            sessionStorage.removeItem(ACTIVE_INCIDENT_KEY)
+            sessionStorage.removeItem(ACTIVE_UNITS_KEY)
+            setIncident(null)
+            setLoadingIncident(false)
+            return
+          }
           setIncident(inc)
+          setLoadingIncident(false)
           if (dispatches.length > 0) {
             const enriched = buildUnitsFromDispatches(dispatches, vehicles)
             setUnits(enriched)
@@ -226,6 +274,7 @@ export default function ActiveIncident() {
           }
         })
         .catch(() => {
+          setLoadingIncident(false)
           // If API fails, try stored units so the page isn't blank
           const stored = loadUnitsFromStorage()
           if (stored.length > 0) setUnits(stored)
@@ -233,28 +282,12 @@ export default function ActiveIncident() {
       return
     }
 
-    // 2. No incident_id anywhere — fetch the latest active incident from DB
-    listIncidents()
-      .then((incs) => {
-        const active = incs.find((i) => ACTIVE_STATUSES.includes(i.status)) ?? null
-        if (!active) return
-        sessionStorage.setItem(ACTIVE_INCIDENT_KEY, active.incident_id)
-        setIncident(active)
-        return Promise.all([
-          listDispatchesForIncident(active.incident_id),
-          listVehicles(),
-        ]).then(([dispatches, vehicles]) => {
-          if (dispatches.length > 0) {
-            const enriched = buildUnitsFromDispatches(dispatches, vehicles)
-            setUnits(enriched)
-            saveUnitsToStorage(enriched)
-          } else {
-            const stored = loadUnitsFromStorage()
-            if (stored.length > 0) setUnits(stored)
-          }
-        })
-      })
-      .catch(() => {})
+    // 2. No incident_id anywhere (fresh navigation, no active dispatch in
+    // this session) — leave the page empty rather than searching the whole
+    // system for "some other incident that happens to still be active,"
+    // which is how an unrelated stale incident kept reappearing here.
+    setIncident(null)
+    setLoadingIncident(false)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Live elapsed time — re-renders every second so the display keeps ticking
@@ -262,6 +295,93 @@ export default function ActiveIncident() {
     const t = setInterval(() => setElapsedTick((v) => v + 1), 1000)
     return () => clearInterval(t)
   }, [])
+
+  // Fetch the field responder's submitted report for this incident, if any —
+  // previously there was no screen anywhere in the dispatcher portal that
+  // showed a field report's actual content (only the incident-status queue
+  // used for the dispatcher's own separate closure form).
+  useEffect(() => {
+    const incidentId = incident?.incident_id
+    if (!incidentId) { setFieldReport(null); setFieldReportPhotos([]); return }
+    getReportForIncident(incidentId)
+      .then((r) => {
+        setFieldReport(r)
+        // Photos uploaded alongside the field report were never fetched
+        // anywhere on the dispatcher side — the responder's upload
+        // succeeded server-side but nothing downstream ever asked for it.
+        if (r?.report_id) {
+          listAttachments(r.report_id).then(setFieldReportPhotos).catch(() => setFieldReportPhotos([]))
+        } else {
+          setFieldReportPhotos([])
+        }
+      })
+      .catch(() => { setFieldReport(null); setFieldReportPhotos([]) })
+  }, [incident?.incident_id, incident?.status])
+
+  // Default to the first dispatched unit's thread once units load.
+  useEffect(() => {
+    if (!selectedUnitId && units.length > 0) setSelectedUnitId(units[0].vehicle_id)
+  }, [units, selectedUnitId])
+
+  const selectedUnit = units.find((u) => u.vehicle_id === selectedUnitId) ?? null
+
+  // Real-time Unified Comms — scoped by dispatch_id (one dispatcher <-> one
+  // responder pair), not incident_id. An incident-scoped topic meant every
+  // dispatcher/responder on a multi-unit incident shared one conversation
+  // with no isolation — this panel previously also never touched the
+  // WebSocket layer at all (local-only `comms` state, no subscribe/publish).
+  useEffect(() => {
+    setComms([]) // switching units shows that unit's own thread, not the previous one's
+    const dispatchId = selectedUnit?.dispatch_id
+    if (!dispatchId) return
+    const token = getAccessToken()
+    connect(token)
+    const unsub = subscribe(`/topic/dispatches/${dispatchId}/chat`, (msg) => {
+      const isSelf = msg.senderRole === 'DISPATCHER'
+      setComms((prev) => [
+        ...prev,
+        {
+          id: `ws-${Date.now()}-${Math.random()}`,
+          from: isSelf ? 'DISPATCH' : (msg.senderName ?? 'Field Unit'),
+          role: isSelf ? 'dispatch' : 'unit',
+          time: msg.timestamp ?? new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+          text: msg.text,
+          isSelf,
+          type: 'text',
+        },
+      ])
+    })
+    return unsub
+  }, [selectedUnit?.dispatch_id])
+
+  // Live unit position updates — previously `units` was only fetched once on
+  // mount, so pins stayed frozen at their initial position forever even
+  // though the backend broadcasts real GPS updates on every ping
+  // (WebSocketPublisher.publishGpsUpdate → /topic/vehicles/{id}/gps).
+  // Depend on the stable set of vehicle ids (not `units` itself, whose
+  // identity changes on every position update) to avoid resubscribing on
+  // every incoming ping.
+  const vehicleIdsKey = units.map((u) => u.vehicle_id).filter(Boolean).sort().join(',')
+  useEffect(() => {
+    if (!vehicleIdsKey) return
+    const token = getAccessToken()
+    connect(token)
+    const vehicleIds = vehicleIdsKey.split(',')
+    const unsubs = vehicleIds.map((vid) =>
+      subscribe(`/topic/vehicles/${vid}/gps`, (evt) => {
+        // GpsUpdateEvent also carries the vehicle's current status — without
+        // this, a unit marking ON_SCENE would move to the right spot on the
+        // map but its badge would stay stuck on whatever it loaded as
+        // (previously always the hardcoded "En Route").
+        setUnits((prev) => prev.map((u) =>
+          u.vehicle_id === evt.vehicleId
+            ? { ...u, current_lat: evt.lat, current_lng: evt.lng, accuracy: 'GPS', ...statusInfoFor(evt.status) }
+            : u
+        ))
+      })
+    )
+    return () => unsubs.forEach((unsub) => unsub())
+  }, [vehicleIdsKey])
 
   // 'idle' | 'sending' | 'sent' | 'error'
   const [escalation, setEscalation] = useState('idle')
@@ -290,7 +410,38 @@ export default function ActiveIncident() {
     }
   }
 
-  const handleSceneComplete = () => {
+  const handleSceneComplete = async () => {
+    setSceneCompleteError(null)
+    // Previously fired updateIncidentStatus() without awaiting it, then
+    // navigated to Pending Reports after a fixed 1.8s timeout regardless of
+    // whether the PATCH had actually landed. If the dispatcher then reached
+    // the closure form and submitted before that PATCH completed, the
+    // incident was still DISPATCHED/ON_SCENE server-side and
+    // createIncidentClosure() correctly rejected with 409
+    // INVALID_INCIDENT_STATE — a race, not a real validation failure.
+    // Awaiting here (and surfacing a real error instead of swallowing it)
+    // guarantees the status transition has landed before the dispatcher can
+    // proceed to close the incident.
+    //
+    // The backend's status machine is forward-only (VALID_STATES index must
+    // strictly increase) — clicking this button a second time (e.g. after
+    // navigating back from Pending Reports without realizing the first
+    // click already succeeded) re-sends PENDING_REPORT for an incident
+    // that's already there or further along, and the backend correctly
+    // rejects that as INVALID_TRANSITION. That's not a real failure from
+    // the dispatcher's point of view — the incident is already where they
+    // wanted it — so treat "already past this point" as success, not error.
+    const ALREADY_PAST = new Set(['PENDING_REPORT', 'RESOLVED', 'CLOSED'])
+    if (incident?.incident_id && !ALREADY_PAST.has(incident.status)) {
+      try {
+        await updateIncidentStatus(incident.incident_id, 'PENDING_REPORT')
+      } catch (err) {
+        if (err?.response?.data?.error !== 'INVALID_TRANSITION') {
+          setSceneCompleteError('Could not mark the scene complete — check your connection and try again.')
+          return
+        }
+      }
+    }
     setSceneComplete(true)
     // Clear all session data related to this incident and its intake form
     try {
@@ -300,15 +451,11 @@ export default function ActiveIncident() {
     sessionStorage.removeItem('resq-active-call')
     sessionStorage.removeItem(ACTIVE_INCIDENT_KEY)
     sessionStorage.removeItem(ACTIVE_UNITS_KEY)
-    // Mark incident as awaiting report in the DB (fire-and-forget; PendingReports is seeded via navState regardless)
-    if (incident?.incident_id) {
-      updateIncidentStatus(incident.incident_id, 'PENDING_REPORT').catch(() => {})
-    }
     addNotification({
       id: `scene-complete-${Date.now()}`,
       type: 'scene_complete',
       title: `Scene complete — ${incident?.incident_ref ?? ''}`,
-      message: `Units released. Field report required for ${incident?.incident_type ?? 'incident'}.`,
+      message: `Units released. Field report required for ${formatIncidentType(incident?.incident_type) ?? 'incident'}.`,
       time: new Date().toISOString(),
       read: false,
       target_role: 'dispatcher',
@@ -410,23 +557,33 @@ export default function ActiveIncident() {
 
   const handleSend = (e) => {
     e.preventDefault()
-    if (!message.trim()) return
-    setComms((prev) => [
-      ...prev,
-      {
-        id: prev.length + 1,
-        from: 'DISPATCH',
-        role: 'dispatch',
-        time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-        text: message.trim(),
-        isSelf: true,
-        type: 'text',
-      },
-    ])
+    const dispatchId = selectedUnit?.dispatch_id
+    if (!message.trim() || !dispatchId) return
+    const user = getCurrentUser()
+    // Don't optimistically append locally — the subscription above already
+    // receives our own message back over the topic (same pattern FROnScene.jsx
+    // uses), so appending here too would show it twice.
+    publish(`/app/chat/dispatch/${dispatchId}`, {
+      text: message.trim(),
+      senderName: user?.full_name ?? 'Dispatcher',
+      senderRole: 'DISPATCHER',
+    })
     setMessage('')
   }
 
   const sev = incident?.severity ?? 'medium'
+
+  if (!loadingIncident && !incident) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full min-h-0 gap-3 bg-(--bg-base) text-center px-6">
+        <MapPin size={36} style={{ color: 'var(--text-muted)' }} />
+        <p className="text-[15px] font-semibold text-(--text-primary) m-0">No active incident</p>
+        <p className="text-[13px] text-(--text-secondary) m-0 max-w-[420px]">
+          This screen shows an incident once you dispatch one — nothing to show right now.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col h-full min-h-0 bg-(--bg-base) overflow-hidden relative">
@@ -468,7 +625,7 @@ export default function ActiveIncident() {
               className="text-xl md:text-2xl font-bold text-(--text-primary) m-0 leading-tight"
               style={{ fontFamily: 'var(--font-display)' }}
             >
-              {incident?.incident_type ?? 'Active Incident'}
+              {formatIncidentType(incident?.incident_type) ?? 'Active Incident'}
             </h1>
             <p className="flex items-center gap-1.5 text-[13px] text-(--text-secondary) mt-2 m-0">
               <MapPin size={14} className="text-(--accent) shrink-0" />
@@ -516,9 +673,14 @@ export default function ActiveIncident() {
               }}
             >
               <CheckCircle size={16} />
-              Mark Scene Complete
+              {sceneComplete ? 'Scene Complete' : 'Mark Scene Complete'}
             </button>
           </div>
+          {sceneCompleteError && (
+            <p className="text-[12px] mt-2 m-0" style={{ color: 'var(--status-critical)' }}>
+              {sceneCompleteError}
+            </p>
+          )}
         </div>
       </header>
 
@@ -576,7 +738,7 @@ export default function ActiveIncident() {
               }}
             >
               <Tooltip direction="top" offset={[0, -14]}>
-                <strong>{incident?.incident_ref ?? '—'}</strong> — {incident?.incident_type ?? ''}
+                <strong>{incident?.incident_ref ?? '—'}</strong> — {formatIncidentType(incident?.incident_type) ?? ''}
                 <br />
                 {incident?.address ?? incident?.district ?? ''}
                 <br />
@@ -709,6 +871,29 @@ export default function ActiveIncident() {
               )
             })}
           </ul>
+
+          {fieldReport && (
+            <div className="border-t border-(--border-subtle) p-4 shrink-0">
+              <div className="flex items-center justify-between mb-2">
+                <span
+                  className="text-[10px] font-bold tracking-[0.12em] text-(--text-secondary) uppercase"
+                  style={{ fontFamily: 'var(--font-display)' }}
+                >
+                  Field Report
+                </span>
+                <span className="text-[10px] text-(--text-muted)" style={{ fontFamily: 'var(--font-mono)' }}>
+                  {fieldReport.submitted_at ? new Date(fieldReport.submitted_at).toLocaleTimeString() : ''}
+                </span>
+              </div>
+              <div className="rounded-lg border border-(--border-subtle) bg-(--bg-base) p-3">
+                <FieldReportCard
+                  fieldReport={fieldReport}
+                  photos={fieldReportPhotos}
+                  location={incident?.address ?? (incident?.district ? `${incident.district}${incident.sector ? ' / ' + incident.sector : ''}` : null)}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Field comms — right column, full height */}
@@ -728,6 +913,23 @@ export default function ActiveIncident() {
               {incident?.sector ?? incident?.district ?? 'Field'}
             </span>
           </div>
+
+          {/* Each unit has its own isolated chat thread with the dispatcher who
+              sent it — this selector only appears when there's more than one
+              unit to choose between. */}
+          {units.length > 1 && (
+            <div className="px-4 py-2 border-b border-(--border-subtle) shrink-0 bg-(--bg-elevated)">
+              <select
+                className="dispatcher-input h-8 text-[12px] w-full"
+                value={selectedUnitId ?? ''}
+                onChange={(e) => setSelectedUnitId(e.target.value)}
+              >
+                {units.map((u) => (
+                  <option key={u.vehicle_id} value={u.vehicle_id}>{u.id} — {u.role}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0 bg-(--bg-base)">
             {comms.map((msg) => {

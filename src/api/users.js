@@ -12,6 +12,7 @@ function transform(u) {
     district_name: u.districtName ?? null,
     agency_id: u.agencyId,
     agency_name: u.agencyName ?? null,
+    agency_type: u.agencyType ?? null,
     mfa_enabled: u.mfaEnabled ?? false,
     last_login: u.lastLogin ?? null,
     created_at: u.createdAt ?? null,
@@ -90,4 +91,8 @@ export async function inviteUser(body) {
 
 export async function deleteUser(id) {
   await api.delete(`/api/users/${id}`)
+}
+
+export async function resendInvite(id) {
+  await api.post(`/api/users/${id}/resend-invite`)
 }

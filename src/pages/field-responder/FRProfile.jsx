@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { logout, getRefreshToken, getCurrentUser } from '../../utils/authSession'
+import { logout, getRefreshToken, getCurrentUser, canFileFieldReports } from '../../utils/authSession'
 import { logoutApi } from '../../api/auth'
 import { disconnect } from '../../lib/wsClient'
 import {
@@ -105,11 +105,13 @@ export default function FRProfile() {
 
         <div className="fr-profile-section-label">Quick Actions</div>
         <div className="fr-profile-links">
-          <Link to="/field-responder/performance" className="fr-profile-link dispatcher-surface">
-            <BarChart3 size={18} className="text-(--accent)" />
-            <span className="flex-1">My Stats</span>
-            <ChevronRight size={16} className="text-(--text-muted)" />
-          </Link>
+          {canFileFieldReports() && (
+            <Link to="/field-responder/performance" className="fr-profile-link dispatcher-surface">
+              <BarChart3 size={18} className="text-(--accent)" />
+              <span className="flex-1">My Stats</span>
+              <ChevronRight size={16} className="text-(--text-muted)" />
+            </Link>
+          )}
           <Link to="/field-responder/shift-end" className="fr-profile-link dispatcher-surface">
             <Moon size={18} className="text-(--accent)" />
             <span className="flex-1">End Shift</span>

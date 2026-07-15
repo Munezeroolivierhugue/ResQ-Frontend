@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { connect, connectMock, disconnectMock, emit } from '../utils/callChannel'
 import { randomRwandanPhone } from '../data/mockCallData'
-import { claimCall, passCall, recordOutcome as recordCallOutcome } from '../api/calls'
+import { claimCall, passCall, missCall, simulateCall as simulateCallApi, recordOutcome as recordCallOutcome } from '../api/calls'
 import { getCallerByPhone } from '../api/callers'
 
 // ── Store ─────────────────────────────────────────────────────────────────────
@@ -71,6 +71,20 @@ export const useCallChannelStore = create((set, get) => {
       set({ incomingCall: null, showIncomingBanner: false })
     },
 
+    // Ring timed out with nobody answering — a genuine miss, distinct from a
+    // dispatcher explicitly clicking Decline (which cascades to the next dispatcher).
+    expireCall: async () => {
+      const { incomingCall } = get()
+      if (!incomingCall) return
+      const sessionId = incomingCall.session_id ?? incomingCall.call_id
+      if (sessionId && !sessionId.startsWith('CALL-MOCK-') && !sessionId.startsWith('CALL-SIM-')) {
+        missCall(sessionId).catch(console.error)
+      } else {
+        emit('call_ended', { call_id: sessionId, status: 'MISSED' })
+      }
+      set({ incomingCall: null, showIncomingBanner: false })
+    },
+
     recordOutcome: async (outcome) => {
       const { currentCall } = get()
       if (!currentCall) return
@@ -90,15 +104,24 @@ export const useCallChannelStore = create((set, get) => {
     simulateCall: () => {
       // Clear any stale call state so the banner always fires
       set({ currentCall: null, incomingCall: null, showIncomingBanner: false })
-      const payload = {
-        call_id: `CALL-SIM-${Date.now()}`,
-        phone_number: randomRwandanPhone(),
-        started_at: new Date().toISOString(),
-      }
-      if (_mockRef?.fireMock) {
+      if (wsUrl) {
+        // Real backend + WebSocket are connected — create an actual CallRecord
+        // so claim/pass/miss (and the resulting MissedCall on a real miss) work
+        // exactly like a live call, instead of a client-only banner that can
+        // never be persisted. The broadcast on /topic/calls (handled by
+        // handlers.onIncomingCall above) is what actually populates the banner.
+        simulateCallApi().catch(console.error)
+      } else if (_mockRef?.fireMock) {
         _mockRef.fireMock()
       } else {
-        set({ incomingCall: payload, showIncomingBanner: true })
+        set({
+          incomingCall: {
+            call_id: `CALL-MOCK-${Date.now()}`,
+            phone_number: randomRwandanPhone(),
+            started_at: new Date().toISOString(),
+          },
+          showIncomingBanner: true,
+        })
       }
     },
 

@@ -13,6 +13,7 @@ function transform(r) {
     injuries: r.injuries,
     suspects: r.suspects,
     scene_status: r.sceneStatus,
+    confirmed_type: r.confirmedType,
     description: r.description,
     agencies_involved: r.agenciesInvolved,
     case_reference: r.caseReference,
@@ -32,7 +33,11 @@ function transformClosure(c) {
     final_disposition: c.finalDisposition,
     closure_notes: c.closureNotes,
     data_source: c.dataSource,
-    closed_by: c.closedById,
+    // Backend already returned closedByName correctly — this was mapping
+    // to the raw closedById UUID instead, which is why every "Closed by"
+    // line on the review screens rendered a GUID instead of a name.
+    closed_by: c.closedByName,
+    closed_by_id: c.closedById,
     closed_at: c.closedAt,
   }
 }
@@ -49,12 +54,18 @@ export async function getReportForIncident(incidentId) {
 
 export async function submitFieldReport(body) {
   // body snake_case; convert to camelCase for backend
+  // vehicleId was previously dropped here even though the store always sent
+  // it — the backend needs it both to link the report to the right vehicle
+  // and to notify the correct dispatcher (the one who dispatched this unit,
+  // not an arbitrary one on a multi-unit incident).
   const payload = {
     incidentId: body.incident_id,
+    vehicleId: body.vehicle_id,
     personsInvolved: body.persons_involved,
     injuries: body.injuries,
     suspects: body.suspects,
     sceneStatus: body.scene_status,
+    confirmedType: body.confirmed_type,
     description: body.description,
     agenciesInvolved: body.agencies_involved,
     caseReference: body.case_reference,
@@ -83,6 +94,28 @@ export async function uploadAttachment(reportId, file, caption) {
     file_type: a.fileType,
     caption: a.caption,
   }
+}
+
+// Backend serves attachments as plain static files (FileStorageService) under
+// a relative path like "/reports/{id}/{name}" — never something the frontend
+// previously fetched or rendered anywhere, so submitted photos silently never
+// reached the dispatcher despite uploading successfully.
+export async function listAttachments(reportId) {
+  const { data } = await api.get(`/api/field-reports/${reportId}/attachments`)
+  return (data.data ?? data).map((a) => ({
+    attachment_id: a.attachmentId,
+    file_url: a.fileUrl,
+    file_type: a.fileType,
+    caption: a.caption,
+  }))
+}
+
+// Attachment fileUrls are backend-relative; the API client's baseURL is ''
+// in dev (proxied) but must be the real backend origin in production.
+export function attachmentUrl(fileUrl) {
+  if (!fileUrl) return ''
+  const base = import.meta.env.VITE_API_URL ?? ''
+  return `${base}${fileUrl}`
 }
 
 export async function createClosure(body) {

@@ -5,7 +5,7 @@ import { FR_OFFICER, FR_ASSIGNMENT } from '../data/mockFieldResponderData'
 import { generateUuid, yesNoToBoolean } from '../utils/formHelpers'
 import { recordGpsPing, updateVehicleStatus, getVehicle } from '../api/vehicles'
 import { submitFieldReport } from '../api/fieldReports'
-import { updateIncidentStatus, listIncidents, getIncident } from '../api/incidents'
+import { updateIncidentStatus, getIncident } from '../api/incidents'
 import { listDispatchesForIncident, getMyDispatches } from '../api/dispatches'
 import { getAccessToken, getCurrentUser } from '../utils/authSession'
 
@@ -13,26 +13,52 @@ const STAGES = ['dispatched', 'en_route', 'on_scene', 'incident_clear']
 const MOCK_VEHICLE_ID = FR_OFFICER.vehicle_id  // placeholder — never send to real API
 
 let gpsIntervalId = null
+let geoWatchId = null
+let latestGeo = null // { lat, lng } — updated live by the browser's real geolocation
+
+// Previously the periodic ping sent a purely synthetic random walk starting
+// from a fixed mock coordinate (FR_OFFICER.current_lat/lng), completely
+// disconnected from the officer's real position — meanwhile FRNavigation.jsx
+// separately reads real browser geolocation for its own map. Those two never
+// agreed, which is why the dispatcher's Active Incident map and Admin Unit
+// Management (both driven by these pings) could show a unit in a totally
+// different district than where the field responder — and the incident
+// itself — actually was. Pinging from the same real geolocation the
+// responder's own screen uses keeps every screen consistent.
+function startGeoWatch() {
+  if (geoWatchId != null || !navigator.geolocation) return
+  geoWatchId = navigator.geolocation.watchPosition(
+    (pos) => { latestGeo = { lat: pos.coords.latitude, lng: pos.coords.longitude } },
+    () => {},
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 },
+  )
+}
+
+function stopGeoWatch() {
+  if (geoWatchId != null) navigator.geolocation.clearWatch(geoWatchId)
+  geoWatchId = null
+  latestGeo = null
+}
 
 function startGpsInterval() {
   if (gpsIntervalId) return
-  let lat = FR_OFFICER.current_lat
-  let lng = FR_OFFICER.current_lng
+  startGeoWatch()
   gpsIntervalId = setInterval(() => {
     const { gpsActive, vehicleId } = useFieldResponderStore.getState()
     if (!gpsActive) { stopGpsInterval(); return }
     if (!getAccessToken()) return
     // Only ping when we have a real vehicle ID assigned — skip mock placeholder
     if (!vehicleId || vehicleId === MOCK_VEHICLE_ID) return
-    lat += (Math.random() * 2 - 1) * 0.0001
-    lng += (Math.random() * 2 - 1) * 0.0001
-    recordGpsPing(vehicleId, lat, lng).catch(() => {})
+    // No real fix yet — skip this tick rather than send a fabricated position
+    if (!latestGeo) return
+    recordGpsPing(vehicleId, latestGeo.lat, latestGeo.lng).catch(() => {})
   }, 30000)
 }
 
 function stopGpsInterval() {
   clearInterval(gpsIntervalId)
   gpsIntervalId = null
+  stopGeoWatch()
 }
 
 function buildDescription(form) {
@@ -57,6 +83,7 @@ export const useFieldResponderStore = create(
       reportSubmitted: false,
       outstandingReports: [],
       toast: null,
+      sessionUserId: null,    // whose account this persisted state belongs to — see checkSessionOwner()
 
       setVehicleId: (vehicleId) => set({ vehicleId }),
       setIncidentId: (incidentId) => set({ incidentId }),
@@ -72,6 +99,18 @@ export const useFieldResponderStore = create(
             const v = await getVehicle(vehicleId)
             const alreadyActive = ['DISPATCHED', 'EN_ROUTE', 'ON_SCENE'].includes((v.status ?? '').toUpperCase())
             if (!alreadyActive) updateVehicleStatus(vehicleId, 'available').catch(() => {})
+            // A vehicle's current_lat/current_lng is meant to be live-tracked
+            // GPS, but it can go stale or wrong between shifts (e.g. it was
+            // last pinged from wherever the previous device's geolocation
+            // happened to resolve, which may have nothing to do with this
+            // vehicle's actual home district). Snapping to the station's
+            // fixed, correct coordinates at the start of every shift is the
+            // real-world-accurate behavior anyway — a unit starts its shift
+            // at its station — and keeps the dispatcher's map from showing
+            // a unit in the wrong district before its first real GPS fix.
+            if (v.station_lat != null && v.station_lng != null) {
+              recordGpsPing(vehicleId, v.station_lat, v.station_lng).catch(() => {})
+            }
           } catch {
             // Can't fetch vehicle — attempt status update anyway
             updateVehicleStatus(vehicleId, 'available').catch(() => {})
@@ -85,12 +124,36 @@ export const useFieldResponderStore = create(
         if (assignment) return   // already have one
         try {
           const dispatches = await getMyDispatches()
-          const active = dispatches.find(d => {
-            // pick any dispatch whose vehicle isn't in a terminal state
-            return true
-          })
+          // Most-recent-first so an older dispatch can't shadow a newer one if
+          // the backend doesn't already return them in that order.
+          const candidates = [...dispatches].sort(
+            (a, b) => new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0)
+          )
+          // A dispatch is "current" for the responder up until they submit
+          // their field report — once the incident reaches PENDING_REPORT
+          // (set by the backend as a side effect of that submission) or
+          // beyond, the ball is in the dispatcher's court for closure, and
+          // this responder has nothing left to do. Previously only CLOSED
+          // counted as terminal here, which is why submitReport() used to
+          // force the incident straight to CLOSED itself (to stop it from
+          // reappearing as "active") — but that skipped the dispatcher's own
+          // review+closure step entirely, since by the time they opened the
+          // closure form the incident was already CLOSED and the backend
+          // correctly rejected it (closure requires RESOLVED/PENDING_REPORT).
+          const RESPONDER_DONE_STATUSES = new Set(['PENDING_REPORT', 'RESOLVED', 'CLOSED'])
+          let active = null
+          let inc = null
+          for (const candidate of candidates) {
+            try {
+              const candidateIncident = await getIncident(candidate.incident_id)
+              if (!RESPONDER_DONE_STATUSES.has(candidateIncident?.status)) {
+                active = candidate
+                inc = candidateIncident
+                break
+              }
+            } catch { /* skip this candidate, try the next */ }
+          }
           if (!active) return
-          const inc = await getIncident(active.incident_id)
           const sibling = await listDispatchesForIncident(active.incident_id)
           set({
             incidentId: active.incident_id,
@@ -110,18 +173,62 @@ export const useFieldResponderStore = create(
         if (incidentId) updateIncidentStatus(incidentId, 'EN_ROUTE').catch(() => {})
       },
       markOnScene: () => {
-        const { incidentId } = get()
+        const { incidentId, vehicleId, assignment } = get()
         set({ assignmentStage: 'on_scene', dutyStatus: 'on_scene' })
         if (incidentId) updateIncidentStatus(incidentId, 'ON_SCENE').catch(() => {})
+        // The periodic GPS interval is pure random jitter around wherever it
+        // started (it has no notion of a destination) and keeps its own
+        // lat/lng closure state independent of this snap — previously it
+        // kept firing every 30s afterward, sending a stale jittered position
+        // that visibly dragged the dispatcher's map pin away from the
+        // incident again a moment after arriving. Stop it here so the pin
+        // stays put for the whole on-scene phase; it resumes (from a fresh
+        // position) once the responder is free to move again — see
+        // submitReport()/clearIncident().
+        stopGpsInterval()
+        const lat = assignment?.incident?.lat
+        const lng = assignment?.incident?.lng
+        if (vehicleId && vehicleId !== MOCK_VEHICLE_ID && lat != null && lng != null) {
+          recordGpsPing(vehicleId, lat, lng).catch(() => {})
+        }
       },
-      clearIncident: () =>
+      clearIncident: async () => {
+        const { incidentId } = get()
+        // Not currently wired to any button (the "Incident Clear" UI action
+        // actually calls updateIncidentStatus + submitReport directly) — kept
+        // consistent with the other status-transition actions in case it's
+        // used directly in the future, so it doesn't silently regress into
+        // the local-only-reset bug that caused incidents to never close.
+        if (incidentId) await updateIncidentStatus(incidentId, 'CLOSED').catch(() => {})
         set({
           incidentId: null,
           assignmentStage: 'incident_clear',
           dutyStatus: 'available',
           hasActiveAssignment: false,
           assignment: null,
-        }),
+        })
+        // markOnScene() froze the GPS interval so the pin would hold at the
+        // incident until it fully closed — resume live tracking now that
+        // it has.
+        if (get().gpsActive) startGpsInterval()
+      },
+      // Non-police responders never file a field report (only RNP units do —
+      // see canFileFieldReports()), so submitReport()'s state reset never
+      // runs for them. Without this, after they mark an incident RESOLVED
+      // the store kept pointing at that now-finished incident (stale
+      // incidentId/assignment/hasActiveAssignment), so the assignment screen
+      // kept showing it instead of a clean "no active assignment" state.
+      clearAssignmentLocal: () => {
+        set({
+          reportSubmitted: false,
+          dutyStatus: 'available',
+          assignmentStage: 'incident_clear',
+          hasActiveAssignment: false,
+          incidentId: null,
+          assignment: null,
+        })
+        if (get().gpsActive) startGpsInterval()
+      },
       endShift: () => {
         stopGpsInterval()
         set({ dutyStatus: 'offline', gpsActive: false, hasActiveAssignment: false, assignmentStage: 'dispatched', assignment: null })
@@ -140,13 +247,24 @@ export const useFieldResponderStore = create(
           injuries: yesNoToBoolean(form.injuries),
           suspects: yesNoToBoolean(form.suspects),
           scene_status: form.sceneStatus,
+          confirmed_type: form.incidentType || null,
           description: buildDescription(form),
           agencies_involved: form.agencies?.join(', ').slice(0, 255) || null,
           case_reference: form.caseReference || null,
           entry_method: 'STRUCTURED',
           submitted_at: new Date().toISOString(),
         }
-        await submitFieldReport(payload)
+        const saved = await submitFieldReport(payload)
+        // The backend moves the incident to PENDING_REPORT as a side effect
+        // of saving the report — that's the correct terminal state from the
+        // responder's side. This used to also force-close the incident
+        // straight to CLOSED to stop it reappearing in pollForAssignment(),
+        // but that skipped the dispatcher's own review-and-closure step
+        // entirely (the closure form requires RESOLVED/PENDING_REPORT and
+        // was finding the incident already CLOSED). pollForAssignment() now
+        // treats PENDING_REPORT itself as "done" for this responder, so no
+        // forced status change is needed here — the dispatcher owns the
+        // CLOSED transition from here on.
         set({
           reportSubmitted: true,
           dutyStatus: 'available',
@@ -155,6 +273,14 @@ export const useFieldResponderStore = create(
           incidentId: null,
           assignment: null,
         })
+        // markOnScene() froze the GPS interval so the pin would hold at the
+        // incident until it fully closed — resume live tracking now that
+        // it has.
+        if (get().gpsActive) startGpsInterval()
+        // Returned so the caller can attach a photo to the real report_id
+        // (previously nothing was returned, so there was no way to sequence
+        // a photo upload after a successful submission).
+        return saved
       },
       addMessage: (text, from = 'officer') => {
         const now = new Date()
@@ -179,6 +305,47 @@ export const useFieldResponderStore = create(
         setTimeout(() => set({ toast: null }), ms)
       },
       stageIndex: () => STAGES.indexOf(get().assignmentStage),
+      // This store persists vehicleId/incidentId/hasActiveAssignment to a
+      // single global localStorage key with no per-user scoping — nothing
+      // ever cleared it on logout, so a second, different field responder
+      // logging into the same browser/device would inherit the previous
+      // user's stale assignment flags until the next live poll reconciled
+      // it. Call this from authSession.logout() to close that gap.
+      resetForNewUser: () => {
+        stopGpsInterval()
+        const user = getCurrentUser()
+        set({
+          vehicleId: null,
+          incidentId: null,
+          assignment: null,
+          gpsActive: true,
+          dutyStatus: 'offline',
+          assignmentStage: 'dispatched',
+          hasActiveAssignment: false,
+          messages: [...mockUnifiedComms],
+          reportSubmitted: false,
+          outstandingReports: [],
+          toast: null,
+          sessionUserId: user?.user_id ?? null,
+        })
+      },
+      // resetForNewUser() only runs from authSession.logout() — if a tester
+      // (or a stale session) swaps accounts in the same browser tab without
+      // going through that flow (new tab reusing localStorage, manual token
+      // swap), the previous responder's vehicleId/incidentId otherwise
+      // leaks into the new session's UI until the next live poll overwrites
+      // it. Call this once on load to catch that mismatch immediately.
+      checkSessionOwner: () => {
+        const { sessionUserId } = get()
+        const user = getCurrentUser()
+        const currentId = user?.user_id ?? null
+        if (!currentId) return
+        if (sessionUserId && sessionUserId !== currentId) {
+          get().resetForNewUser()
+        } else if (!sessionUserId) {
+          set({ sessionUserId: currentId })
+        }
+      },
     }),
     {
       name: 'fr-store',
@@ -192,11 +359,16 @@ export const useFieldResponderStore = create(
         hasActiveAssignment: state.hasActiveAssignment,
         messages: state.messages,
         outstandingReports: state.outstandingReports,
+        sessionUserId: state.sessionUserId,
         // assignment is NOT persisted — always fetched live from the backend
       }),
     }
   )
 )
+
+// Guard against stale cross-account state before anything else reads the
+// store (e.g. before GPS restarts below using a leftover vehicleId).
+useFieldResponderStore.getState().checkSessionOwner()
 
 // Start GPS if it was active when the page loads (e.g. restored from localStorage)
 if (useFieldResponderStore.getState().gpsActive) startGpsInterval()

@@ -1,21 +1,18 @@
-import { useState } from "react";
-import { ArrowLeftRight } from "lucide-react";
+import { useEffect, useState } from "react";
 import MetricCard from "../../components/dispatcher/MetricCard";
 import StatusBadge from "../../components/dispatcher/StatusBadge";
-import {
-  OPS_DISPATCHERS,
-  OPS_JEAN_BOSCO_INCIDENTS,
-  getWorkloadVariant,
-  getWorkloadLabel,
-} from "../../data/mockOpsManagerData";
 import OpsManagerDistrictLabel from "../../components/ops-manager/OpsManagerDistrictLabel";
-import { getOpsManagerDistrict } from "../../utils/opsManagerDistrict";
-import { mockIncidents } from "../../data/mockIncidents";
-import { mockAuditLogs } from "../../data/mockAuditLogs";
-import { generateUuid } from "../../utils/formHelpers";
-import { getCurrentUser } from "../../utils/authSession";
+import { getDispatcherSupervision } from "../../api/dispatchers";
+
+function initials(name) {
+  if (!name) return "??";
+  return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+}
 
 function AiRateBar({ rate }) {
+  if (rate == null) {
+    return <span className="text-[11px] text-(--text-muted)">No dispatches yet</span>;
+  }
   const color =
     rate >= 85
       ? "var(--status-low)"
@@ -36,99 +33,52 @@ function AiRateBar({ rate }) {
 }
 
 export default function OpsManagerDispatchers() {
-  const [redistributeId, setRedistributeId] = useState(null);
-  const [selectedIncidents, setSelectedIncidents] = useState([]);
-  const [transferTo, setTransferTo] = useState("");
-  const [toast, setToast] = useState(null);
+  const [dispatchers, setDispatchers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const omDistrict = getOpsManagerDistrict();
-  const dispatchers = OPS_DISPATCHERS.filter((d) => d.district === omDistrict);
-  const overloaded = dispatchers.filter(
-    (d) => d.workload === "overload",
-  ).length;
-  const avgAi = Math.round(
-    dispatchers.reduce((s, d) => s + d.ai_acceptance_rate, 0) /
-      dispatchers.length,
-  );
-  const totalIncidents = dispatchers.reduce((s, d) => s + d.incidents, 0);
+  useEffect(() => {
+    getDispatcherSupervision()
+      .then(setDispatchers)
+      .catch(() => setError("Could not load dispatcher data — check your connection and retry."))
+      .finally(() => setLoading(false));
+  }, []);
 
-  const showToast = (msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3500);
-  };
-
-  const toggleIncident = (id) => {
-    setSelectedIncidents((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
-  };
-
-  const handleConfirmTransfer = () => {
-    if (!transferTo || !selectedIncidents.length) return;
-    const cu = getCurrentUser();
-    const newDispatcher = dispatchers.find((d) => d.id === transferTo);
-    if (!newDispatcher) return;
-    const ts = new Date().toISOString();
-    selectedIncidents.forEach((incRef) => {
-      const incident = mockIncidents.find(
-        (i) => i.incident_ref === incRef || i.id === incRef,
-      );
-      if (incident) incident.logged_by = newDispatcher.user_id;
-      mockAuditLogs.push({
-        log_id: generateUuid(),
-        user_id: cu?.user_id || "demo-user-uuid",
-        timestamp: ts,
-        action: `INCIDENT_REASSIGNED: ${incRef} to ${newDispatcher.user_id}`,
-        module: "OPERATIONS_MANAGER",
-        ip_address: null,
-        status: "SUCCESS",
-      });
-    });
-    showToast(
-      `Transferred ${selectedIncidents.length} incident${selectedIncidents.length > 1 ? "s" : ""} to ${newDispatcher.name}`,
-    );
-    setRedistributeId(null);
-    setSelectedIncidents([]);
-    setTransferTo("");
-  };
+  // Workload thresholds match the "overload" flagging elsewhere in the app
+  const overloaded = dispatchers.filter((d) => d.active_incidents > 6).length;
+  const withAiData = dispatchers.filter((d) => d.ai_acceptance_rate != null);
+  const avgAi = withAiData.length
+    ? Math.round(withAiData.reduce((s, d) => s + d.ai_acceptance_rate, 0) / withAiData.length)
+    : null;
+  const totalIncidents = dispatchers.reduce((s, d) => s + d.active_incidents, 0);
 
   return (
     <div className="portal-page relative">
-      {toast && (
-        <div
-          className="fixed top-20 right-6 z-50 max-w-sm px-4 py-3 rounded-lg border text-[13px] font-medium shadow-lg"
-          style={{
-            background: "var(--bg-surface)",
-            borderColor: "var(--status-low)",
-            color: "var(--status-low)",
-          }}
-        >
-          {toast}
-        </div>
-      )}
-
       <h1 className="dispatcher-page-title m-0">Dispatcher Supervision</h1>
       <OpsManagerDistrictLabel />
       <p className="dispatcher-page-subtitle mt-2">
-        Monitor workload, AI acceptance, and redistribute active queues.
+        Monitor workload and AI acceptance across dispatchers in your district.
       </p>
 
       <div className="portal-grid-4 my-6">
-        <MetricCard
-          label="Active Dispatchers"
-          value={String(dispatchers.length)}
-        />
-        <MetricCard label="Avg AI Acceptance" value={`${avgAi}%`} />
+        <MetricCard label="Active Dispatchers" value={loading ? '…' : String(dispatchers.length)} />
+        <MetricCard label="Avg AI Acceptance" value={loading ? '…' : (avgAi != null ? `${avgAi}%` : 'N/A')} />
         <MetricCard
           label="Overloaded"
-          value={String(overloaded)}
+          value={loading ? '…' : String(overloaded)}
           hintTone={overloaded ? "critical" : "positive"}
         />
-        <MetricCard
-          label="Total Active Incidents"
-          value={String(totalIncidents)}
-        />
+        <MetricCard label="Total Active Incidents" value={loading ? '…' : String(totalIncidents)} />
       </div>
+
+      {error && (
+        <div
+          className="px-4 py-3 rounded-lg border text-[13px] mb-4"
+          style={{ background: 'var(--status-critical-bg)', color: 'var(--status-critical)', borderColor: 'var(--status-critical)' }}
+        >
+          {error}
+        </div>
+      )}
 
       <div className="dispatcher-surface table-scroll">
         <table className="w-full text-left text-[13px] border-collapse min-w-[800px]">
@@ -138,19 +88,21 @@ export default function OpsManagerDispatchers() {
               style={{ fontFamily: "var(--font-display)" }}
             >
               <th className="p-3">Dispatcher</th>
-              <th className="p-3">Workload</th>
               <th className="p-3">Active Incidents</th>
               <th className="p-3">Handled Today</th>
               <th className="p-3">AI Acceptance</th>
               <th className="p-3">Status</th>
-              <th className="p-3">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {dispatchers.map((d) => (
+            {loading ? (
+              <tr><td colSpan={5} className="p-6 text-center text-(--text-muted)">Loading…</td></tr>
+            ) : dispatchers.length === 0 ? (
+              <tr><td colSpan={5} className="p-6 text-center text-(--text-muted)">No dispatchers assigned to your district.</td></tr>
+            ) : dispatchers.map((d) => (
               <tr
-                key={d.id}
-                className="border-b border-(--border-subtle) hover:bg-(--bg-elevated) group"
+                key={d.user_id}
+                className="border-b border-(--border-subtle) hover:bg-(--bg-elevated)"
               >
                 <td className="p-3">
                   <div className="flex items-center gap-2">
@@ -161,118 +113,34 @@ export default function OpsManagerDispatchers() {
                         color: "var(--accent)",
                       }}
                     >
-                      {d.initials}
+                      {initials(d.name)}
                     </span>
-                    <div>
-                      <div className="font-semibold">{d.name}</div>
-                      <div className="font-mono text-[10px] text-(--text-muted)">
-                        {d.id}
-                      </div>
-                    </div>
+                    <div className="font-semibold">{d.name}</div>
                   </div>
-                </td>
-                <td className="p-3">
-                  <StatusBadge
-                    label={getWorkloadLabel(d.workload)}
-                    variant={getWorkloadVariant(d.workload)}
-                  />
                 </td>
                 <td
                   className="p-3 font-bold"
                   style={{
-                    color:
-                      d.incidents > 6 ? "var(--status-critical)" : undefined,
+                    color: d.active_incidents > 6 ? "var(--status-critical)" : undefined,
                   }}
                 >
-                  {d.incidents}
+                  {d.active_incidents}
                 </td>
-                <td className="p-3">{d.incidents_handled}</td>
+                <td className="p-3">{d.incidents_handled_today}</td>
                 <td className="p-3">
                   <AiRateBar rate={d.ai_acceptance_rate} />
                 </td>
                 <td className="p-3">
                   <StatusBadge
-                    label={d.status}
-                    variant={d.status === "ON DUTY" ? "resolved" : "info"}
+                    label={d.on_duty ? "ON DUTY" : "OFF DUTY"}
+                    variant={d.on_duty ? "resolved" : "info"}
                   />
-                </td>
-                <td className="p-3">
-                  <div className="flex gap-1 opacity-70 group-hover:opacity-100">
-                    <button
-                      type="button"
-                      className="dispatcher-btn-icon"
-                      aria-label="Redistribute"
-                      onClick={() => {
-                        setRedistributeId(d.id);
-                        setSelectedIncidents([]);
-                        setTransferTo("");
-                      }}
-                    >
-                      <ArrowLeftRight size={14} />
-                    </button>
-                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-
-      {redistributeId === "DSP-0042" && (
-        <div className="dispatcher-surface p-4 mt-4">
-          <h3 className="font-bold m-0 mb-3">
-            Redistribute Jean Bosco&apos;s Queue
-          </h3>
-          {OPS_JEAN_BOSCO_INCIDENTS.map((inc) => (
-            <label
-              key={inc.id}
-              className="flex items-center gap-2 text-[13px] mb-2 cursor-pointer"
-            >
-              <input
-                type="checkbox"
-                checked={selectedIncidents.includes(inc.id)}
-                onChange={() => toggleIncident(inc.id)}
-                className="accent-(--accent)"
-              />
-              {inc.id} — {inc.type}
-            </label>
-          ))}
-          <label className="dispatcher-field mt-3 max-w-xs">
-            <span className="field-label">Transfer to</span>
-            <select
-              className="dispatcher-input dispatcher-select"
-              value={transferTo}
-              onChange={(e) => setTransferTo(e.target.value)}
-            >
-              <option value="">Select dispatcher</option>
-              {dispatchers
-                .filter((d) => d.id !== "DSP-0042")
-                .map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name} — {d.incidents} active
-                  </option>
-                ))}
-            </select>
-          </label>
-          <div className="flex gap-2 mt-3">
-            <button
-              type="button"
-              className="dispatcher-btn-primary text-[12px]"
-              disabled={!transferTo || !selectedIncidents.length}
-              onClick={handleConfirmTransfer}
-            >
-              Confirm Transfer
-            </button>
-            <button
-              type="button"
-              className="dispatcher-btn-ghost text-[12px]"
-              onClick={() => setRedistributeId(null)}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

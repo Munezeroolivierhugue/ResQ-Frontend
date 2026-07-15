@@ -13,7 +13,7 @@ function unitIcon(vehicleType) {
   return                                                     { icon: ShieldCheck, color: '#D4A017' }
 }
 
-export default function AvailableUnitsModal({ isOpen, onClose }) {
+export default function AvailableUnitsModal({ isOpen, onClose, onSelectUnit }) {
   const [isMutualAidModalOpen, setIsMutualAidModalOpen] = useState(false)
   const [isAdditionalUnitModalOpen, setIsAdditionalUnitModalOpen] = useState(false)
   const [units, setUnits] = useState([])
@@ -80,8 +80,16 @@ export default function AvailableUnitsModal({ isOpen, onClose }) {
                 )}
                 {units.map((v) => {
                   const { icon: Icon, color } = unitIcon(v.vehicle_type)
+                  const selectable = typeof onSelectUnit === 'function'
                   return (
-                    <div key={v.vehicle_id} className="bg-(--bg-elevated) border border-(--border) rounded-xl px-3.5 py-3 flex items-center gap-3">
+                    <div
+                      key={v.vehicle_id}
+                      className={`bg-(--bg-elevated) border border-(--border) rounded-xl px-3.5 py-3 flex items-center gap-3 ${selectable ? 'cursor-pointer hover:border-(--accent) transition-colors' : ''}`}
+                      role={selectable ? 'button' : undefined}
+                      tabIndex={selectable ? 0 : undefined}
+                      onClick={selectable ? () => onSelectUnit(v) : undefined}
+                      onKeyDown={selectable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectUnit(v) } } : undefined}
+                    >
                       <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border" style={{ background: `color-mix(in srgb, ${color} 12%, transparent)`, borderColor: `color-mix(in srgb, ${color} 30%, transparent)` }}>
                         <Icon size={16} strokeWidth={1.8} color={color} />
                       </div>

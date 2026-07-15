@@ -9,6 +9,8 @@ import { useFieldResponderStore } from '../../store/fieldResponderStore'
 import { connect, subscribe, disconnect } from '../../lib/wsClient'
 import { getAccessToken } from '../../utils/authSession'
 import { listDispatchesForIncident } from '../../api/dispatches'
+import { getIncident } from '../../api/incidents'
+import { formatIncidentType } from '../../utils/incidentTypeLabels'
 
 function vehicleTypeName(type) {
   const t = (type ?? '').toUpperCase()
@@ -41,20 +43,21 @@ export default function FRAssignment() {
       const store = useFieldResponderStore.getState()
       if (store.assignment) return  // already have one
       try {
-        const dispatches = await listDispatchesForIncident(event.incidentId)
+        // Previously built a partial incident object by hand from the WS event
+        // payload (DispatchAssignedEvent) — it never carried district/sector/
+        // call_time at all, so those fields always showed blank here even
+        // though the polling fallback (which calls getIncident()) had them.
+        // Fetching the real incident keeps this path in sync with every field
+        // the transform in api/incidents.js exposes, now and in the future.
+        const [dispatches, inc] = await Promise.all([
+          listDispatchesForIncident(event.incidentId),
+          getIncident(event.incidentId),
+        ])
         const mine = dispatches.find((d) => d.vehicle_id === store.vehicleId)
         if (!mine) return
         store.setIncidentId(event.incidentId)
         store.setAssignment({
-          incident: {
-            incident_id: event.incidentId,
-            incident_ref: event.incidentNumber,
-            incident_type: event.incidentType,
-            severity: event.severity,
-            address: event.address,
-            current_lat: event.lat,
-            current_lng: event.lng,
-          },
+          incident: inc,
           dispatch: mine,
           otherDispatches: dispatches.filter((d) => d.vehicle_id !== store.vehicleId),
         })
@@ -129,15 +132,21 @@ export default function FRAssignment() {
 
   const { incident, dispatch, otherDispatches } = assignment
   const eta = dispatch.eta_minutes ?? null
-  const location = incident.district ?? incident.address ?? 'Unknown location'
-  const landmark = incident.sector ?? ''
+  // Previously showed only the district (or address as a fallback, never
+  // both) with the sector mislabeled as "landmark" — the specific street/
+  // place the dispatcher actually captured (incident.address, e.g. "National
+  // Archives of Rwanda, Mini Ubumwe") was silently dropped everywhere on
+  // this screen, so the responder only ever saw a broad sector like
+  // "Kacyiru" instead of the exact location.
+  const location = `${incident.district ?? 'Unknown district'}${incident.sector ? ' / ' + incident.sector : ''}`
+  const landmark = incident.address ?? ''
 
   return (
     <div className="fr-page fr-page--assignment">
       <SeverityBanner
         severity={incident.severity ?? 'medium'}
         label="INCOMING ASSIGNMENT"
-        title={incident.incident_type}
+        title={formatIncidentType(incident.incident_type)}
         location={location}
         landmark={landmark}
         incidentId={incident.incident_ref ?? incident.incident_id?.slice(0, 8).toUpperCase()}
@@ -154,9 +163,10 @@ export default function FRAssignment() {
         <div className="fr-divider" />
         {[
           ['Incident ref',      incident.incident_ref ?? '—'],
-          ['Type',              incident.incident_type],
+          ['Type',              formatIncidentType(incident.incident_type)],
           ['Severity',          (incident.severity ?? 'medium').toUpperCase()],
           ['District / Sector', `${incident.district ?? '—'}${incident.sector ? ' / ' + incident.sector : ''}`],
+          ['Location',          incident.address ?? '—'],
           ['Call time',         incident.call_time ? new Date(incident.call_time).toLocaleString() : '—'],
           ['Dispatched by',     dispatch.dispatched_by_name ?? 'Dispatcher'],
         ].map(([label, val]) => (
@@ -170,8 +180,6 @@ export default function FRAssignment() {
       <div className="fr-key-numbers">
         {[
           { val: eta != null ? String(eta) : '—', unit: 'min ETA', color: eta != null ? etaColor(eta) : 'var(--text-muted)' },
-          { val: dispatch.confidence != null ? `${Math.round(dispatch.confidence * 100)}%` : '—', unit: 'AI confidence', color: 'var(--text-primary)' },
-          { val: 'P1', unit: 'priority', color: 'var(--status-critical)' },
         ].map((tile) => (
           <div key={tile.unit} className="dispatcher-surface fr-key-tile">
             <div className="fr-key-value font-mono" style={{ color: tile.color }}>{tile.val}</div>

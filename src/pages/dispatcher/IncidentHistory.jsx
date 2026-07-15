@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react'
-import { ChevronRight, ChevronLeft, Download, Search } from 'lucide-react'
+import { ChevronRight, ChevronLeft, Download, Search, FileCheck } from 'lucide-react'
+import ViewClosureModal from '../../components/dispatcher/ViewClosureModal'
 import { listIncidents } from '../../api/incidents'
+import { listDispatchesForIncident } from '../../api/dispatches'
 import { listDistricts } from '../../api/districts'
+import { getResponseTimeTarget } from '../../api/admin'
 import { buildPdfHtml, openPdfWindow, sectionHtml, tableHtml } from '../../utils/pdfExport'
+import { formatIncidentType, normalizeIncidentType } from '../../utils/incidentTypeLabels'
 
 const RANGE_OPTIONS = [
   { value: 'all',   label: 'All Time' },
@@ -21,10 +25,7 @@ function inRange(callTime, range) {
   return true
 }
 
-const ACCENT = '#879D1F'
-const NAVY   = '#031632'
-
-function exportPDF(rows, { totalCount, avgResponse, slaPct }) {
+function exportPDF(rows, { totalCount, avgResponse, slaPct, slaTargetMinutes }) {
   const generatedBy = sessionStorage.getItem('resq-full-name') || 'Dispatcher'
   const sevColor = { critical: '#B9382F', high: '#F07820', medium: '#D4A017', low: '#3DAA6A' }
   const rows20 = rows.slice(0, 20)
@@ -58,8 +59,8 @@ function exportPDF(rows, { totalCount, avgResponse, slaPct }) {
     ],
     kpis: [
       { label: 'Total Incidents', value: totalCount, sub: 'Matching filter' },
-      { label: 'Avg Response Time', value: avgResponse != null ? `${avgResponse} min` : 'N/A', sub: 'Target < 8 min' },
-      { label: 'Within SLA (≤10 min)', value: slaPct != null ? `${slaPct}%` : 'N/A', sub: 'SLA threshold' },
+      { label: 'Avg Response Time', value: avgResponse != null ? `${avgResponse} min` : 'N/A', sub: `Target < ${slaTargetMinutes} min` },
+      { label: `Within SLA (≤${slaTargetMinutes} min)`, value: slaPct != null ? `${slaPct}%` : 'N/A', sub: 'SLA threshold' },
       { label: 'Shown in Report', value: rows.length, sub: rows.length > 20 ? 'First 20 shown' : 'All shown' },
     ],
     sections: [tableSection],
@@ -98,6 +99,7 @@ function fmtMinutes(m) {
 }
 
 export default function IncidentHistory() {
+  const [viewClosureIncident, setViewClosureIncident] = useState(null)
   const [search, setSearch] = useState('')
   const [page,   setPage]   = useState(1)
   const [incidents, setIncidents] = useState([])
@@ -106,10 +108,17 @@ export default function IncidentHistory() {
   const [typeFilter, setTypeFilter] = useState('All')
   const [districtFilter, setDistrictFilter] = useState('All')
   const [districts, setDistricts] = useState([])
+  // Default (8) matches the backend's own fallback until the real
+  // admin-configured value loads — every "response time vs target" figure
+  // on this page used to hardcode its own guess (8 here, 10 elsewhere)
+  // instead of reading Admin Settings' National Response Time Target, so
+  // changing it there never actually changed what dispatchers saw.
+  const [slaTargetMinutes, setSlaTargetMinutes] = useState(8)
   const perPage = 5
 
   useEffect(() => {
     listDistricts().then(setDistricts).catch(() => {})
+    getResponseTimeTarget().then(setSlaTargetMinutes).catch(() => {})
   }, [])
 
   // District filter is a real backend query param; the rest filter client-side
@@ -124,27 +133,58 @@ export default function IncidentHistory() {
     setPage(1)
   }, [districtFilter])
 
-  // Type options derived from the actual data so labels always match DB values
-  const typeOptions = ['All', ...Array.from(new Set(incidents.map(i => i.incident_type).filter(Boolean))).sort()]
-
-  const totalCount = incidents.length
-  const avgResponseMs = incidents.filter(i => i.response_time_minutes != null)
-  const avgResponse = avgResponseMs.length
-    ? Math.round(avgResponseMs.reduce((s, i) => s + i.response_time_minutes, 0) / avgResponseMs.length)
-    : null
-  const slaCount = avgResponseMs.filter(i => i.response_time_minutes <= 10).length
-  const slaPct = avgResponseMs.length ? Math.round((slaCount / avgResponseMs.length) * 100) : null
+  // Type options derived from the actual data, deduplicated by canonical
+  // type — older/manually-entered incidents stored the human-readable label
+  // directly ("Fire") instead of the canonical code ("FIRE"), and "TRAFFIC"
+  // was a legacy synonym for "RTA", so without normalizing first this
+  // dropdown showed the same real type twice with different underlying
+  // values, each filtering to a different (incomplete) subset of results.
+  const typeOptions = ['All', ...Array.from(new Set(incidents.map(i => normalizeIncidentType(i.incident_type)).filter(Boolean))).sort()]
 
   const filtered = incidents.filter(i =>
     (!search ||
       (i.incident_ref ?? '').toLowerCase().includes(search.toLowerCase()) ||
       (i.incident_type ?? '').toLowerCase().includes(search.toLowerCase()) ||
       (i.district ?? i.address ?? '').toLowerCase().includes(search.toLowerCase())) &&
-    (typeFilter === 'All' || i.incident_type === typeFilter) &&
+    (typeFilter === 'All' || normalizeIncidentType(i.incident_type) === typeFilter) &&
     inRange(i.call_time, range)
   )
+
+  // These KPI cards used to be computed from the full district-scoped
+  // `incidents` list while the table below rendered `filtered` (after
+  // search/type/date-range are also applied) — so if those extra filters
+  // excluded every row, the table correctly said "No incidents found" while
+  // the KPI cards kept showing stats from the wider, pre-filter set. That's
+  // exactly the Kicukiro case: 0 rows in the table, but a stale average
+  // still displayed above it. Deriving both from the same `filtered` array
+  // keeps them consistent no matter what's currently filtered out.
+  const totalCount = filtered.length
+  const avgResponseMs = filtered.filter(i => i.response_time_minutes != null)
+  const avgResponse = avgResponseMs.length
+    ? Math.round(avgResponseMs.reduce((s, i) => s + i.response_time_minutes, 0) / avgResponseMs.length)
+    : null
+  const slaCount = avgResponseMs.filter(i => i.response_time_minutes <= slaTargetMinutes).length
+  const slaPct = avgResponseMs.length ? Math.round((slaCount / avgResponseMs.length) * 100) : null
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage))
   const paged      = filtered.slice((page - 1) * perPage, page * perPage)
+
+  // Units column was hardcoded to "—" for every row — nothing ever fetched
+  // which vehicles were actually dispatched. Only fetch for the currently
+  // visible page (5 rows), not all filtered results, to keep this cheap.
+  const [unitsByIncident, setUnitsByIncident] = useState({})
+  useEffect(() => {
+    let cancelled = false
+    Promise.all(paged.map((inc) =>
+      listDispatchesForIncident(inc.incident_id)
+        .then((ds) => [inc.incident_id, ds.map((d) => d.vehicle_plate).filter(Boolean)])
+        .catch(() => [inc.incident_id, []])
+    )).then((entries) => {
+      if (cancelled) return
+      setUnitsByIncident(Object.fromEntries(entries))
+    })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, districtFilter, incidents])
 
   return (
     <div className="portal-page">
@@ -156,7 +196,7 @@ export default function IncidentHistory() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => exportPDF(filtered, { totalCount, avgResponse, slaPct })}
+            onClick={() => exportPDF(filtered, { totalCount, avgResponse, slaPct, slaTargetMinutes })}
             disabled={loading || filtered.length === 0}
             className="flex items-center gap-1.5 px-5 py-2.25 bg-transparent border border-(--border) text-(--text-primary) font-semibold text-[13px] rounded-lg cursor-pointer hover:bg-(--bg-elevated) hover:border-(--accent) transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ fontFamily: 'var(--font-body)' }}
@@ -176,8 +216,8 @@ export default function IncidentHistory() {
 
       <div className="flex gap-3 mb-5">
         <KpiCard label="Total Closed" value={loading ? '…' : totalCount} />
-        <KpiCard label="Avg Response Time" value={loading ? '…' : (avgResponse != null ? `${avgResponse}m` : 'N/A')} sub="Target: 10 min" />
-        <KpiCard label="Within SLA" value={loading ? '…' : (slaPct != null ? `${slaPct}%` : 'N/A')} sub="≤ 10 min response" />
+        <KpiCard label="Avg Response Time" value={loading ? '…' : (avgResponse != null ? `${avgResponse}m` : 'N/A')} sub={`Target: ${slaTargetMinutes} min`} />
+        <KpiCard label="Within SLA (Service Level Agreement)" value={loading ? '…' : (slaPct != null ? `${slaPct}%` : 'N/A')} sub={`Response arrived ≤ ${slaTargetMinutes} min after the call`} />
         <KpiCard label="Incidents Shown" value={loading ? '…' : filtered.length} sub="Filtered results" />
       </div>
 
@@ -206,7 +246,7 @@ export default function IncidentHistory() {
             value={typeFilter}
             onChange={e => { setTypeFilter(e.target.value); setPage(1) }}
           >
-            {typeOptions.map(o => <option key={o} value={o}>{o === 'All' ? 'All Types' : o}</option>)}
+            {typeOptions.map(o => <option key={o} value={o}>{o === 'All' ? 'All Types' : formatIncidentType(o)}</option>)}
           </select>
           <select
             className="h-10 w-36 bg-(--bg-input) border border-(--border) rounded-lg px-3 text-[13px] text-(--text-primary) outline-none appearance-none cursor-pointer"
@@ -224,21 +264,21 @@ export default function IncidentHistory() {
         <table className="w-full border-collapse min-w-[720px]">
           <thead>
             <tr className="bg-(--bg-base)">
-              {['ID', 'Severity', 'Type', 'District / Sector', 'Reported', 'Response Time', 'Resolution Time', 'Units', 'SLA'].map(col => (
+              {['ID', 'Severity', 'Type', 'District / Sector', 'Reported', 'Response Time', 'Resolution Time', 'Units', 'SLA', 'Action'].map(col => (
                 <th key={col} className="px-3.5 py-2.5 text-left field-label border-b border-(--border) whitespace-nowrap">{col}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={9} className="px-3.5 py-12 text-center text-[13px] text-(--text-muted)">Loading…</td></tr>
+              <tr><td colSpan={10} className="px-3.5 py-12 text-center text-[13px] text-(--text-muted)">Loading…</td></tr>
             ) : paged.length === 0 ? (
-              <tr><td colSpan={9} className="px-3.5 py-12 text-center text-[13px] text-(--text-muted)">No incidents found.</td></tr>
+              <tr><td colSpan={10} className="px-3.5 py-12 text-center text-[13px] text-(--text-muted)">No incidents found.</td></tr>
             ) : paged.map((inc, idx) => {
               const sev = inc.severity ?? 'medium'
               const c = severityColor[sev] || '#44474D'
               const respMins = inc.response_time_minutes
-              const withinSla = respMins != null && respMins <= 10
+              const withinSla = respMins != null && respMins <= slaTargetMinutes
               const location = inc.district
                 ? `${inc.district}${inc.sector ? ' / ' + inc.sector : ''}`
                 : (inc.address ?? '—')
@@ -253,7 +293,7 @@ export default function IncidentHistory() {
                       {sev.toUpperCase()}
                     </span>
                   </td>
-                  <td className="px-3.5 text-[13px]">{inc.incident_type}</td>
+                  <td className="px-3.5 text-[13px]">{formatIncidentType(inc.incident_type)}</td>
                   <td className="px-3.5 text-[12px] text-(--text-secondary)">{location}</td>
                   <td className="px-3.5 text-[12px] text-(--text-secondary)" style={{ fontFamily: 'var(--font-mono)' }}>
                     {inc.call_time ? new Date(inc.call_time).toLocaleString() : '—'}
@@ -264,7 +304,9 @@ export default function IncidentHistory() {
                     </span>
                   </td>
                   <td className="px-3.5 text-[12px] text-(--text-secondary)" style={{ fontFamily: 'var(--font-mono)' }}>{fmtMinutes(inc.resolution_time_minutes)}</td>
-                  <td className="px-3.5 text-[12px] text-(--status-info)" style={{ fontFamily: 'var(--font-mono)' }}>—</td>
+                  <td className="px-3.5 text-[12px] text-(--status-info)" style={{ fontFamily: 'var(--font-mono)' }}>
+                    {(unitsByIncident[inc.incident_id] ?? []).join(', ') || '—'}
+                  </td>
                   <td className="px-3.5">
                     {respMins != null ? (
                       <span className="inline-flex items-center px-2.25 py-0.5 rounded text-[10px] font-bold uppercase tracking-[0.07em]"
@@ -278,6 +320,17 @@ export default function IncidentHistory() {
                     ) : (
                       <span className="text-[10px] text-(--text-muted)">N/A</span>
                     )}
+                  </td>
+                  <td className="px-3.5">
+                    <button
+                      type="button"
+                      onClick={() => setViewClosureIncident(inc)}
+                      className="inline-flex items-center gap-1 px-1 py-1 rounded-lg cursor-pointer text-[11px] font-bold text-(--accent) transition-opacity hover:opacity-70"
+                      style={{ background: 'none', border: 'none' }}
+                    >
+                      <FileCheck size={12} />
+                      View Closure
+                    </button>
                   </td>
                 </tr>
               )
@@ -308,6 +361,12 @@ export default function IncidentHistory() {
           </div>
         </div>
       </div>
+
+      <ViewClosureModal
+        incident={viewClosureIncident}
+        open={!!viewClosureIncident}
+        onClose={() => setViewClosureIncident(null)}
+      />
     </div>
   )
 }
