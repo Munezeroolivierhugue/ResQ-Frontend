@@ -47,7 +47,6 @@ import OpsManagerEscalations from './pages/ops-manager/OpsManagerEscalations'
 import OpsManagerEscalation from './pages/ops-manager/OpsManagerEscalation'
 import OpsManagerResources from './pages/ops-manager/OpsManagerResources'
 import OpsManagerMultiAgency from './pages/ops-manager/OpsManagerMultiAgency'
-import OpsManagerDispatchers from './pages/ops-manager/OpsManagerDispatchers'
 import OpsManagerClosedIncidents from './pages/ops-manager/OpsManagerClosedIncidents'
 import OpsManagerIncidentClosureReview from './pages/ops-manager/OpsManagerIncidentClosureReview'
 import OpsManagerShift from './pages/ops-manager/OpsManagerShift'
@@ -64,6 +63,7 @@ import DCExecutiveReport from './pages/district-commander/DCExecutiveReport'
 import DCProfile from './pages/district-commander/DCProfile'
 import DCSettings from './pages/district-commander/DCSettings'
 import DCCreateUser from './pages/district-commander/DCCreateUser'
+import DCUsers from './pages/district-commander/DCUsers'
 import FieldResponderRoute from './components/layout/FieldResponderRoute'
 import FieldResponderShell from './components/field-responder/FieldResponderShell'
 import FRShiftStart from './pages/field-responder/FRShiftStart'
@@ -174,7 +174,9 @@ export default function App() {
             <Route path="coverage" element={<DCCoverage />} />
             <Route path="resources" element={<DCResources />} />
             <Route path="executive-report" element={<DCExecutiveReport />} />
-            <Route path="create-user" element={<DCCreateUser />} />
+            <Route path="users" element={<DCUsers />} />
+            <Route path="users/invite" element={<DCCreateUser />} />
+            <Route path="create-user" element={<Navigate to="/district-commander/users/invite" replace />} />
             <Route path="profile" element={<DCProfile />} />
             <Route path="settings" element={<Navigate to="/district-commander/settings/profile" replace />} />
             <Route path="settings/:section" element={<DCSettings />} />
@@ -228,7 +230,6 @@ export default function App() {
             <Route path="escalations/:incidentId" element={<OpsManagerEscalation />} />
             <Route path="resources" element={<OpsManagerResources />} />
             <Route path="multi-agency" element={<OpsManagerMultiAgency />} />
-            <Route path="dispatchers" element={<OpsManagerDispatchers />} />
             <Route path="closed-incidents" element={<OpsManagerClosedIncidents />} />
             <Route path="incident-closure" element={<OpsManagerIncidentClosureReview />} />
             <Route path="shift" element={<OpsManagerShift />} />

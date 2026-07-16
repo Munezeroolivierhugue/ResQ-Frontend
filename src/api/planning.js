@@ -118,8 +118,10 @@ export async function runSimulation(body) {
   return transformSimulation(data.data ?? data)
 }
 
-export async function listCoverageGaps() {
-  const { data } = await api.get('/api/planning/coverage-gaps')
+export async function listCoverageGaps(districtId) {
+  const { data } = await api.get('/api/planning/coverage-gaps', {
+    params: districtId ? { districtId } : {},
+  })
   return (data.data ?? data).map(transformGap)
 }
 

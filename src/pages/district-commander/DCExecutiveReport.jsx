@@ -35,12 +35,16 @@ function exportPDF({ periodLabel, periodStart, periodEnd, districtName, draftRep
 import MetricCard from '../../components/dispatcher/MetricCard'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import DCPageHeader from '../../components/district-commander/DCPageHeader'
-import {
-  DC_INCIDENT_TYPES,
-  DC_SIGNIFICANT_EVENTS,
-} from '../../data/mockDistrictCommanderData'
 import { listReports, generateReport, submitReport } from '../../api/reporting'
+import { listIncidents } from '../../api/incidents'
+import { listVehicles } from '../../api/vehicles'
 import { getCurrentUser } from '../../utils/authSession'
+import { getDistrictCommanderDistrict } from '../../utils/districtCommanderSession'
+
+function fmtRespTime(minutes) {
+  if (minutes == null) return '—'
+  return `${Number(minutes).toFixed(1)}m`
+}
 
 function fmtDate(iso) {
   if (!iso) return '—'
@@ -59,23 +63,28 @@ function currentMonthPeriod() {
 }
 
 export default function DCExecutiveReport() {
-  const districtId = sessionStorage.getItem('resq-district-id') || undefined
+  const districtId = getCurrentUser()?.district_id
+  const districtName = getDistrictCommanderDistrict()
   const { start: periodStart, end: periodEnd, label: periodLabel } = currentMonthPeriod()
 
   const [tab, setTab] = useState('current')
   const [assessment, setAssessment] = useState('')
   const [recommendations, setRecommendations] = useState('')
-  const [pdfModal, setPdfModal] = useState(null)
 
   const [archive, setArchive] = useState([])
   const [archiveLoading, setArchiveLoading] = useState(true)
 
   // Draft report state from backend
   const [draftReport, setDraftReport] = useState(null)
-  const [generating, setGenerating] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [toast, setToast] = useState(null)
+
+  // Real incident data for the current period, used to build the incident
+  // type breakdown and significant events sections below — no mock rows.
+  const [periodIncidents, setPeriodIncidents] = useState([])
+  const [incidentsLoading, setIncidentsLoading] = useState(true)
+  const [coverageRatio, setCoverageRatio] = useState(null)
 
   function showToast(msg) {
     setToast(msg)
@@ -87,14 +96,81 @@ export default function DCExecutiveReport() {
       .then(setArchive)
       .catch(() => {})
       .finally(() => setArchiveLoading(false))
-  }, [])
+  }, [districtId])
+
+  useEffect(() => {
+    if (!districtId) { Promise.resolve().then(() => setIncidentsLoading(false)); return }
+    listIncidents({ districtId })
+      .then((all) => {
+        const inPeriod = all.filter((i) => i.call_time && i.call_time >= periodStart && i.call_time <= `${periodEnd}T23:59:59`)
+        setPeriodIncidents(inPeriod)
+      })
+      .catch(() => {})
+      .finally(() => setIncidentsLoading(false))
+    listVehicles({ districtId })
+      .then((vehicles) => {
+        if (!vehicles.length) return
+        const available = vehicles.filter((v) => v.status === 'available').length
+        setCoverageRatio(Math.round((available / vehicles.length) * 100))
+      })
+      .catch(() => {})
+  }, [districtId, periodStart, periodEnd])
+
+  const incidentTypeBreakdown = (() => {
+    const byType = {}
+    for (const inc of periodIncidents) {
+      const key = inc.incident_type ?? 'Other'
+      if (!byType[key]) byType[key] = { type: key, count: 0, totalResponse: 0, responseCount: 0, resolved: 0 }
+      const bucket = byType[key]
+      bucket.count += 1
+      if (inc.response_time_minutes != null) {
+        bucket.totalResponse += inc.response_time_minutes
+        bucket.responseCount += 1
+      }
+      if (inc.status === 'CLOSED' || inc.status === 'RESOLVED') bucket.resolved += 1
+    }
+    return Object.values(byType)
+      .map((b) => ({
+        type: b.type,
+        count: b.count,
+        avgResponse: b.responseCount ? fmtRespTime(b.totalResponse / b.responseCount) : '—',
+        resolution: `${Math.round((b.resolved / b.count) * 100)}%`,
+      }))
+      .sort((a, b) => b.count - a.count)
+  })()
+
+  const significantEvents = periodIncidents
+    .filter((i) => i.severity === 'critical' || i.severity === 'high')
+    .sort((a, b) => new Date(b.call_time) - new Date(a.call_time))
+    .slice(0, 6)
+    .map((i) => ({
+      date: i.call_time ? new Date(i.call_time).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—',
+      text: `${i.incident_type ?? 'Incident'} — ${i.severity.toUpperCase()} severity${i.address ? ` at ${i.address}` : ''} (${i.status})`,
+    }))
+
+  // Live metrics computed directly from this period's real incidents, so
+  // the KPI cards are accurate immediately — the analyst-facing report
+  // record is only created/submitted when the DC actually submits.
+  const liveMetrics = (() => {
+    const total = periodIncidents.length
+    const withResponse = periodIncidents.filter((i) => i.response_time_minutes != null)
+    const avgResponse = withResponse.length
+      ? withResponse.reduce((sum, i) => sum + i.response_time_minutes, 0) / withResponse.length
+      : null
+    const closed = periodIncidents.filter((i) => i.status === 'CLOSED' || i.status === 'RESOLVED').length
+    const resolutionRate = total ? closed / total : null
+    return { total, avgResponse, resolutionRate }
+  })()
 
   const assessmentOk = assessment.trim().length >= 50
   const recommendationsOk = recommendations.trim().length >= 50
 
-  const handleGenerate = async () => {
-    setGenerating(true)
+  const handleSubmit = async () => {
+    setSubmitting(true)
     try {
+      // The report record (which the analyst reads) is created from live
+      // metrics at the moment of submission, so it always reflects the
+      // real, current numbers rather than a stale earlier snapshot.
       const report = await generateReport({
         report_type: 'EXECUTIVE',
         district_id: districtId,
@@ -102,25 +178,9 @@ export default function DCExecutiveReport() {
         period_end: periodEnd,
       })
       setDraftReport(report)
-      showToast('Draft report created')
-    } catch {
-      showToast('Failed to generate report — please try again')
-    } finally {
-      setGenerating(false)
-    }
-  }
-
-  const handleSubmit = async () => {
-    if (!draftReport?.report_id) {
-      showToast('Generate a draft first before submitting')
-      return
-    }
-    setSubmitting(true)
-    try {
-      await submitReport(draftReport.report_id)
+      await submitReport(report.report_id)
       setSubmitted(true)
-      showToast('Report submitted to Headquarters')
-      // Refresh archive
+      showToast('Report submitted to the Analyst')
       listReports('EXECUTIVE', districtId).then(setArchive).catch(() => {})
     } catch {
       showToast('Submission failed — please try again')
@@ -139,7 +199,7 @@ export default function DCExecutiveReport() {
         </div>
       )}
 
-      <DCPageHeader title="Executive Report" subtitle="Monthly performance report for RNP Headquarters." />
+      <DCPageHeader title="Executive Report" subtitle="Monthly performance report submitted to the Analyst." />
 
       <div className="flex gap-2 mb-6 border-b border-(--border) pb-2">
         {[
@@ -170,45 +230,31 @@ export default function DCExecutiveReport() {
               </div>
               <div className="mt-2">
                 <StatusBadge
-                  label={submitted ? 'SUBMITTED' : draftReport ? 'DRAFT' : 'NOT STARTED'}
+                  label={submitted ? 'SUBMITTED' : 'IN PROGRESS'}
                   variant={submitted ? 'resolved' : 'handover'}
                 />
               </div>
               <p className="text-[12px] text-(--text-muted) m-0 mt-2">Report period: {periodStart} – {periodEnd}</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              {!draftReport && !submitted && (
-                <button
-                  type="button"
-                  className="dispatcher-btn-ghost text-[12px] inline-flex items-center gap-1.5"
-                  disabled={generating}
-                  onClick={handleGenerate}
-                >
-                  {generating ? 'Generating…' : '⚡ Generate Draft'}
-                </button>
-              )}
               <button type="button" className="dispatcher-btn-ghost text-[12px] inline-flex items-center gap-1.5"
                 onClick={() => {
                   const cu = getCurrentUser()
                   exportPDF({
                     periodLabel, periodStart, periodEnd,
-                    districtName: sessionStorage.getItem('resq-district-name') || undefined,
-                    draftReport,
+                    districtName,
+                    draftReport: draftReport ?? {
+                      total_incidents: liveMetrics.total,
+                      avg_response_time: liveMetrics.avgResponse,
+                      resolution_rate: liveMetrics.resolutionRate,
+                    },
                     assessment,
                     recommendations,
-                    generatedBy: cu?.fullName || sessionStorage.getItem('resq-full-name') || 'District Commander',
+                    generatedBy: cu?.fullName || 'District Commander',
                   })
                 }}>
                 <Download size={14} />
                 Generate PDF
-              </button>
-              <button
-                type="button"
-                className="dispatcher-btn-primary text-[12px] inline-flex items-center gap-1.5"
-                disabled={!canSubmit}
-                onClick={handleSubmit}
-              >
-                {submitting ? 'Submitting…' : <><Send size={14} />Submit to Headquarters</>}
               </button>
             </div>
           </div>
@@ -220,7 +266,7 @@ export default function DCExecutiveReport() {
             >
               <Check size={24} style={{ color: 'var(--status-low)' }} className="shrink-0" />
               <div>
-                <div className="font-bold text-(--status-low)">Report submitted to RNP Headquarters</div>
+                <div className="font-bold text-(--status-low)">Report submitted to the Analyst</div>
                 <p className="text-[12px] text-(--text-secondary) m-0 mt-1">
                   A confirmation has been logged to your report archive.
                 </p>
@@ -230,15 +276,14 @@ export default function DCExecutiveReport() {
 
           <section className="rounded-lg p-4" style={{ background: 'var(--bg-elevated)' }}>
             <p className="text-[11px] text-(--text-muted) m-0 mb-3">
-              {draftReport ? 'Auto-generated from district data — do not edit.' : 'Click "Generate Draft" to populate metrics from live data.'}
+              {incidentsLoading ? 'Loading live district data…' : 'Live metrics from this period’s real incidents — updates automatically, no action needed.'}
             </p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <MetricCard label="Incidents" value={draftReport?.total_incidents != null ? String(draftReport.total_incidents) : '—'} hintTone="warning" />
-              <MetricCard label="Avg Response" value={draftReport?.avg_response_time != null ? `${Number(draftReport.avg_response_time).toFixed(1)}m` : '—'} hintTone="positive" />
-              <MetricCard label="Resolution Rate" value={draftReport?.resolution_rate != null ? `${Math.round(draftReport.resolution_rate * 100)}%` : '—'} hintTone="positive" />
-              <MetricCard label="Coverage" value="91%" hint="Mock data" hintTone="positive" />
-              <MetricCard label="Missed Calls" value="87%" hint="Mock data" hintTone="warning" />
-              <MetricCard label="District" value={draftReport?.district_name ?? '—'} hintTone="neutral" />
+              <MetricCard label="Incidents" value={incidentsLoading ? '—' : String(liveMetrics.total)} hintTone="warning" />
+              <MetricCard label="Avg Response" value={incidentsLoading ? '—' : fmtRespTime(liveMetrics.avgResponse)} hintTone="positive" />
+              <MetricCard label="Resolution Rate" value={incidentsLoading || liveMetrics.resolutionRate == null ? '—' : `${Math.round(liveMetrics.resolutionRate * 100)}%`} hintTone="positive" />
+              <MetricCard label="Unit Availability" value={coverageRatio != null ? `${coverageRatio}%` : '—'} hintTone="positive" />
+              <MetricCard label="District" value={districtName ?? '—'} hintTone="neutral" />
             </div>
           </section>
 
@@ -254,7 +299,13 @@ export default function DCExecutiveReport() {
                 </tr>
               </thead>
               <tbody>
-                {DC_INCIDENT_TYPES.map((row) => (
+                {incidentsLoading && (
+                  <tr><td colSpan={4} className="py-4 text-center text-(--text-muted)">Loading…</td></tr>
+                )}
+                {!incidentsLoading && incidentTypeBreakdown.length === 0 && (
+                  <tr><td colSpan={4} className="py-4 text-center text-(--text-muted)">No incidents recorded this period.</td></tr>
+                )}
+                {!incidentsLoading && incidentTypeBreakdown.map((row) => (
                   <tr key={row.type} className="border-b border-(--border-subtle)">
                     <td className="py-2 pr-3">{row.type}</td>
                     <td className="py-2 pr-3 font-mono">{row.count}</td>
@@ -268,14 +319,20 @@ export default function DCExecutiveReport() {
 
           <section className="dispatcher-surface p-4">
             <h2 className="text-[13px] font-bold m-0 mb-3">Significant Events</h2>
-            <ul className="m-0 p-0 list-none space-y-3">
-              {DC_SIGNIFICANT_EVENTS.map((ev) => (
-                <li key={ev.date} className="dispatcher-timeline-item border-l-2 border-(--accent) pl-3">
-                  <div className="text-[11px] font-mono text-(--accent)">{ev.date}</div>
-                  <div className="text-[12px] text-(--text-secondary) mt-0.5">{ev.text}</div>
-                </li>
-              ))}
-            </ul>
+            {incidentsLoading ? (
+              <p className="text-[12px] text-(--text-muted) m-0">Loading…</p>
+            ) : significantEvents.length === 0 ? (
+              <p className="text-[12px] text-(--text-muted) m-0">No high or critical severity incidents this period.</p>
+            ) : (
+              <ul className="m-0 p-0 list-none space-y-3">
+                {significantEvents.map((ev, idx) => (
+                  <li key={idx} className="dispatcher-timeline-item border-l-2 border-(--accent) pl-3">
+                    <div className="text-[11px] font-mono text-(--accent)">{ev.date}</div>
+                    <div className="text-[12px] text-(--text-secondary) mt-0.5">{ev.text}</div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           <section className="dispatcher-surface p-4">
@@ -284,7 +341,7 @@ export default function DCExecutiveReport() {
               <textarea
                 className="dispatcher-input dispatcher-textarea"
                 style={{ minHeight: '150px' }}
-                placeholder="Describe operational highlights, challenges, resource constraints, and recommendations for headquarters..."
+                placeholder="Describe operational highlights, challenges, resource constraints, and recommendations for the analyst..."
                 value={assessment}
                 onChange={(e) => setAssessment(e.target.value)}
                 disabled={submitted}
@@ -299,7 +356,7 @@ export default function DCExecutiveReport() {
               <textarea
                 className="dispatcher-input dispatcher-textarea"
                 style={{ minHeight: '100px' }}
-                placeholder="List specific resource requests, policy recommendations, or operational changes you are requesting HQ to consider..."
+                placeholder="List specific resource requests, policy recommendations, or operational changes for the analyst to consider..."
                 value={recommendations}
                 onChange={(e) => setRecommendations(e.target.value)}
                 disabled={submitted}
@@ -309,8 +366,8 @@ export default function DCExecutiveReport() {
 
           <section className="pt-4 border-t border-(--border-subtle)">
             <ul className="text-[12px] text-(--text-muted) m-0 mb-4 space-y-1 list-none p-0">
-              <li>{draftReport ? '✓' : '○'} Performance data auto-populated (generate draft first)</li>
-              <li>✓ Incident analysis complete</li>
+              <li>{!incidentsLoading ? '✓' : '○'} Performance data auto-populated from live district data</li>
+              <li>{!incidentsLoading ? '✓' : '○'} Incident analysis {incidentsLoading ? 'loading…' : 'complete'}</li>
               <li>{assessmentOk ? '✓' : '○'} District Commander assessment (required)</li>
               <li>{recommendationsOk ? '✓' : '○'} Recommendations (required)</li>
             </ul>
@@ -320,7 +377,7 @@ export default function DCExecutiveReport() {
               disabled={!canSubmit}
               onClick={handleSubmit}
             >
-              {submitting ? 'Submitting…' : <><Send size={16} />Submit to Headquarters</>}
+              {submitting ? 'Submitting…' : <><Send size={16} />Submit to Analyst</>}
             </button>
           </section>
         </div>
@@ -357,7 +414,19 @@ export default function DCExecutiveReport() {
                     <button
                       type="button"
                       className="dispatcher-btn-ghost text-[11px]"
-                      onClick={() => setPdfModal(row.period_start ?? row.report_id)}
+                      onClick={() => {
+                        const cu = getCurrentUser()
+                        exportPDF({
+                          periodLabel: row.period_start ? `${row.period_start} – ${row.period_end ?? ''}` : (row.period_start ?? 'Archived Period'),
+                          periodStart: row.period_start ?? '—',
+                          periodEnd: row.period_end ?? '—',
+                          districtName: row.district_name ?? districtName,
+                          draftReport: row,
+                          assessment: '',
+                          recommendations: '',
+                          generatedBy: row.generated_by_name ?? cu?.fullName ?? 'District Commander',
+                        })
+                      }}
                     >
                       View
                     </button>
@@ -367,23 +436,6 @@ export default function DCExecutiveReport() {
             </tbody>
           </table>
         </div>
-      )}
-
-      {pdfModal && (
-        <>
-          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setPdfModal(null)} aria-hidden />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 pointer-events-none">
-            <div className="dispatcher-surface p-6 max-w-lg w-full pointer-events-auto max-h-[80vh] overflow-y-auto">
-              <h3 className="font-mono text-(--accent) m-0 mb-2">Executive Report — {pdfModal}</h3>
-              <p className="text-[12px] text-(--text-secondary) m-0 leading-relaxed">
-                Report archived and submitted to RNP Headquarters. PDF export is not yet implemented.
-              </p>
-              <button type="button" className="dispatcher-btn-primary mt-4 text-[12px]" onClick={() => setPdfModal(null)}>
-                Close
-              </button>
-            </div>
-          </div>
-        </>
       )}
     </div>
   )

@@ -1,11 +1,19 @@
 import { useEffect, useState } from 'react'
-import { MapPin, Play, Check, ChevronDown, Truck, CloudRain } from 'lucide-react'
+import { MapPin, Play, Check, ChevronDown, Truck, Megaphone } from 'lucide-react'
 import { useFieldResponderStore } from '../../store/fieldResponderStore'
 import { listVehicles } from '../../api/vehicles'
 import { getMyProfile } from '../../api/users'
 import { startShift } from '../../api/shifts'
 import { getMyStats } from '../../api/fieldResponderStats'
+import { listBroadcasts } from '../../api/broadcasts'
 import { getCurrentUser } from '../../utils/authSession'
+
+function timeAgo(isoString) {
+  const diffMin = Math.floor((Date.now() - new Date(isoString).getTime()) / 60000)
+  if (diffMin < 1) return 'Just now'
+  if (diffMin < 60) return `${diffMin}m ago`
+  return `${Math.floor(diffMin / 60)}h ago`
+}
 
 function initials(name) {
   if (!name) return '??'
@@ -30,6 +38,16 @@ export default function FRShiftStart() {
   const [selectedVehicle, setSelectedVehicle] = useState(vehicleId ?? '')
   const [startingShift, setStartingShift] = useState(false)
   const [incidentsToday, setIncidentsToday] = useState(0)
+  const [advisories, setAdvisories] = useState([])
+
+  useEffect(() => {
+    listBroadcasts()
+      .then((all) => setAdvisories(
+        all.filter((b) => b.target_area === user?.district_name || b.target_area === 'ALL_UNITS').slice(0, 3)
+      ))
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     // Load pre-assigned vehicle from user profile first
@@ -167,16 +185,27 @@ export default function FRShiftStart() {
         )}
       </div>
 
-      {/* Shift briefing */}
+      {/* Advisories — real broadcasts from the Ops Manager, scoped to this
+          responder's own district. Previously a static "Weather Advisory"
+          card promised rerouting alerts that nothing ever fed — no weather
+          integration existed anywhere in the app. */}
       <div className="dispatcher-surface fr-card">
         <div className="fr-card-header">
-          <CloudRain size={16} className="text-(--accent)" />
-          <span className="font-semibold text-[13px]">Weather Advisory</span>
+          <Megaphone size={16} className="text-(--accent)" />
+          <span className="font-semibold text-[13px]">Advisories</span>
         </div>
         <div className="fr-divider" />
-        <p className="fr-briefing-text">
-          If there are any weather changes affecting your route, you will be notified here for rerouting.
-        </p>
+        {advisories.length === 0 ? (
+          <p className="fr-briefing-text">No advisories from your Ops Manager right now.</p>
+        ) : (
+          advisories.map((b) => (
+            <p key={b.broadcast_id} className="fr-briefing-text">
+              <strong>{b.priority}</strong> · {b.message}
+              <br />
+              <span className="text-(--text-muted)" style={{ fontSize: '11px' }}>{timeAgo(b.sent_at)}</span>
+            </p>
+          ))
+        )}
       </div>
 
       {/* Go Available button */}

@@ -1,11 +1,20 @@
 import { useState, useEffect } from 'react'
-import { Plus, Search } from 'lucide-react'
+import { Plus, Search, ShieldAlert } from 'lucide-react'
 import DCResourceRequestModal from '../../components/district-commander/DCResourceRequestModal'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
 import DCPageHeader from '../../components/district-commander/DCPageHeader'
 import { getDistrictCommanderDistrict } from '../../utils/districtCommanderSession'
 import { listResourceRequests, createResourceRequest } from '../../api/reporting'
+import { listMutualAidRequests, updateMutualAidStatus } from '../../api/mutualAid'
+import { getCurrentUser } from '../../utils/authSession'
+
+function timeAgo(isoString) {
+  const diffMin = Math.floor((Date.now() - new Date(isoString).getTime()) / 60000)
+  if (diffMin < 1) return 'Just now'
+  if (diffMin < 60) return `${diffMin}m ago`
+  return `${Math.floor(diffMin / 60)}h ago`
+}
 
 function statusVariant(status) {
   if (!status) return 'handover'
@@ -22,7 +31,7 @@ function formatDate(iso) {
 
 export default function DCResources() {
   const district = getDistrictCommanderDistrict()
-  const districtId = sessionStorage.getItem('resq-district-id') || undefined
+  const districtId = getCurrentUser()?.district_id
 
   const [filter, setFilter] = useState('All')
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -32,6 +41,13 @@ export default function DCResources() {
   const [error, setError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState(null)
+
+  // Mutual aid requests from this district's own Ops Manager — a different,
+  // separate concept from the "Resource Requests" (to RNP HQ) below. Only
+  // the District Commander can approve/decline/fulfill these.
+  const [mutualAidRequests, setMutualAidRequests] = useState([])
+  const [mutualAidLoading, setMutualAidLoading] = useState(true)
+  const [mutualAidActingId, setMutualAidActingId] = useState(null)
 
   function showToast(msg) {
     setToast(msg)
@@ -46,6 +62,27 @@ export default function DCResources() {
   }
 
   useEffect(() => { fetchRequests() }, [])
+
+  useEffect(() => {
+    if (!districtId) return
+    listMutualAidRequests({ districtId })
+      .then((all) => setMutualAidRequests(all.filter((r) => r.status === 'PENDING')))
+      .catch(() => {})
+      .finally(() => setMutualAidLoading(false))
+  }, [districtId])
+
+  const handleMutualAidAction = async (requestId, status) => {
+    setMutualAidActingId(requestId)
+    try {
+      await updateMutualAidStatus(requestId, status)
+      setMutualAidRequests((prev) => prev.filter((r) => r.request_id !== requestId))
+      showToast(`Request ${status.toLowerCase()}`)
+    } catch {
+      showToast('Could not update request — please retry')
+    } finally {
+      setMutualAidActingId(null)
+    }
+  }
 
   const history = requests.filter((r) => {
     const matchesFilter =
@@ -67,6 +104,7 @@ export default function DCResources() {
         district_id: districtId,
         resource_type: data.unitType,
         quantity: parseInt(data.qty, 10) || 1,
+        urgency: data.urgency,
         reason: data.justification || data.urgency,
       })
       showToast('Resource request submitted successfully')
@@ -107,6 +145,55 @@ export default function DCResources() {
       />
 
       <div className="flex flex-col gap-6">
+        <div className="dispatcher-surface p-5">
+          <SectionTitle
+            title="Mutual Aid Requests"
+            badge={<StatusBadge label={String(mutualAidRequests.length)} variant="critical" />}
+          />
+          <p className="text-[12px] text-(--text-secondary) m-0 mt-1 mb-3">
+            Requests from your district's Ops Manager for units from another district.
+          </p>
+          {mutualAidLoading ? (
+            <p className="text-[12px] text-(--text-muted) m-0">Loading…</p>
+          ) : mutualAidRequests.length === 0 ? (
+            <p className="text-[12px] text-(--text-muted) m-0">No pending mutual aid requests.</p>
+          ) : (
+            mutualAidRequests.map((r) => (
+              <div key={r.request_id} className="flex flex-wrap items-center justify-between gap-3 py-3 border-b border-(--border-subtle) last:border-0">
+                <div className="flex items-start gap-2">
+                  <ShieldAlert size={16} className="mt-0.5 shrink-0" style={{ color: 'var(--status-medium)' }} />
+                  <div>
+                    <div className="text-[13px] font-semibold">
+                      {r.quantity}× {r.unit_type} — requested by {r.requested_by_name ?? 'Ops Manager'}
+                    </div>
+                    <div className="text-[12px] text-(--text-secondary)">
+                      {r.reason ?? 'No reason given'} · {timeAgo(r.created_at)}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    type="button"
+                    className="dispatcher-btn-ghost text-[12px]"
+                    disabled={mutualAidActingId === r.request_id}
+                    onClick={() => handleMutualAidAction(r.request_id, 'DECLINED')}
+                  >
+                    Decline
+                  </button>
+                  <button
+                    type="button"
+                    className="dispatcher-btn-primary text-[12px]"
+                    disabled={mutualAidActingId === r.request_id}
+                    onClick={() => handleMutualAidAction(r.request_id, 'APPROVED')}
+                  >
+                    Approve
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
         <div className="dispatcher-surface p-5">
           <h2 className="text-[14px] font-bold m-0 mb-3">Request History</h2>
           <div className="flex flex-col sm:flex-row items-center gap-3 mb-4">

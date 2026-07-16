@@ -102,12 +102,11 @@ export default function DCResourceRequestModal({ isOpen, onClose, onSubmit, dist
             >
               <Info size={14} className="shrink-0 text-(--accent)" />
               <span>
-                The following will be automatically attached: Current coverage score (77%), Active unit count (18),
-                Avg response time (7.4m), Last 30 days incident volume (312)
+                This request will be sent to RNP Headquarters for review, along with your district name and requester details.
               </span>
             </div>
             {submitted && (
-              <p className="text-[12px] text-(--status-low) m-0 text-center font-bold">Request queued for HQ review (demo).</p>
+              <p className="text-[12px] text-(--status-low) m-0 text-center font-bold">Request submitted for HQ review.</p>
             )}
           </form>
         </div>

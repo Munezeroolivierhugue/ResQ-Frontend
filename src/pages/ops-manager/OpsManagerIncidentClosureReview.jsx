@@ -7,17 +7,40 @@ import SeverityBadge from '../../components/dispatcher/SeverityBadge'
 import FieldReportCard from '../../components/dispatcher/FieldReportCard'
 import ClosureRecordCard from '../../components/dispatcher/ClosureRecordCard'
 import { getReportForIncident, getClosureForIncident, listAttachments } from '../../api/fieldReports'
+import { getIncident } from '../../api/incidents'
 import { formatIncidentType } from '../../utils/incidentTypeLabels'
+
+// Persists which incident this review is for across a hard refresh —
+// react-router's route `state` (the only thing this page used to rely on)
+// is lost on refresh, which silently dropped straight to "No incident
+// selected" even though the dispatcher had just clicked into a real,
+// specific closed incident from the list.
+const REVIEW_INCIDENT_KEY = 'resq-om-closure-review-incident-id'
 
 export default function OpsManagerIncidentClosureReview() {
   const navigate = useNavigate()
   const { state } = useLocation()
-  const incident = state?.incident ?? null
+  const [incident, setIncident] = useState(state?.incident ?? null)
+  const [incidentLoading, setIncidentLoading] = useState(!state?.incident)
 
   const [fieldReport, setFieldReport] = useState(null)
   const [closure, setClosure] = useState(null)
   const [photos, setPhotos] = useState([])
   const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (state?.incident) {
+      sessionStorage.setItem(REVIEW_INCIDENT_KEY, state.incident.incident_id)
+      return
+    }
+    const storedId = sessionStorage.getItem(REVIEW_INCIDENT_KEY)
+    if (!storedId) { Promise.resolve().then(() => setIncidentLoading(false)); return }
+    getIncident(storedId)
+      .then(setIncident)
+      .catch(() => sessionStorage.removeItem(REVIEW_INCIDENT_KEY))
+      .finally(() => setIncidentLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (!incident?.incident_id) { setLoading(false); return }
@@ -33,6 +56,14 @@ export default function OpsManagerIncidentClosureReview() {
       }
     }).finally(() => setLoading(false))
   }, [incident?.incident_id])
+
+  if (incidentLoading) {
+    return (
+      <div className="portal-page">
+        <p className="text-[13px] text-(--text-muted) mt-6">Loading…</p>
+      </div>
+    )
+  }
 
   if (!incident) {
     return (

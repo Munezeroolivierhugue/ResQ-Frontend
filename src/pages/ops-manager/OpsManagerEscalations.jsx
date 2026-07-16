@@ -10,6 +10,8 @@ import { listBackupRequests, acknowledgeBackupRequest } from '../../api/backup-r
 import { getCurrentUser } from '../../utils/authSession'
 import { formatIncidentType } from '../../utils/incidentTypeLabels'
 
+const TERMINAL_STATUSES = new Set(['RESOLVED', 'PENDING_REPORT', 'CLOSED'])
+
 function elapsedDisplay(callTime) {
   if (!callTime) return '—'
   const mins = Math.floor((Date.now() - new Date(callTime).getTime()) / 60000)
@@ -43,8 +45,11 @@ export default function OpsManagerEscalations() {
   const districtId = getCurrentUser()?.district_id
 
   useEffect(() => {
+    // `escalated` is a one-way flag that's never cleared once the incident
+    // is later resolved/closed — without also filtering by status here,
+    // every incident ever escalated stays in this queue forever.
     listIncidents({ escalated: true, ...(districtId ? { districtId } : {}) })
-      .then(setEscalations)
+      .then((all) => setEscalations(all.filter((i) => !TERMINAL_STATUSES.has(i.status))))
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [districtId])

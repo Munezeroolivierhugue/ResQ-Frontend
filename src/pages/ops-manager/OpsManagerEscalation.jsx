@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { MapContainer, TileLayer, CircleMarker, Tooltip } from "react-leaflet";
 import { Building2, Megaphone, ChevronsUp, X } from "lucide-react";
 import { useThemeStore } from "../../store/themeStore";
@@ -15,7 +15,7 @@ import {
   getEscalationDetail,
   OPS_AGENCIES,
 } from "../../data/mockOpsManagerData";
-import { mockBroadcasts } from "../../data/mockBroadcasts";
+import { createBroadcast } from "../../api/broadcasts";
 import { mockAgencyInvolvements } from "../../data/mockAgencyInvolvements";
 import { mockAuditLogs } from "../../data/mockAuditLogs";
 import { mockIncidents } from "../../data/mockIncidents";
@@ -34,6 +34,11 @@ const TERMINAL_STATUSES = new Set(["RESOLVED", "PENDING_REPORT", "CLOSED"]);
 
 export default function OpsManagerEscalation() {
   const { incidentId } = useParams();
+  const [searchParams] = useSearchParams();
+  // "View Only" from the Dashboard/Escalation Command queue should be
+  // exactly that — no command actions available. Previously "View Only" and
+  // "Take Command" both linked to this same page with no distinction at all.
+  const readOnly = searchParams.get("readOnly") === "1";
   const { theme } = useThemeStore();
   const addNotification = useNotificationsStore((s) => s.addNotification);
   const detail = getEscalationDetail(incidentId);
@@ -125,27 +130,22 @@ export default function OpsManagerEscalation() {
     return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
   };
 
-  const handleBroadcast = () => {
+  const handleBroadcast = async () => {
     if (!broadcastMsg.trim()) return;
-    const cu = getCurrentUser();
-    mockBroadcasts.push({
-      broadcast_id: generateUuid(),
-      sent_by: cu?.user_id || "demo-user-uuid",
-      message: broadcastMsg,
-      priority: broadcastPriority,
-      target_area: "GEOGRAPHIC_ZONE",
-      sent_at: new Date().toISOString(),
-    });
-    addNotification({
-      id: `bc-${Date.now()}`,
-      type: "BROADCAST",
-      title: `Geographic Broadcast — ${detail.id}`,
-      desc: broadcastMsg,
-      time: "Just now",
-      read: false,
-      href: "#broadcast",
-      target_role: "dispatcher",
-    });
+    try {
+      // Real persisted broadcast, scoped to this ops manager's own district
+      // — previously only pushed into a local, in-memory mock array with a
+      // notification visible on the sender's own screen only, so nothing
+      // was actually delivered to anyone.
+      await createBroadcast({
+        message: `${incidentRef}: ${broadcastMsg}`,
+        priority: broadcastPriority,
+        target_area: getCurrentUser()?.district_name ?? "ALL_UNITS",
+      });
+    } catch {
+      setToast("Could not send broadcast — check your connection and try again.");
+      return;
+    }
     setBroadcastMsg("");
     setBroadcastPriority("NORMAL");
     setBroadcastOpen(false);
@@ -312,7 +312,7 @@ export default function OpsManagerEscalation() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="text-(--accent) font-mono font-bold text-[14px]">
-              COMMANDING: {incidentRef}
+              {readOnly ? "VIEWING" : "COMMANDING"}: {incidentRef}
               {realIncident?.incident_type && ` — ${formatIncidentType(realIncident.incident_type)}`}
             </div>
             <div className="flex items-center gap-2 mt-1">
@@ -332,18 +332,20 @@ export default function OpsManagerEscalation() {
               )}
             </div>
           </div>
-          <button
-            type="button"
-            className="dispatcher-btn-primary shrink-0 text-[11px]"
-            style={{
-              background: "var(--status-critical)",
-              color: "var(--text-on-accent)",
-            }}
-            onClick={handleEscalateToBC}
-            disabled={dcEscalated || isClosed}
-          >
-            {dcEscalated ? "ESCALATED ✓" : "ESCALATE TO DISTRICT COMMANDER"}
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              className="dispatcher-btn-primary shrink-0 text-[11px]"
+              style={{
+                background: "var(--status-critical)",
+                color: "var(--text-on-accent)",
+              }}
+              onClick={handleEscalateToBC}
+              disabled={dcEscalated || isClosed}
+            >
+              {dcEscalated ? "ESCALATED ✓" : "ESCALATE TO DISTRICT COMMANDER"}
+            </button>
+          )}
         </div>
 
         <div
@@ -439,85 +441,94 @@ export default function OpsManagerEscalation() {
           </p>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <button
-            type="button"
-            className="dispatcher-btn-primary w-full"
-            onClick={() => setDispatchOpen(true)}
+        {readOnly ? (
+          <div
+            className="p-3 rounded-lg text-[12px] text-center"
+            style={{ background: "var(--bg-elevated)", color: "var(--text-muted)" }}
           >
-            Dispatch Additional Units →
-          </button>
-          <button
-            type="button"
-            className="dispatcher-btn-ghost w-full flex items-center justify-center gap-2"
-            onClick={() => setNotifyOpen(true)}
-          >
-            <Building2 size={16} /> Notify Agency
-          </button>
-          <button
-            type="button"
-            className="dispatcher-btn-ghost w-full flex items-center justify-center gap-2"
-            onClick={() => setBroadcastOpen((v) => !v)}
-          >
-            <Megaphone size={16} /> Issue Geographic Broadcast
-          </button>
-          {broadcastOpen && (
-            <div className="p-3 border border-(--border) rounded-lg flex flex-col gap-2">
-              <label className="dispatcher-field">
-                <span className="field-label">Priority</span>
-                <select
-                  className="dispatcher-input dispatcher-select"
-                  value={broadcastPriority}
-                  onChange={(e) => setBroadcastPriority(e.target.value)}
+            View only — no command actions available from this screen.
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              className="dispatcher-btn-primary w-full"
+              onClick={() => setDispatchOpen(true)}
+            >
+              Dispatch Additional Units →
+            </button>
+            <button
+              type="button"
+              className="dispatcher-btn-ghost w-full flex items-center justify-center gap-2"
+              onClick={() => setNotifyOpen(true)}
+            >
+              <Building2 size={16} /> Notify Agency
+            </button>
+            <button
+              type="button"
+              className="dispatcher-btn-ghost w-full flex items-center justify-center gap-2"
+              onClick={() => setBroadcastOpen((v) => !v)}
+            >
+              <Megaphone size={16} /> Issue Geographic Broadcast
+            </button>
+            {broadcastOpen && (
+              <div className="p-3 border border-(--border) rounded-lg flex flex-col gap-2">
+                <label className="dispatcher-field">
+                  <span className="field-label">Priority</span>
+                  <select
+                    className="dispatcher-input dispatcher-select"
+                    value={broadcastPriority}
+                    onChange={(e) => setBroadcastPriority(e.target.value)}
+                  >
+                    <option value="NORMAL">Normal</option>
+                    <option value="URGENT">Urgent</option>
+                    <option value="EMERGENCY">Emergency</option>
+                  </select>
+                </label>
+                <label className="dispatcher-field">
+                  <span className="field-label">Message</span>
+                  <textarea
+                    className="dispatcher-input dispatcher-textarea"
+                    rows={3}
+                    value={broadcastMsg}
+                    onChange={(e) => setBroadcastMsg(e.target.value)}
+                    placeholder="Broadcast message…"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="dispatcher-btn-primary w-full text-[12px]"
+                  onClick={handleBroadcast}
+                  disabled={!broadcastMsg.trim()}
                 >
-                  <option value="NORMAL">Normal</option>
-                  <option value="URGENT">Urgent</option>
-                  <option value="EMERGENCY">Emergency</option>
-                </select>
-              </label>
-              <label className="dispatcher-field">
-                <span className="field-label">Message</span>
-                <textarea
-                  className="dispatcher-input dispatcher-textarea"
-                  rows={3}
-                  value={broadcastMsg}
-                  onChange={(e) => setBroadcastMsg(e.target.value)}
-                  placeholder="Broadcast message…"
-                />
-              </label>
-              <button
-                type="button"
-                className="dispatcher-btn-primary w-full text-[12px]"
-                onClick={handleBroadcast}
-                disabled={!broadcastMsg.trim()}
-              >
-                Send Broadcast
-              </button>
-            </div>
-          )}
-          <button
-            type="button"
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-[13px] border cursor-pointer"
-            style={{
-              border: dcEscalated
-                ? "1px solid var(--status-low)"
-                : "1px solid var(--status-critical)",
-              color: dcEscalated
-                ? "var(--status-low)"
-                : "var(--status-critical)",
-              background: dcEscalated
-                ? "var(--status-low-bg)"
-                : "var(--status-critical-bg)",
-            }}
-            onClick={handleEscalateToBC}
-            disabled={dcEscalated}
-          >
-            <ChevronsUp size={16} />{" "}
-            {dcEscalated
-              ? "Escalated to District Commander ✓"
-              : "Escalate to District Commander"}
-          </button>
-        </div>
+                  Send Broadcast
+                </button>
+              </div>
+            )}
+            <button
+              type="button"
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-[13px] border cursor-pointer"
+              style={{
+                border: dcEscalated
+                  ? "1px solid var(--status-low)"
+                  : "1px solid var(--status-critical)",
+                color: dcEscalated
+                  ? "var(--status-low)"
+                  : "var(--status-critical)",
+                background: dcEscalated
+                  ? "var(--status-low-bg)"
+                  : "var(--status-critical-bg)",
+              }}
+              onClick={handleEscalateToBC}
+              disabled={dcEscalated}
+            >
+              <ChevronsUp size={16} />{" "}
+              {dcEscalated
+                ? "Escalated to District Commander ✓"
+                : "Escalate to District Commander"}
+            </button>
+          </div>
+        )}
 
         <div className="dispatcher-surface p-4">
           <div className="font-bold text-[13px] mb-3">Responding Units</div>

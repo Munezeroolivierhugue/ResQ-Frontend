@@ -26,7 +26,7 @@ const DISTRICT = [
 const HEADQUARTERS = [
   { icon: Package,      label: 'Resource Requests', href: '/district-commander/resources' },
   { icon: FileBarChart, label: 'Executive Report',  href: '/district-commander/executive-report' },
-  { icon: UserPlus,     label: 'Create User',       href: '/district-commander/create-user' },
+  { icon: UserPlus,     label: 'Users',              href: '/district-commander/users' },
 ]
 
 const BOTTOM = [

@@ -107,6 +107,15 @@ export async function listUnitPerformance(vehicleId) {
   return (data.data ?? data).map(transformUnitPerf)
 }
 
+// Computes (and persists) a real performance record for one vehicle over a
+// period ("YYYY-MM") from its actual dispatch/response-time/AI-acceptance
+// history — nothing in the app ever called this, so unit_performance rows
+// never existed and every performance column silently showed "—".
+export async function computeUnitPerformance(vehicleId, period) {
+  const { data } = await api.post(`/api/reporting/unit-performance/${vehicleId}`, null, { params: { period } })
+  return transformUnitPerf(data.data ?? data)
+}
+
 export async function listDataQuality() {
   const { data } = await api.get('/api/reporting/data-quality')
   return (data.data ?? data).map(transformDataQuality)

@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { Phone, PhoneMissed, PhoneCall, PhoneForwarded } from 'lucide-react'
-import { mockMissedCalls } from '../../data/mockMissedCalls'
+import { useEffect, useState } from 'react'
+import { Phone, PhoneMissed, PhoneForwarded } from 'lucide-react'
+import { listMissedCalls } from '../../api/missedCalls'
 
 function maskPhone(phone) {
   if (!phone) return '—'
@@ -20,40 +20,18 @@ function formatWaitDuration(seconds) {
 }
 
 export default function OpsManagerMissedCallsPanel() {
-  const [calls, setCalls] = useState(
-    () => mockMissedCalls.filter((c) => c.status !== 'CALLED_BACK')
-  )
-  const [toastMsg, setToastMsg] = useState(null)
+  const [calls, setCalls] = useState([])
 
-  const showToast = (msg) => {
-    setToastMsg(msg)
-    setTimeout(() => setToastMsg(null), 3000)
-  }
-
-  const handleCallBack = (missedCallId) => {
-    const call = mockMissedCalls.find((c) => c.missed_call_id === missedCallId)
-    if (!call) return
-    Object.assign(call, {
-      status: 'CALLED_BACK',
-      called_back_by: 'demo-user-uuid',
-      callback_time: new Date().toISOString(),
-    })
-    setCalls((prev) => prev.filter((c) => c.missed_call_id !== missedCallId))
-    showToast('Callback initiated')
-  }
+  useEffect(() => {
+    listMissedCalls()
+      .then((all) => setCalls(all.filter((c) => c.status !== 'called_back')))
+      .catch(() => {})
+  }, [])
 
   const count = calls.length
 
   return (
     <div className="dispatcher-surface overflow-hidden relative">
-      {toastMsg && (
-        <div
-          className="absolute top-2 right-2 z-10 text-[12px] px-3 py-1.5 rounded-lg font-semibold"
-          style={{ background: 'var(--status-low-bg)', color: 'var(--status-low)', border: '1px solid var(--status-low)' }}
-        >
-          {toastMsg}
-        </div>
-      )}
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-(--border-subtle)">
         <div className="flex items-center gap-2 min-w-0">
           <PhoneMissed size={16} style={{ color: 'var(--status-critical)' }} aria-hidden />
@@ -86,37 +64,21 @@ export default function OpsManagerMissedCallsPanel() {
               <div className="flex items-center gap-2 min-w-[140px] flex-1">
                 <Phone size={14} className="text-(--text-muted) shrink-0" aria-hidden />
                 <span className="font-mono text-[12px] text-(--text-primary)">
-                  {call.phoneMasked || maskPhone(call.phone_number)}
+                  {maskPhone(call.phone_number)}
                 </span>
               </div>
               <div className="shrink-0">
                 <div className="text-[10px] uppercase text-(--text-muted) tracking-wide">Called</div>
                 <div className="font-mono text-[12px] text-(--text-secondary)">
-                  {call.calledAt || formatCallTime(call.call_time)}
+                  {formatCallTime(call.call_time)}
                 </div>
               </div>
               <div className="shrink-0">
                 <div className="text-[10px] uppercase text-(--text-muted) tracking-wide">Waited</div>
                 <div className="font-mono text-[12px] text-(--text-secondary)">
-                  {call.waited || formatWaitDuration(call.wait_duration)}
+                  {formatWaitDuration(call.wait_duration)}
                 </div>
               </div>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 shrink-0 cursor-pointer font-semibold transition-colors hover:bg-(--accent-ghost)"
-                style={{
-                  background: 'transparent',
-                  border: '1px solid var(--accent)',
-                  color: 'var(--accent)',
-                  borderRadius: '6px',
-                  padding: '0.3rem 0.65rem',
-                  fontSize: '11px',
-                }}
-                onClick={() => handleCallBack(call.missed_call_id)}
-              >
-                <PhoneCall size={12} aria-hidden />
-                Call Back
-              </button>
             </div>
           ))}
         </div>

@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { UserPlus, Send, Check } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { UserPlus, Send, Check, ArrowLeft } from 'lucide-react'
 import DCPageHeader from '../../components/district-commander/DCPageHeader'
 import { getCurrentUser } from '../../utils/authSession'
+import { getDistrictCommanderDistrict } from '../../utils/districtCommanderSession'
 import api from '../../lib/apiClient'
 
 const ALLOWED_ROLES = [
@@ -20,8 +22,8 @@ function validate(form) {
 
 export default function DCCreateUser() {
   const currentUser = getCurrentUser()
-  const districtId   = sessionStorage.getItem('resq-district-id') || null
-  const districtName = sessionStorage.getItem('resq-district-name') || 'Your District'
+  const districtId   = currentUser?.district_id || null
+  const districtName = getDistrictCommanderDistrict() || 'Your District'
 
   const [form, setForm]     = useState({ fullName: '', email: '', phone: '', role: 'FIELD_RESPONDER' })
   const [errors, setErrors] = useState({})
@@ -66,8 +68,13 @@ export default function DCCreateUser() {
 
   return (
     <div className="portal-page flex flex-col gap-6 max-w-2xl">
+      <Link to="/district-commander/users" className="text-[12px] font-semibold inline-flex items-center gap-1.5 no-underline text-(--text-secondary) hover:text-(--accent)">
+        <ArrowLeft size={14} />
+        Back to Users
+      </Link>
+
       <DCPageHeader
-        title="Create User"
+        title="Invite User"
         eyebrow="District Commander"
         subtitle={`Provision Field Responders and Operations Managers for ${districtName}.`}
       />
@@ -85,12 +92,17 @@ export default function DCCreateUser() {
               <strong>{success.name}</strong> clicks the link they can set their password and log in as{' '}
               <strong>{ALLOWED_ROLES.find(r => r.value === success.role)?.label}</strong>.
             </p>
-            <button type="button"
-              className="text-[12px] font-semibold mt-2 bg-transparent border-0 p-0 cursor-pointer"
-              style={{ color: 'var(--accent)' }}
-              onClick={() => setSuccess(null)}>
-              + Add another user
-            </button>
+            <div className="flex gap-4 mt-2">
+              <button type="button"
+                className="text-[12px] font-semibold bg-transparent border-0 p-0 cursor-pointer"
+                style={{ color: 'var(--accent)' }}
+                onClick={() => setSuccess(null)}>
+                + Add another user
+              </button>
+              <Link to="/district-commander/users" className="text-[12px] font-semibold no-underline" style={{ color: 'var(--accent)' }}>
+                View all users →
+              </Link>
+            </div>
           </div>
         </div>
       )}

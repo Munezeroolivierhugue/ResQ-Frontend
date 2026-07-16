@@ -1,478 +1,257 @@
-import { Fragment, useState } from "react";
-import { Link } from "react-router-dom";
-import { Send, Check, Download } from "lucide-react";
-import { buildPdfHtml, openPdfWindow } from "../../utils/pdfExport";
-
-function exportShiftPDF({
-  district,
-  shiftPeriod,
-  generatedBy,
-  incidents,
-  avgResponse,
-  coverageScore,
-  dispatchAccuracy,
-  escalations,
-  aiAcceptance,
-}) {
-  openPdfWindow(
-    buildPdfHtml({
-      title: "Shift Performance Report",
-      subtitle: shiftPeriod,
-      reportType: "SHIFT REPORT",
-      idPrefix: "OPS",
-      metaItems: [
-        { label: "District", value: district ?? "—" },
-        { label: "Shift Period", value: shiftPeriod },
-      ],
-      kpis: [
-        {
-          label: "Total Incidents",
-          value: incidents ?? "—",
-          sub: "Dispatched this shift",
-        },
-        {
-          label: "Avg Response Time",
-          value: avgResponse ?? "—",
-          sub: "Target < 8 min",
-        },
-        { label: "Coverage Score", value: coverageScore ?? "—" },
-        { label: "Dispatch Accuracy", value: dispatchAccuracy ?? "—" },
-        { label: "Escalations Managed", value: escalations ?? "—" },
-        { label: "AI Acceptance Rate", value: aiAcceptance ?? "—" },
-      ],
-      sections: [],
-      generatedBy: generatedBy ?? "Operations Manager",
-      generatedRole: "Operations Manager",
-    }),
-  );
-}
+import { useState, useEffect } from "react";
+import { FileText, Siren, CheckCircle, AlertTriangle, Clock, ChevronsUp } from "lucide-react";
+import SurfaceCard from "../../components/dispatcher/SurfaceCard";
 import MetricCard from "../../components/dispatcher/MetricCard";
 import SectionTitle from "../../components/dispatcher/SectionTitle";
+import DataTable from "../../components/dispatcher/DataTable";
 import StatusBadge from "../../components/dispatcher/StatusBadge";
-import VerticalTimeline from "../../components/dispatcher/VerticalTimeline";
-import { useOpsManagerStore } from "../../store/opsManagerStore";
-import {
-  OPS_SHIFT_REPORT_INCIDENTS,
-  OPS_RESOURCE_EVENTS,
-  OPS_SHIFT_HANDOVER,
-} from "../../data/mockOpsManagerData";
+import { FormTextarea } from "../../components/dispatcher/FormControls";
 import OpsManagerDistrictLabel from "../../components/ops-manager/OpsManagerDistrictLabel";
-import { getOpsManagerDistrict } from "../../utils/opsManagerDistrict";
-import { mockReports } from "../../data/mockReports";
-import { generateUuid } from "../../utils/formHelpers";
+import { getMyShifts, saveShiftNotes, startShift } from "../../api/shifts";
+import { listIncidents } from "../../api/incidents";
+import { getResponseTimeTarget } from "../../api/admin";
 import { getCurrentUser } from "../../utils/authSession";
-import { useNotificationsStore } from "../../store/notificationsStore";
+import { formatIncidentType } from "../../utils/incidentTypeLabels";
+import { buildPdfHtml, openPdfWindow, sectionHtml, tableHtml } from "../../utils/pdfExport";
+import { useOpsManagerStore } from "../../store/opsManagerStore";
 
-function getCurrentShiftPeriod() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const startOfYear = new Date(year, 0, 1);
-  const week = Math.ceil(
-    ((now - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7,
-  );
-  return `${year}-W${String(week).padStart(2, "0")}`;
+function fmtDate(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString();
 }
 
 export default function OpsManagerShift() {
-  const [tab, setTab] = useState("performance");
+  const currentUser = getCurrentUser();
+  const districtId = currentUser?.district_id;
+
+  const [shift, setShift] = useState(null);
+  const [incidents, setIncidents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [slaTargetMinutes, setSlaTargetMinutes] = useState(8);
   const [notes, setNotes] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const [expandedId, setExpandedId] = useState(null);
-  const { markHandoverRead } = useOpsManagerStore();
-  const addNotification = useNotificationsStore((s) => s.addNotification);
+  // 'idle' | 'saving' | 'saved' | 'error'
+  const [noteState, setNoteState] = useState("idle");
+
+  const markHandoverRead = useOpsManagerStore((s) => s.markHandoverRead);
+
+  useEffect(() => {
+    getResponseTimeTarget().then(setSlaTargetMinutes).catch(() => {});
+    // The Dashboard's "Shift Handover Summary Available" banner points here
+    // and expects a visit to clear it — preserved even though the old fake
+    // "Incoming Handover" tab (invented incidents/unit issues with nothing
+    // real behind them) is gone.
+    markHandoverRead();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!districtId) return;
+    Promise.allSettled([getMyShifts(), listIncidents({ districtId })]).then(async ([shiftsResult, incsResult]) => {
+      const shifts = shiftsResult.status === "fulfilled" ? shiftsResult.value : [];
+      const incs = incsResult.status === "fulfilled" ? incsResult.value : [];
+      let latest = shifts.sort((a, b) => new Date(b.shift_start) - new Date(a.shift_start))[0] ?? null;
+      // Same gap this fixed on the dispatcher side: Ops Managers never had a
+      // shift-start action anywhere, so this page always found zero shift
+      // records and "Save notes" (the real handover-to-DC delivery) stayed
+      // permanently disabled. Start one silently on first visit.
+      if (!latest && currentUser?.user_id) {
+        try {
+          latest = await startShift({
+            user_id: currentUser.user_id,
+            district_id: districtId,
+            role_on_shift: currentUser.role ?? "OPERATIONS_MANAGER",
+          });
+        } catch { /* non-fatal — page still works read-only */ }
+      }
+      setShift(latest);
+      if (latest?.handover_notes) setNotes(latest.handover_notes);
+      if (latest?.shift_start) {
+        const start = new Date(latest.shift_start);
+        const end = latest.shift_end ? new Date(latest.shift_end) : new Date();
+        setIncidents(incs.filter((i) => { const t = new Date(i.call_time); return t >= start && t <= end; }));
+      } else {
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        setIncidents(incs.filter((i) => i.call_time && new Date(i.call_time) >= startOfDay));
+      }
+    }).finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [districtId]);
+
+  const resolved = incidents.filter((i) => ["RESOLVED", "CLOSED"].includes(i.status)).length;
+  const critical = incidents.filter((i) => i.severity === "critical").length;
+  const escalated = incidents.filter((i) => i.escalated).length;
+  const avgResp = (() => {
+    const ms = incidents.filter((i) => i.response_time_minutes != null);
+    return ms.length ? Math.round(ms.reduce((s, i) => s + i.response_time_minutes, 0) / ms.length) : null;
+  })();
+
+  const period = shift
+    ? `${fmtDate(shift.shift_start)} — ${shift.shift_end ? fmtDate(shift.shift_end) : "Ongoing"}`
+    : "Current shift";
+  const generatedAt = fmtDate(new Date().toISOString());
+
+  const handleSaveNotes = async () => {
+    if (!shift?.shift_id || noteState === "saving") return;
+    setNoteState("saving");
+    try {
+      await saveShiftNotes(shift.shift_id, notes);
+      setNoteState("saved");
+      setTimeout(() => setNoteState("idle"), 2500);
+    } catch {
+      setNoteState("error");
+    }
+  };
+
+  const columns = [
+    { key: "incident_ref", label: "Incident ID", render: (row) => (
+      <span className="font-semibold text-(--accent)" style={{ fontFamily: "var(--font-mono)" }}>{row.incident_ref}</span>
+    ) },
+    { key: "incident_type", label: "Type", render: (row) => (
+      <span className="inline-flex items-center gap-2">
+        <Siren size={14} className="text-(--accent) shrink-0" />
+        {formatIncidentType(row.incident_type)}
+      </span>
+    ) },
+    { key: "severity", label: "Severity", render: (row) => (
+      <StatusBadge label={(row.severity ?? "").toUpperCase()} variant={row.severity === "critical" ? "critical" : "handover"} />
+    ) },
+    { key: "call_time", label: "Time", render: (row) => (
+      <span style={{ fontFamily: "var(--font-mono)" }}>{row.call_time ? new Date(row.call_time).toLocaleString() : "—"}</span>
+    ) },
+    { key: "status", label: "Status", render: (row) => (
+      <StatusBadge
+        label={row.status === "CLOSED" ? "Closed" : row.status}
+        variant={row.status === "CLOSED" ? "resolved" : "handover"}
+      />
+    ) },
+  ];
+
+  const sortedIncidents = [...incidents].sort((a, b) => new Date(b.call_time ?? 0) - new Date(a.call_time ?? 0));
+
+  const handleGeneratePdf = () => {
+    const generatedBy = currentUser?.full_name ?? currentUser?.email ?? "Operations Manager";
+    const rows20 = sortedIncidents.slice(0, 20);
+    const tableSection = sectionHtml(
+      `Incident Log${sortedIncidents.length > 20 ? ` (first 20 of ${sortedIncidents.length})` : ""}`,
+      tableHtml(
+        ["Incident ID", "Type", "Severity", "Time", "Status"],
+        rows20.map((r) => [
+          `<span style="font-family:monospace;font-weight:700">${r.incident_ref ?? "—"}</span>`,
+          formatIncidentType(r.incident_type) ?? "—",
+          (r.severity ?? "—").toUpperCase(),
+          r.call_time ? new Date(r.call_time).toLocaleString() : "—",
+          r.status ?? "—",
+        ])
+      )
+    );
+    const notesSection = notes
+      ? sectionHtml("Notes for District Commander", `<p style="font-size:12px;line-height:1.6;white-space:pre-wrap">${notes}</p>`)
+      : "";
+
+    openPdfWindow(buildPdfHtml({
+      title: "Shift Performance Report",
+      subtitle: `${period}. Generated on ${generatedAt}.`,
+      reportType: "SHIFT REPORT",
+      idPrefix: "OPS",
+      metaItems: [
+        { label: "Operations Manager", value: generatedBy },
+        { label: "District", value: currentUser?.district_name ?? "—" },
+        { label: "Period", value: period },
+      ],
+      kpis: [
+        { label: "Total Incidents", value: incidents.length, sub: "This shift" },
+        { label: "Resolved", value: resolved, sub: `${incidents.length ? Math.round((resolved / incidents.length) * 100) : 0}% of shift` },
+        { label: "Critical", value: critical, sub: "High-priority incidents" },
+        { label: "Escalated", value: escalated, sub: "Sent for higher supervision" },
+        { label: "Avg Response", value: avgResp != null ? `${avgResp} min` : "N/A", sub: `Target: ${slaTargetMinutes} min` },
+      ],
+      sections: [tableSection, notesSection].filter(Boolean),
+      generatedBy,
+      generatedRole: "Operations Manager",
+    }));
+  };
 
   return (
     <div className="portal-page">
-      <div className="mb-4">
-        <h1 className="dispatcher-page-title m-0">Shift Performance</h1>
-        <OpsManagerDistrictLabel />
-      </div>
-      <div className="flex gap-2 mb-6 border-b border-(--border) pb-2">
-        {["performance", "handover"].map((t) => (
-          <button
-            key={t}
-            type="button"
-            className="text-[13px] font-semibold px-4 py-2 border-none bg-transparent cursor-pointer border-b-2 -mb-[10px]"
-            style={{
-              borderColor: tab === t ? "var(--accent)" : "transparent",
-              color: tab === t ? "var(--accent)" : "var(--text-muted)",
-            }}
-            onClick={() => setTab(t)}
-          >
-            {t === "performance"
-              ? "Shift Performance Report"
-              : "Incoming Handover"}
-          </button>
-        ))}
-      </div>
-
-      {tab === "performance" && (
-        <>
-          <div className="flex flex-wrap justify-between gap-4 mb-6">
-            <div>
-              <h2
-                className="text-lg font-bold text-(--text-primary) m-0"
-                style={{ fontFamily: "var(--font-display)" }}
-              >
-                Shift Performance Report
-              </h2>
-              <p className="dispatcher-page-subtitle m-0 mt-1">
-                Auto-generated from shift data. Review and submit to District
-                Commander.
-              </p>
-            </div>
-            <div className="flex items-center gap-3 self-start">
-              <span className="text-[11px] font-mono text-(--text-muted)">
-                Shift: 08:00 – 16:00 · May 25 2026 · District:{" "}
-                {getOpsManagerDistrict()}
-              </span>
-              <button
-                type="button"
-                className="dispatcher-btn-ghost text-[12px] inline-flex items-center gap-1.5"
-                onClick={() => {
-                  const cu = getCurrentUser();
-                  exportShiftPDF({
-                    district: getOpsManagerDistrict(),
-                    shiftPeriod:
-                      "08:00 – 16:00 · " +
-                      new Date().toLocaleDateString("en-GB", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      }),
-                    generatedBy:
-                      cu?.fullName ||
-                      sessionStorage.getItem("resq-full-name") ||
-                      "Operations Manager",
-                    incidents: "247",
-                    avgResponse: "7.2m",
-                    coverageScore: "93%",
-                    dispatchAccuracy: "88%",
-                    escalations: "4",
-                    aiAcceptance: "86%",
-                  });
-                }}
-              >
-                <Download size={14} />
-                Export PDF
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-            <MetricCard
-              label="Total Incidents"
-              value="247"
-              hint="✓"
-              hintTone="positive"
-            />
-            <MetricCard
-              label="Avg Response Time"
-              value="7.2m"
-              hint="✓ at target"
-              hintTone="positive"
-            />
-            <MetricCard
-              label="Coverage Score"
-              value="93%"
-              hint="✓ above 90%"
-              hintTone="positive"
-            />
-            <MetricCard
-              label="Dispatch Accuracy"
-              value="88%"
-              hint="⚠ watch"
-              hintTone="warning"
-            />
-            <MetricCard label="Escalations Managed" value="4" />
-            <MetricCard
-              label="AI Acceptance Rate"
-              value="86%"
-              hint="✓"
-              hintTone="positive"
-            />
-          </div>
-
-          <div className="dispatcher-surface p-4 mb-6 table-scroll">
-            <SectionTitle title="Significant Incidents" className="mb-3" />
-            <table className="w-full text-[13px] min-w-[640px]">
-              <thead>
-                <tr className="text-[11px] text-(--text-muted) uppercase border-b border-(--border)">
-                  <th className="text-left p-2">Incident ID</th>
-                  <th className="text-left p-2">Type</th>
-                  <th className="text-left p-2">Severity</th>
-                  <th className="text-left p-2">Duration</th>
-                  <th className="text-left p-2">Units</th>
-                  <th className="text-left p-2">Outcome</th>
-                </tr>
-              </thead>
-              <tbody>
-                {OPS_SHIFT_REPORT_INCIDENTS.map((row) => (
-                  <Fragment key={row.id}>
-                    <tr
-                      className="border-b border-(--border-subtle) cursor-pointer hover:bg-(--bg-elevated)"
-                      onClick={() =>
-                        setExpandedId(expandedId === row.id ? null : row.id)
-                      }
-                    >
-                      <td className="p-2 font-mono text-(--accent)">
-                        {row.id}
-                      </td>
-                      <td className="p-2">{row.type}</td>
-                      <td className="p-2">
-                        <StatusBadge
-                          label={row.severity}
-                          variant={
-                            row.severity === "CRITICAL"
-                              ? "critical"
-                              : "handover"
-                          }
-                        />
-                      </td>
-                      <td className="p-2">{row.duration}</td>
-                      <td className="p-2">{row.units}</td>
-                      <td className="p-2 text-(--text-secondary)">
-                        {row.outcome}
-                      </td>
-                    </tr>
-                    {expandedId === row.id && (
-                      <tr>
-                        <td
-                          colSpan={6}
-                          className="p-3 text-[12px] text-(--text-secondary) bg-(--bg-input)"
-                        >
-                          Timeline: logged → units dispatched → {row.outcome}
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="dispatcher-surface p-4 mb-6">
-            <SectionTitle title="Resource Events" className="mb-3" />
-            <VerticalTimeline
-              events={OPS_RESOURCE_EVENTS.map((e, i) => ({
-                id: i,
-                time: e.time,
-                title: e.title,
-                description: e.description,
-              }))}
-            />
-          </div>
-
-          <div className="dispatcher-surface p-4 mb-6">
-            <label className="dispatcher-field">
-              <span className="field-label">
-                Your notes for District Commander
-              </span>
-              <textarea
-                className="dispatcher-input dispatcher-textarea"
-                rows={5}
-                placeholder="What went well, challenges encountered, resource recommendations for next shift..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              />
-            </label>
-            <div className="text-[11px] text-(--text-muted) text-right">
-              {notes.length} characters
-            </div>
-          </div>
-
-          {!submitted ? (
-            <div className="flex flex-wrap justify-between gap-3 pt-4 border-t border-(--border)">
-              <button type="button" className="dispatcher-btn-ghost">
-                Preview Report
-              </button>
-              <button
-                type="button"
-                className="dispatcher-btn-primary flex items-center gap-2"
-                onClick={() => {
-                  const cu = getCurrentUser();
-                  const district = getOpsManagerDistrict();
-                  const shiftPeriod = getCurrentShiftPeriod();
-                  mockReports.push({
-                    report_id: generateUuid(),
-                    submitted_by: cu?.user_id || "demo-user-uuid",
-                    role: "OPERATIONS_MANAGER",
-                    district_id: cu?.district_id || district,
-                    shift_period: shiftPeriod,
-                    total_incidents: 247,
-                    avg_response_time_min: 7.2,
-                    coverage_score_pct: 93,
-                    dispatch_accuracy_pct: 88,
-                    escalations_managed: 4,
-                    ai_acceptance_rate_pct: 86,
-                    notes: notes || null,
-                    submitted_at: new Date().toISOString(),
-                  });
-                  addNotification({
-                    id: `sr-${Date.now()}`,
-                    type: "SHIFT_REPORT_SUBMITTED",
-                    title: "Shift Report Submitted",
-                    desc: `Ops Manager shift report for ${shiftPeriod} sent to District Commander`,
-                    time: "Just now",
-                    read: false,
-                    href: "#shift-report",
-                    target_role: "district_commander",
-                  });
-                  setSubmitted(true);
-                }}
-              >
-                <Send size={16} /> Submit to District Commander
-              </button>
-            </div>
-          ) : (
-            <div
-              className="p-4 rounded-lg flex items-start gap-3"
-              style={{
-                background: "var(--status-low-bg)",
-                border: "1px solid var(--status-low)",
-              }}
-            >
-              <Check size={22} style={{ color: "var(--status-low)" }} />
-              <div>
-                <div className="font-bold text-(--text-primary)">
-                  Report submitted to District Commander
-                </div>
-                <p className="text-[13px] text-(--text-secondary) m-0 mt-1">
-                  Handover summary prepared for incoming Operations Manager.
-                </p>
-              </div>
-            </div>
-          )}
-          {!submitted && (
-            <p className="text-[11px] text-(--text-muted) mt-2">
-              Submission will also prepare handover summary for the incoming
-              Operations Manager.
-            </p>
-          )}
-        </>
-      )}
-
-      {tab === "handover" && (
-        <div className="dispatcher-surface p-6 max-w-4xl">
-          <div className="text-[11px] font-mono uppercase tracking-[0.2em] text-(--accent) font-bold mb-4">
-            Shift Handover Briefing
-          </div>
-          <p className="text-[13px] text-(--text-secondary) m-0">
-            {OPS_SHIFT_HANDOVER.outgoing}
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+        <div>
+          <h1 className="dispatcher-page-title m-0">Shift Performance</h1>
+          <OpsManagerDistrictLabel />
+          <p className="dispatcher-page-subtitle m-0 mt-1">
+            Real incident activity for {period}. Generated on {generatedAt}.
           </p>
-          <p className="text-[11px] font-mono text-(--text-muted) mt-1">
-            Generated: {OPS_SHIFT_HANDOVER.generated}
-          </p>
-
-          <HandoverSection title="Active Incidents Inherited">
-            <table className="w-full text-[12px] mt-2">
-              <thead>
-                <tr className="text-(--text-muted)">
-                  <th className="text-left p-1">ID</th>
-                  <th className="text-left p-1">Type</th>
-                  <th className="text-left p-1">Status</th>
-                  <th className="text-left p-1">Units</th>
-                </tr>
-              </thead>
-              <tbody>
-                {OPS_SHIFT_HANDOVER.activeIncidents.map((r) => (
-                  <tr key={r.id} className="border-t border-(--border-subtle)">
-                    <td className="p-1 font-mono text-(--accent)">{r.id}</td>
-                    <td className="p-1">{r.type}</td>
-                    <td className="p-1">{r.status}</td>
-                    <td className="p-1">{r.units}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </HandoverSection>
-
-          <HandoverSection title="Unit Issues">
-            <ul className="m-0 pl-4 text-[13px] text-(--text-secondary)">
-              {OPS_SHIFT_HANDOVER.unitIssues.map((u) => (
-                <li key={u}>{u}</li>
-              ))}
-            </ul>
-          </HandoverSection>
-
-          <HandoverSection title="Unresolved Escalations">
-            <ul className="m-0 pl-4 text-[13px] text-(--text-secondary)">
-              {OPS_SHIFT_HANDOVER.unresolvedEscalations.map((u) => (
-                <li key={u}>{u}</li>
-              ))}
-            </ul>
-          </HandoverSection>
-
-          <HandoverSection title="AI Recommendations Pending">
-            <ul className="m-0 pl-4 text-[13px] text-(--text-secondary)">
-              {OPS_SHIFT_HANDOVER.pendingAi.map((u) => (
-                <li key={u}>{u}</li>
-              ))}
-            </ul>
-          </HandoverSection>
-
-          <HandoverSection title="Outgoing Notes">
-            <blockquote className="dispatcher-quote m-0 mt-2">
-              {OPS_SHIFT_HANDOVER.notes}
-            </blockquote>
-          </HandoverSection>
-
-          <HandoverSection title="Shift Stats">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2 text-[12px]">
-              <div>
-                <span className="text-(--text-muted)">Incidents</span>
-                <div className="font-bold">
-                  {OPS_SHIFT_HANDOVER.stats.incidents}
-                </div>
-              </div>
-              <div>
-                <span className="text-(--text-muted)">Avg response</span>
-                <div className="font-bold">
-                  {OPS_SHIFT_HANDOVER.stats.avgResponse}
-                </div>
-              </div>
-              <div>
-                <span className="text-(--text-muted)">Coverage</span>
-                <div className="font-bold">
-                  {OPS_SHIFT_HANDOVER.stats.coverage}
-                </div>
-              </div>
-              <div>
-                <span className="text-(--text-muted)">Escalations</span>
-                <div className="font-bold">
-                  {OPS_SHIFT_HANDOVER.stats.escalations}
-                </div>
-              </div>
-            </div>
-          </HandoverSection>
-
-          <button
-            type="button"
-            className="dispatcher-btn-outline mt-6"
-            onClick={markHandoverRead}
-          >
-            Mark as Read
-          </button>
-          <Link
-            to="/ops-manager/dashboard"
-            className="block text-[12px] text-(--accent) mt-3 no-underline"
-          >
-            Return to Command Overview
-          </Link>
         </div>
-      )}
-    </div>
-  );
-}
-
-function HandoverSection({ title, children }) {
-  return (
-    <div className="mt-6">
-      <div className="dispatcher-section-title">
-        <span className="dispatcher-section-accent" aria-hidden />
-        <span className="panel-title">{title}</span>
+        <button type="button" className="dispatcher-btn-primary flex items-center gap-2" onClick={handleGeneratePdf}>
+          <FileText size={14} />
+          Generate report PDF
+        </button>
       </div>
-      {children}
+
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+        <MetricCard icon={Siren} label="Total Incidents" value={loading ? "…" : incidents.length} hint="This shift" hintTone="neutral" />
+        <MetricCard icon={CheckCircle} label="Resolved" value={loading ? "…" : resolved} hint={`${incidents.length ? Math.round((resolved / incidents.length) * 100) : 0}% of shift`} hintTone="positive" />
+        <MetricCard icon={AlertTriangle} label="Critical" value={loading ? "…" : critical} hint="High-priority incidents" hintTone={critical > 0 ? "critical" : "neutral"} />
+        <MetricCard icon={ChevronsUp} label="Escalated" value={loading ? "…" : escalated} hint="Sent for higher supervision" hintTone={escalated > 0 ? "warning" : "neutral"} />
+        <MetricCard icon={Clock} label="Avg Response" value={loading ? "…" : (avgResp != null ? `${avgResp}m` : "N/A")} hint={`Target: ${slaTargetMinutes} min`} hintTone={avgResp != null && avgResp <= slaTargetMinutes ? "positive" : "critical"} />
+      </div>
+
+      <SurfaceCard className="mb-5" padding="p-0 overflow-hidden">
+        <div className="px-5 py-4 border-b border-(--border)">
+          <SectionTitle title="Significant Incidents" className="mb-0" />
+        </div>
+        {loading ? (
+          <div className="py-12 text-center text-[13px] text-(--text-muted)">Loading shift data…</div>
+        ) : (
+          <DataTable
+            columns={columns}
+            rows={sortedIncidents}
+            footer={
+              <span className="text-[12px] text-(--text-muted)">
+                {incidents.length} incident{incidents.length !== 1 ? "s" : ""} this shift
+              </span>
+            }
+          />
+        )}
+      </SurfaceCard>
+
+      <SurfaceCard padding="p-5 md:p-6 flex flex-col">
+        <SectionTitle title="Your notes for District Commander" className="mb-4" />
+        <FormTextarea
+          label="Handover notes"
+          value={notes}
+          onChange={setNotes}
+          placeholder="What went well, challenges encountered, resource recommendations for next shift…"
+          rows={5}
+          className="flex-1 mb-0"
+        />
+        <div className="flex items-center gap-2 mt-4 pt-4 border-t border-(--border-subtle)">
+          <div>
+            <div className="text-[13px] font-semibold text-(--text-primary)">
+              {currentUser?.full_name ?? currentUser?.email ?? "Operations Manager"}
+            </div>
+            {!shift && (
+              <div className="text-[11px] text-(--text-muted)">No shift data</div>
+            )}
+          </div>
+          <div className="ml-auto flex items-center gap-2 shrink-0">
+            {noteState === "error" && (
+              <span className="text-[11px] font-semibold" style={{ color: "var(--status-critical)" }}>
+                Save failed — retry
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={handleSaveNotes}
+              disabled={!shift || noteState === "saving"}
+              className="dispatcher-btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              title={!shift ? "No shift record to attach notes to" : undefined}
+            >
+              {noteState === "saving" ? "Saving…" : noteState === "saved" ? "Saved ✓" : "Save notes → District Commander"}
+            </button>
+          </div>
+        </div>
+      </SurfaceCard>
     </div>
   );
 }
