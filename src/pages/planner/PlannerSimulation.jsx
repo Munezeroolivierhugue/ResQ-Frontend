@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Play, ArrowRight, FileDown, Plus, Loader2 } from 'lucide-react'
+import { Play, ArrowRight, Plus, Loader2 } from 'lucide-react'
 import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
-import { getCurrentUser } from '../../utils/authSession'
 import { listSimulations, runSimulation as apiRunSimulation } from '../../api/planning'
+import { listDistricts } from '../../api/districts'
 
 const SCENARIOS = [
   'Flash Flood — Kigali',
@@ -14,63 +14,118 @@ const SCENARIOS = [
   'Multi-District Traffic Crisis',
   'Custom Scenario',
 ]
+const DURATIONS = [
+  { label: '1 hour', hours: 1 },
+  { label: '4 hours', hours: 4 },
+  { label: '8 hours', hours: 8 },
+  { label: '24 hours', hours: 24 },
+  { label: '48 hours', hours: 48 },
+]
+
+function fmtTime(min) {
+  return min != null ? `${min.toFixed(1)}m` : '—'
+}
+
+function ResultCard({ title, result, tone }) {
+  if (!result) return null
+  const overTarget = result.target_response_time != null && result.projected_response_time > result.target_response_time
+  return (
+    <div
+      className="flex-1 rounded-lg p-4"
+      style={tone === 'accent' ? { background: 'var(--status-low-bg)', border: '1px solid var(--status-low)' } : { background: 'var(--bg-elevated)' }}
+    >
+      <div className="text-[10px] font-mono uppercase mb-3" style={tone === 'accent' ? { color: 'var(--status-low)' } : { color: 'var(--text-muted)' }}>
+        {title}
+      </div>
+      {[
+        ['Projected incidents', String(result.projected_incidents ?? '—'), null],
+        [
+          `Avg response time (target ${result.target_response_time ?? '—'}m)`,
+          fmtTime(result.projected_response_time),
+          overTarget ? 'var(--status-critical)' : 'var(--status-low)',
+        ],
+        ['Coverage score', `${result.projected_coverage ?? '—'}%`, result.projected_coverage < 60 ? 'var(--status-critical)' : 'var(--accent)'],
+        ['Units', result.units_short > 0 ? `${result.units_short} short of ${result.units_available}/${result.units_total}` : `${result.units_available}/${result.units_total} sufficient`, result.units_short > 0 ? 'var(--status-critical)' : 'var(--status-low)'],
+      ].map(([label, val, color]) => (
+        <div key={label} className="flex justify-between text-[12px] mb-2">
+          <span className="text-(--text-secondary)">{label}</span>
+          <span className="font-mono font-semibold text-[14px]" style={{ color: color || 'var(--text-primary)' }}>
+            {val}
+          </span>
+        </div>
+      ))}
+      {overTarget && (
+        <div className="text-[11px] mt-1 pt-2 border-t border-(--border-subtle)" style={{ color: 'var(--status-critical)' }}>
+          ⚠ Exceeds the national {result.target_response_time}-minute target
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function PlannerSimulation() {
+  const [districts, setDistricts] = useState([])
+  const [districtId, setDistrictId] = useState('')
+  const [disasterScenario, setDisasterScenario] = useState(SCENARIOS[2])
+  const [durationHours, setDurationHours] = useState(4)
   const [multiplier, setMultiplier] = useState(3)
-  const [resourceMode, setResourceMode] = useState('current')
   const [loading, setLoading] = useState(false)
-  const [showResults, setShowResults] = useState(true)
+  const [currentResult, setCurrentResult] = useState(null)
+  const [optimizedResult, setOptimizedResult] = useState(null)
   const [savedScenarios, setSavedScenarios] = useState([])
+  const [runError, setRunError] = useState(null)
 
   useEffect(() => {
-    listSimulations().then((sims) => {
-      setSavedScenarios(sims.map((s) => ({
-        id: s.simulation_id,
-        name: s.scenario_type ? `${s.scenario_type} · ${s.multiplier ?? 1}×` : '—',
-        scenario_type: s.scenario_type ?? '—',
-        created_at: s.ran_at
-          ? new Date(s.ran_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-          : '—',
-        result_summary: s.coverage_score != null ? `${Math.round(s.coverage_score)}% coverage` : '—',
-      })))
-    }).catch(() => setSavedScenarios([]))
+    listDistricts().then(setDistricts).catch(() => {})
+    listSimulations().then(setSavedScenarios).catch(() => setSavedScenarios([]))
   }, [])
 
-  const runSimulation = async () => {
+  const runBoth = async (params) => {
     setLoading(true)
-    setShowResults(false)
+    setRunError(null)
+    setCurrentResult(null)
+    setOptimizedResult(null)
     try {
-      const scenario_type = resourceMode === 'ai' ? 'AI_OPTIMIZED' : 'CURRENT_RESOURCES'
-
-      const newSim = await apiRunSimulation({
-        scenario_type,
-        multiplier: Math.round(multiplier),
-        duration_hours: 4,
-        focus_area: null,
-      })
-
-      const scenarioEntry = {
-        id: newSim.simulation_id ?? Math.random().toString(36).slice(2),
-        name: `${newSim.scenario_type ?? scenario_type} · ${newSim.multiplier ?? multiplier}×`,
-        scenario_type: newSim.scenario_type ?? scenario_type,
-        created_at: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
-        result_summary: newSim.coverage_score != null ? `${Math.round(newSim.coverage_score)}% coverage` : '—',
-      }
-
-      setSavedScenarios((prev) => [scenarioEntry, ...prev])
-      setLoading(false)
-      setShowResults(true)
-    } catch (err) {
-      console.error(err)
+      const [current, optimized] = await Promise.all([
+        apiRunSimulation({ ...params, scenario_type: 'CURRENT_RESOURCES' }),
+        apiRunSimulation({ ...params, scenario_type: 'AI_OPTIMIZED' }),
+      ])
+      setCurrentResult(current)
+      setOptimizedResult(optimized)
+      setSavedScenarios((prev) => [optimized, current, ...prev])
+    } catch {
+      setRunError('Could not run simulation — please retry.')
+    } finally {
       setLoading(false)
     }
+  }
+
+  const runSimulation = () => runBoth({
+    disaster_scenario: disasterScenario,
+    multiplier: Math.round(multiplier),
+    duration_hours: durationHours,
+    district_id: districtId || null,
+  })
+
+  const rerun = (sim) => {
+    const district = districts.find((d) => d.name === sim.focus_area)
+    setDistrictId(district?.district_id ?? '')
+    setDisasterScenario(sim.disaster_scenario ?? SCENARIOS[2])
+    setDurationHours(sim.duration_hours ?? 4)
+    setMultiplier(sim.multiplier ?? 1)
+    runBoth({
+      disaster_scenario: sim.disaster_scenario,
+      multiplier: Math.round(sim.multiplier ?? 1),
+      duration_hours: sim.duration_hours ?? 4,
+      district_id: district?.district_id ?? null,
+    })
   }
 
   return (
     <div className="portal-page flex flex-col gap-4 min-w-[1024px]">
       <PlannerPageHeader
         title="Simulation Workspace"
-        subtitle="Test system performance under major emergency scenarios."
+        subtitle="Test system performance under load, using this district's real incident and fleet data."
       />
 
       <div className="flex flex-col lg:flex-row gap-4">
@@ -79,7 +134,11 @@ export default function PlannerSimulation() {
           <div className="flex flex-col gap-3 mt-4">
             <label className="text-[12px] font-medium text-(--text-secondary)">
               Scenario type *
-              <select className="dispatcher-input h-10 w-full mt-1" defaultValue="Major Public Gathering">
+              <select
+                className="dispatcher-input h-10 w-full mt-1"
+                value={disasterScenario}
+                onChange={(e) => setDisasterScenario(e.target.value)}
+              >
                 {SCENARIOS.map((s) => (
                   <option key={s}>{s}</option>
                 ))}
@@ -87,16 +146,20 @@ export default function PlannerSimulation() {
             </label>
             <label className="text-[12px] font-medium text-(--text-secondary)">
               Simulation duration
-              <select className="dispatcher-input h-10 w-full mt-1" defaultValue="4 hours">
-                {['1 hour', '4 hours', '8 hours', '24 hours', '48 hours'].map((d) => (
-                  <option key={d}>{d}</option>
+              <select
+                className="dispatcher-input h-10 w-full mt-1"
+                value={durationHours}
+                onChange={(e) => setDurationHours(Number(e.target.value))}
+              >
+                {DURATIONS.map((d) => (
+                  <option key={d.label} value={d.hours}>{d.label}</option>
                 ))}
               </select>
             </label>
             <div>
               <div className="text-[12px] font-medium text-(--text-secondary)">Incident multiplier</div>
               <p className="text-[11px] text-(--text-muted) m-0 mt-0.5">
-                How many times more incidents than normal baseline
+                How many times more incidents than the real 30-day baseline for this district
               </p>
               <div className="text-[20px] font-bold text-(--accent) my-2">{multiplier}×</div>
               <input
@@ -111,36 +174,26 @@ export default function PlannerSimulation() {
             </div>
             <label className="text-[12px] font-medium text-(--text-secondary)">
               Focus area
-              <select className="dispatcher-input h-10 w-full mt-1" defaultValue="All Kigali">
-                <option>All Kigali</option>
-                <option>Nyarugenge</option>
-                <option>Kicukiro</option>
-                <option>Gasabo</option>
-                <option>Specific sector</option>
+              <select
+                className="dispatcher-input h-10 w-full mt-1"
+                value={districtId}
+                onChange={(e) => setDistrictId(e.target.value)}
+              >
+                <option value="">All Districts</option>
+                {districts.map((d) => (
+                  <option key={d.district_id} value={d.district_id}>{d.name}</option>
+                ))}
               </select>
             </label>
-            <div>
-              <div className="text-[12px] font-medium text-(--text-secondary) mb-2">Resource scenario</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {[
-                  { id: 'current', label: 'Current deployment' },
-                  { id: 'ai', label: 'AI optimized deployment' },
-                ].map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    className="p-3 rounded-lg border text-left text-[12px] cursor-pointer"
-                    style={{
-                      background: resourceMode === opt.id ? 'var(--accent-ghost)' : 'var(--bg-elevated)',
-                      borderColor: resourceMode === opt.id ? 'var(--accent)' : 'var(--border)',
-                    }}
-                    onClick={() => setResourceMode(opt.id)}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+            <p className="text-[11px] text-(--text-muted) m-0">
+              Every run computes both a <strong>Current Deployment</strong> result (this district's own fleet) and an{' '}
+              <strong>AI Optimized</strong> result (pooling every available same-scope unit citywide) side by side.
+            </p>
+            {runError && (
+              <div className="text-[12px] px-3 py-2 rounded" style={{ background: 'var(--status-critical-bg)', color: 'var(--status-critical)' }}>
+                {runError}
               </div>
-            </div>
+            )}
             <button
               type="button"
               className="dispatcher-btn-primary w-full h-14 text-[15px] font-bold flex items-center justify-center gap-2 mt-2"
@@ -167,9 +220,9 @@ export default function PlannerSimulation() {
           <div className="dispatcher-surface p-4">
             <div className="flex flex-wrap justify-between gap-2 mb-4">
               <h3 className="text-[13px] font-semibold m-0">Simulation Results</h3>
-              {showResults && !loading && (
+              {currentResult && !loading && (
                 <span className="text-[11px] font-mono text-(--text-muted)">
-                  AMAHORO STADIUM EVENT · {multiplier}× baseline · 4h
+                  {disasterScenario.toUpperCase()} · {multiplier}× baseline · {durationHours}h · {currentResult.focus_area}
                 </span>
               )}
             </div>
@@ -178,50 +231,24 @@ export default function PlannerSimulation() {
               <p className="text-[13px] text-(--text-secondary) text-center py-8">Running scenario model…</p>
             )}
 
-            {showResults && !loading && (
+            {!loading && !currentResult && (
+              <p className="text-[13px] text-(--text-muted) text-center py-8">Configure a scenario and run it to see results.</p>
+            )}
+
+            {currentResult && optimizedResult && !loading && (
               <>
+                <div className="text-[12px] text-(--text-secondary) mb-3 pb-3 border-b border-(--border-subtle)">
+                  <strong className="text-(--text-primary)">Real baseline</strong> for {currentResult.focus_area} (last 30 days, before this scenario): avg response {fmtTime(currentResult.baseline_response_time)} against a national target of {currentResult.target_response_time}m,
+                  {' '}~{(currentResult.projected_incidents / multiplier).toFixed(1)} incidents/day, {currentResult.units_available}/{currentResult.units_total} units available now.
+                  The two cards below show what the model projects if incident volume rises to <strong>{multiplier}×</strong> that baseline for {durationHours}h.
+                </div>
                 <div className="flex flex-col md:flex-row items-stretch gap-3">
-                  <div className="flex-1 rounded-lg p-4" style={{ background: 'var(--bg-elevated)' }}>
-                    <div className="text-[10px] font-mono uppercase text-(--text-muted) mb-3">Current Deployment</div>
-                    {[
-                      ['Projected incidents', '247', null],
-                      ['Avg response time', '11.4m', 'var(--status-critical)'],
-                      ['Coverage score', '71%', 'var(--status-critical)'],
-                      ['Units insufficient', '8 units short', 'var(--status-critical)'],
-                    ].map(([label, val, color]) => (
-                      <div key={label} className="flex justify-between text-[12px] mb-2">
-                        <span className="text-(--text-secondary)">{label}</span>
-                        <span className="font-mono font-semibold text-[14px]" style={{ color: color || 'var(--text-primary)' }}>
-                          {val}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  <ResultCard title="Current Deployment" result={currentResult} />
                   <div className="flex flex-col items-center justify-center px-2 shrink-0">
                     <ArrowRight size={24} className="text-(--text-muted)" />
                     <span className="text-[12px] text-(--text-muted)">vs</span>
                   </div>
-                  <div
-                    className="flex-1 rounded-lg p-4"
-                    style={{ background: 'var(--status-low-bg)', border: '1px solid var(--status-low)' }}
-                  >
-                    <div className="text-[10px] font-mono uppercase mb-3" style={{ color: 'var(--status-low)' }}>
-                      AI Optimized
-                    </div>
-                    {[
-                      ['Projected incidents', '247', null],
-                      ['Avg response time', '8.1m', 'var(--status-low)'],
-                      ['Coverage score', '89%', 'var(--accent)'],
-                      ['Units needed', '+4 units', 'var(--status-medium)'],
-                    ].map(([label, val, color]) => (
-                      <div key={label} className="flex justify-between text-[12px] mb-2">
-                        <span className="text-(--text-secondary)">{label}</span>
-                        <span className="font-mono font-semibold text-[14px]" style={{ color: color || 'var(--text-primary)' }}>
-                          {val}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  <ResultCard title="AI Optimized" result={optimizedResult} tone="accent" />
                 </div>
 
                 <div
@@ -229,17 +256,16 @@ export default function PlannerSimulation() {
                   style={{ background: 'var(--accent-ghost)', border: '1px solid var(--accent)' }}
                 >
                   <p className="text-[13px] text-(--text-primary) m-0">
-                    AI optimization reduces response time by 3.3 minutes and improves coverage from 71% to 89% for
-                    this scenario.
+                    Pooling units citywide changes response time from {fmtTime(currentResult.projected_response_time)} to{' '}
+                    {fmtTime(optimizedResult.projected_response_time)}, and coverage from {currentResult.projected_coverage}%
+                    to {optimizedResult.projected_coverage}%, based on real fleet and incident data.
                   </p>
-                  <p className="text-[12px] text-(--text-secondary) m-0 mt-1.5">
-                    Requires 4 additional units or redeployment from surrounding districts.
-                  </p>
+                  {optimizedResult.units_short > 0 && (
+                    <p className="text-[12px] text-(--text-secondary) m-0 mt-1.5">
+                      Even pooled citywide, {optimizedResult.units_short} more unit{optimizedResult.units_short === 1 ? '' : 's'} would be needed to meet demand.
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-2 mt-3">
-                    <button type="button" className="dispatcher-btn-outline text-[12px] inline-flex items-center gap-1">
-                      <FileDown size={14} />
-                      Export as Resource Request
-                    </button>
                     <Link to="/planner/deployment" className="dispatcher-btn-primary text-[12px] inline-flex items-center gap-1 no-underline">
                       <Plus size={14} />
                       Create Deployment Plan
@@ -252,16 +278,28 @@ export default function PlannerSimulation() {
 
           <div className="dispatcher-surface p-4">
             <h3 className="text-[13px] font-semibold m-0 mb-3">Saved Scenarios</h3>
+            {savedScenarios.length === 0 && (
+              <p className="text-[12px] text-(--text-muted) m-0">No simulations run yet.</p>
+            )}
             {savedScenarios.map((row, i) => (
               <div
-                key={row.id ?? i}
+                key={row.simulation_id ?? i}
                 className="flex flex-wrap items-center gap-2 py-2 border-t border-(--border-subtle) text-[12px]"
               >
-                <span className="font-medium flex-1 min-w-[140px]">{row.name}</span>
-                <span className="text-(--text-secondary)">{row.scenario_type}</span>
-                <span className="font-mono text-(--text-muted)">{row.created_at}</span>
-                <span>{row.result_summary}</span>
-                <button type="button" className="dispatcher-btn-ghost text-[11px] py-1 px-2 ml-auto">
+                <span className="font-medium flex-1 min-w-[140px]">
+                  {row.disaster_scenario ?? '—'} · {row.multiplier}× · {row.focus_area}
+                </span>
+                <span className="text-(--text-secondary)">{row.scenario_type === 'AI_OPTIMIZED' ? 'AI Optimized' : 'Current'}</span>
+                <span className="font-mono text-(--text-muted)">
+                  {row.created_at ? new Date(row.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—'}
+                </span>
+                <span>{row.projected_coverage != null ? `${row.projected_coverage}% coverage` : '—'}</span>
+                <button
+                  type="button"
+                  className="dispatcher-btn-ghost text-[11px] py-1 px-2 ml-auto"
+                  onClick={() => rerun(row)}
+                  disabled={loading}
+                >
                   Rerun
                 </button>
               </div>

@@ -7,6 +7,7 @@ import {
   ChartScatter,
   Zap,
   FileBarChart,
+  ArrowRightLeft,
   Settings,
   HelpCircle,
   LogOut,
@@ -22,6 +23,7 @@ const PLANNING = [
   { icon: Send,            label: 'Deployment Planning',href: '/planner/deployment' },
   { icon: ChartScatter,    label: 'Simulation',         href: '/planner/simulation' },
   { icon: Zap,             label: 'Response Prediction',href: '/planner/prediction' },
+  { icon: ArrowRightLeft,  label: 'Mutual Aid',         href: '/planner/mutual-aid' },
 ]
 
 const REPORTS = [

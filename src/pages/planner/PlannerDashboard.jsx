@@ -1,12 +1,18 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Cpu, Clock, AlertTriangle, MapPin, Flame, Send, ChartScatter } from 'lucide-react'
+import { Clock, AlertTriangle, MapPin, Flame, Send, ChartScatter } from 'lucide-react'
 import MetricCard from '../../components/dispatcher/MetricCard'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
-import { confidenceBadge, planStatusVariant } from '../../data/mockPlannerData'
-import { listPlans, listCoverageGaps, listSimulations, getPredictions } from '../../api/planning'
+import { planStatusVariant } from '../../data/mockPlannerData'
+import { listPlans, listCoverageGaps, listSimulations, getHotspots } from '../../api/planning'
+
+function densityBadge(density) {
+  if (density === 'high') return { bg: 'var(--status-critical-bg)', color: 'var(--status-critical)' }
+  if (density === 'medium') return { bg: 'var(--status-medium-bg)', color: 'var(--status-medium)' }
+  return { bg: 'var(--status-low-bg)', color: 'var(--status-low)' }
+}
 
 export default function PlannerDashboard() {
   const dateStr = new Date().toLocaleDateString('en-GB', {
@@ -19,16 +25,18 @@ export default function PlannerDashboard() {
   const [plans, setPlans] = useState([])
   const [gaps, setGaps] = useState([])
   const [simulations, setSimulations] = useState([])
-  const [predictions, setPredictions] = useState([])
+  const [hotspots, setHotspots] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.allSettled([listPlans(), listCoverageGaps(), listSimulations(), getPredictions()])
-      .then(([plansRes, gapsRes, simsRes, predsRes]) => {
+    Promise.allSettled([listPlans(), listCoverageGaps(), listSimulations(), getHotspots()])
+      .then(([plansRes, gapsRes, simsRes, hotspotsRes]) => {
         if (plansRes.status === 'fulfilled') setPlans(plansRes.value)
         if (gapsRes.status === 'fulfilled') setGaps(gapsRes.value)
         if (simsRes.status === 'fulfilled') setSimulations(simsRes.value)
-        if (predsRes.status === 'fulfilled') setPredictions(predsRes.value.predictions ?? [])
+        if (hotspotsRes.status === 'fulfilled') {
+          setHotspots([...hotspotsRes.value].sort((a, b) => b.count - a.count))
+        }
       })
       .finally(() => setLoading(false))
   }, [])
@@ -44,14 +52,11 @@ export default function PlannerDashboard() {
     reason: null,
   }))
 
-  const predCards = predictions.slice(0, 4).map((p) => ({
-    zone: p.hotspotZone ?? 'Unknown Zone',
-    type: 'Predicted Incident',
-    confidence: Math.round((p.confidence ?? 0) * 100),
-    window: p.windowStart && p.windowEnd
-      ? `${new Date(p.windowStart).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} – ${new Date(p.windowEnd).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
-      : '—',
-    action: `${p.predictedCount ?? 0} incidents expected`,
+  const hotspotCards = hotspots.slice(0, 4).map((h) => ({
+    zone: h.name ?? 'Unknown Zone',
+    type: h.top_type ?? 'Mixed',
+    density: h.density ?? 'low',
+    count: h.count ?? 0,
   }))
 
   return (
@@ -63,7 +68,7 @@ export default function PlannerDashboard() {
         style={{ background: 'var(--accent-ghost)', border: '1px solid var(--accent)', borderRadius: 10 }}
       >
         {[
-          { icon: Cpu, title: loading ? '— AI predictions active' : `${predictions.length} AI predictions active`, sub: 'For next 24 hours', iconColor: 'var(--accent)' },
+          { icon: Flame, title: loading ? '— active hotspots' : `${hotspots.length} active hotspots`, sub: 'From recorded incidents', iconColor: 'var(--accent)' },
           { icon: Clock, title: loading ? '— deployment plans pending' : `${pendingPlans.length} deployment plans pending`, sub: 'Awaiting OM approval', iconColor: 'var(--accent)' },
           { icon: AlertTriangle, title: loading ? '— coverage gaps flagged' : `${gaps.length} coverage gaps flagged`, sub: 'Current · needs review', iconColor: 'var(--status-medium)' },
         ].map((chip) => {
@@ -84,7 +89,7 @@ export default function PlannerDashboard() {
         <MetricCard icon={MapPin} label="Coverage Gaps" value={loading ? '—' : String(gaps.length)} hint={gaps.length > 0 ? 'Below target' : 'All zones covered'} hintTone={gaps.length > 0 ? 'warning' : 'positive'}>
           <div className="dispatcher-metric-target">Target: 0 gaps</div>
         </MetricCard>
-        <MetricCard icon={Flame} label="Active Hotspot Predictions" value={loading ? '—' : String(predictions.length)} hint={predictions.length > 0 ? 'AI model active' : 'No current predictions'} hintTone="warning" />
+        <MetricCard icon={Flame} label="Active Hotspots" value={loading ? '—' : String(hotspots.length)} hint={hotspots.length > 0 ? 'From recorded incidents' : 'No hotspots recorded'} hintTone="warning" />
         <MetricCard
           icon={Send}
           label="Pending Deployment Plans"
@@ -99,40 +104,36 @@ export default function PlannerDashboard() {
       <div className="portal-split-60-40 gap-4 min-h-0">
         <div className="flex flex-col gap-3 min-w-0">
           <SectionTitle
-            title="AI Predictions — Next 24 Hours"
-            badge={<span className="text-[11px] font-mono text-(--text-muted) ml-auto">Prediction Engine</span>}
+            title="Active Hotspots"
+            badge={<span className="text-[11px] font-mono text-(--text-muted) ml-auto">From recorded incidents</span>}
           />
           {loading && (
-            <div className="dispatcher-surface p-4 text-[13px] text-(--text-muted) text-center">Loading predictions…</div>
+            <div className="dispatcher-surface p-4 text-[13px] text-(--text-muted) text-center">Loading hotspots…</div>
           )}
-          {!loading && predCards.length === 0 && (
-            <div className="dispatcher-surface p-4 text-[13px] text-(--text-muted) text-center">No active predictions from the AI engine.</div>
+          {!loading && hotspotCards.length === 0 && (
+            <div className="dispatcher-surface p-4 text-[13px] text-(--text-muted) text-center">No hotspots recorded yet.</div>
           )}
-          {predCards.map((p, i) => {
-            const cb = confidenceBadge(p.confidence)
+          {hotspotCards.map((h, i) => {
+            const db = densityBadge(h.density)
             return (
               <div key={i} className="dispatcher-surface p-4">
                 <div className="flex flex-wrap justify-between gap-2 mb-1">
                   <div>
-                    <span className="font-semibold text-[13px] text-(--text-primary)">{p.zone}</span>
-                    <span className="text-(--text-secondary) text-[13px]"> · {p.type}</span>
+                    <span className="font-semibold text-[13px] text-(--text-primary)">{h.zone}</span>
+                    <span className="text-(--text-secondary) text-[13px]"> · {h.type}</span>
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={{ background: cb.bg, color: cb.color }}>
-                    {p.confidence}%
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase" style={{ background: db.bg, color: db.color }}>
+                    {h.density}
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 text-[12px] text-(--text-secondary) mb-2">
-                  <Clock size={12} />
-                  {p.window}
-                </div>
-                <div className="flex flex-wrap justify-between gap-2 items-end">
+                <div className="flex flex-wrap justify-between gap-2 items-end mt-2">
                   <p
                     className="text-[12px] text-(--text-secondary) m-0 border-l-2 pl-2"
                     style={{ borderColor: 'var(--accent)' }}
                   >
-                    {p.action}
+                    {h.count} incident{h.count === 1 ? '' : 's'} recorded here
                   </p>
-                  <Link to="/planner/deployment" className="text-[11px] font-semibold text-(--accent) no-underline hover:underline">
+                  <Link to={`/planner/deployment?zone=${encodeURIComponent(h.zone)}`} className="text-[11px] font-semibold text-(--accent) no-underline hover:underline">
                     Create Plan →
                   </Link>
                 </div>

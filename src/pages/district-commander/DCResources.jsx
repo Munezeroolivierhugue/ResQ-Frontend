@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Plus, Search, ShieldAlert } from 'lucide-react'
+import { Plus, Search, ArrowRightLeft, ArrowUpRight, ArrowDownLeft } from 'lucide-react'
 import DCResourceRequestModal from '../../components/district-commander/DCResourceRequestModal'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
 import DCPageHeader from '../../components/district-commander/DCPageHeader'
 import { getDistrictCommanderDistrict } from '../../utils/districtCommanderSession'
 import { listResourceRequests, createResourceRequest } from '../../api/reporting'
-import { listMutualAidRequests, updateMutualAidStatus } from '../../api/mutualAid'
+import { listMutualAidRequests } from '../../api/mutualAid'
 import { getCurrentUser } from '../../utils/authSession'
 
 function timeAgo(isoString) {
@@ -19,8 +19,10 @@ function timeAgo(isoString) {
 function statusVariant(status) {
   if (!status) return 'handover'
   const s = status.toUpperCase()
-  if (s === 'APPROVED') return 'resolved'
+  if (s === 'APPROVED' || s === 'FULFILLED') return 'resolved'
   if (s === 'PENDING') return 'handover'
+  if (s === 'DECLINED') return 'info'
+  if (s === 'RETURNED') return 'active'
   return 'critical'
 }
 
@@ -42,12 +44,12 @@ export default function DCResources() {
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState(null)
 
-  // Mutual aid requests from this district's own Ops Manager — a different,
-  // separate concept from the "Resource Requests" (to RNP HQ) below. Only
-  // the District Commander can approve/decline/fulfill these.
-  const [mutualAidRequests, setMutualAidRequests] = useState([])
+  // Mutual aid is now decided entirely by the Emergency Planner (AI-ranked
+  // donor district, no DC approval gate) — this district's Commander is
+  // just notified. This panel is a read-only activity log of moves that
+  // touched this district, either as the requester or as the donor.
+  const [mutualAidActivity, setMutualAidActivity] = useState([])
   const [mutualAidLoading, setMutualAidLoading] = useState(true)
-  const [mutualAidActingId, setMutualAidActingId] = useState(null)
 
   function showToast(msg) {
     setToast(msg)
@@ -64,25 +66,17 @@ export default function DCResources() {
   useEffect(() => { fetchRequests() }, [])
 
   useEffect(() => {
-    if (!districtId) return
-    listMutualAidRequests({ districtId })
-      .then((all) => setMutualAidRequests(all.filter((r) => r.status === 'PENDING')))
+    if (!districtId) { Promise.resolve().then(() => setMutualAidLoading(false)); return }
+    listMutualAidRequests()
+      .then((all) => setMutualAidActivity(
+        all.filter((r) =>
+          (r.requesting_district_id === districtId || r.source_district_id === districtId)
+          && r.status !== 'PENDING'
+        ).sort((a, b) => new Date(b.resolved_at ?? b.created_at) - new Date(a.resolved_at ?? a.created_at))
+      ))
       .catch(() => {})
       .finally(() => setMutualAidLoading(false))
   }, [districtId])
-
-  const handleMutualAidAction = async (requestId, status) => {
-    setMutualAidActingId(requestId)
-    try {
-      await updateMutualAidStatus(requestId, status)
-      setMutualAidRequests((prev) => prev.filter((r) => r.request_id !== requestId))
-      showToast(`Request ${status.toLowerCase()}`)
-    } catch {
-      showToast('Could not update request — please retry')
-    } finally {
-      setMutualAidActingId(null)
-    }
-  }
 
   const history = requests.filter((r) => {
     const matchesFilter =
@@ -147,50 +141,52 @@ export default function DCResources() {
       <div className="flex flex-col gap-6">
         <div className="dispatcher-surface p-5">
           <SectionTitle
-            title="Mutual Aid Requests"
-            badge={<StatusBadge label={String(mutualAidRequests.length)} variant="critical" />}
+            title="Mutual Aid Activity"
+            badge={<StatusBadge label={String(mutualAidActivity.length)} variant="active" />}
           />
           <p className="text-[12px] text-(--text-secondary) m-0 mt-1 mb-3">
-            Requests from your district's Ops Manager for units from another district.
+            Unit moves the Emergency Planner has decided that touch your district — sent to you, or sent from you to another district.
           </p>
           {mutualAidLoading ? (
             <p className="text-[12px] text-(--text-muted) m-0">Loading…</p>
-          ) : mutualAidRequests.length === 0 ? (
-            <p className="text-[12px] text-(--text-muted) m-0">No pending mutual aid requests.</p>
+          ) : mutualAidActivity.length === 0 ? (
+            <p className="text-[12px] text-(--text-muted) m-0">No mutual aid activity yet.</p>
           ) : (
-            mutualAidRequests.map((r) => (
-              <div key={r.request_id} className="flex flex-wrap items-center justify-between gap-3 py-3 border-b border-(--border-subtle) last:border-0">
-                <div className="flex items-start gap-2">
-                  <ShieldAlert size={16} className="mt-0.5 shrink-0" style={{ color: 'var(--status-medium)' }} />
-                  <div>
-                    <div className="text-[13px] font-semibold">
-                      {r.quantity}× {r.unit_type} — requested by {r.requested_by_name ?? 'Ops Manager'}
-                    </div>
-                    <div className="text-[12px] text-(--text-secondary)">
-                      {r.reason ?? 'No reason given'} · {timeAgo(r.created_at)}
+            mutualAidActivity.map((r) => {
+              const outgoing = r.source_district_id === districtId
+              const declined = r.status === 'DECLINED'
+              const returned = r.status === 'RETURNED'
+              return (
+                <div key={r.request_id} className="flex flex-wrap items-center justify-between gap-3 py-3 border-b border-(--border-subtle) last:border-0">
+                  <div className="flex items-start gap-2">
+                    {declined || returned ? (
+                      <ArrowRightLeft size={16} className="mt-0.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
+                    ) : outgoing ? (
+                      <ArrowUpRight size={16} className="mt-0.5 shrink-0" style={{ color: 'var(--status-medium)' }} />
+                    ) : (
+                      <ArrowDownLeft size={16} className="mt-0.5 shrink-0" style={{ color: 'var(--status-low)' }} />
+                    )}
+                    <div>
+                      <div className="text-[13px] font-semibold">
+                        {declined
+                          ? `${r.quantity}× ${r.unit_type} request declined — requested by ${r.requested_by_name ?? 'Ops Manager'}`
+                          : returned
+                            ? outgoing
+                              ? `${r.vehicle_plate_number ?? r.unit_type} returned from ${r.requesting_district_name}`
+                              : `${r.vehicle_plate_number ?? r.unit_type} returned to ${r.source_district_name ?? 'its home district'}`
+                            : outgoing
+                              ? `${r.vehicle_plate_number ?? r.unit_type} sent to ${r.requesting_district_name}`
+                              : `${r.vehicle_plate_number ?? r.unit_type} received from ${r.source_district_name ?? 'another district'}`}
+                      </div>
+                      <div className="text-[12px] text-(--text-secondary)">
+                        {declined ? (r.resolution_notes ?? 'No unit available') : (r.reason ?? 'No reason given')} · {timeAgo(r.resolved_at ?? r.created_at)}
+                      </div>
                     </div>
                   </div>
+                  <StatusBadge label={r.status} variant={statusVariant(r.status)} />
                 </div>
-                <div className="flex gap-2 shrink-0">
-                  <button
-                    type="button"
-                    className="dispatcher-btn-ghost text-[12px]"
-                    disabled={mutualAidActingId === r.request_id}
-                    onClick={() => handleMutualAidAction(r.request_id, 'DECLINED')}
-                  >
-                    Decline
-                  </button>
-                  <button
-                    type="button"
-                    className="dispatcher-btn-primary text-[12px]"
-                    disabled={mutualAidActingId === r.request_id}
-                    onClick={() => handleMutualAidAction(r.request_id, 'APPROVED')}
-                  >
-                    Approve
-                  </button>
-                </div>
-              </div>
-            ))
+              )
+            })
           )}
         </div>
 

@@ -2,24 +2,26 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MapContainer, TileLayer, Circle, Popup } from 'react-leaflet'
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell } from 'recharts'
-import { Plus, LineChart } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { useThemeStore } from '../../store/themeStore'
 import MapInvalidateSize from '../../components/map/MapInvalidateSize'
 import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
-import { getHotspots } from '../../api/planning'
-import {
-  PLANNER_HOUR_DATA,
-  PLANNER_DAY_DATA,
-  PLANNER_MONTH_DATA,
-  RWANDA_DISTRICTS,
-  heatmapFill,
-} from '../../data/mockPlannerData'
+import { getHotspots, getIncidentTimeDistribution } from '../../api/planning'
+import { listDistricts } from '../../api/districts'
+import { heatmapFill } from '../../data/mockPlannerData'
 import 'leaflet/dist/leaflet.css'
 
 const KIGALI_CENTER = [-1.9536, 30.0606]
-const PERIODS = ['7 Days', '30 Days', '6 Months', '1 Year']
+const PERIODS = [
+  { label: '7 Days', days: 7 },
+  { label: '30 Days', days: 30 },
+  { label: '6 Months', days: 182 },
+  { label: '1 Year', days: 365 },
+]
+const INCIDENT_TYPES = ['All Types', 'MEDICAL', 'FIRE', 'ROAD_ACCIDENT', 'SECURITY', 'THEFT']
 
 function barColor(value, max) {
+  if (!max) return 'var(--accent)'
   const t = value / max
   if (t > 0.75) return 'var(--status-critical)'
   if (t > 0.5) return 'var(--status-medium)'
@@ -29,93 +31,85 @@ function barColor(value, max) {
 export default function PlannerHotspots() {
   const { theme } = useThemeStore()
   const navigate = useNavigate()
-  const [period, setPeriod] = useState('30 Days')
-  const [showResult, setShowResult] = useState(true)
+  const [period, setPeriod] = useState(PERIODS[1])
+  const [districts, setDistricts] = useState([])
+  const [districtId, setDistrictId] = useState('')
+  const [incidentType, setIncidentType] = useState('All Types')
   const [heatmapZones, setHeatmapZones] = useState([])
-  const [emergingHotspots, setEmergingHotspots] = useState([])
+  const [timeDist, setTimeDist] = useState({ by_hour: [], by_day: [], by_month: [] })
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    getHotspots().then((data) => {
-      const hz = data.map((h) => ({
-        name: h.name,
-        lat: h.lat,
-        lng: h.lng,
-        count: h.count,
-        topType: h.topType,
-        density: h.density
-      }))
-      
-      const eh = data.map((h) => ({
-        zone: h.name,
-        severity: h.density === 'high' ? 'critical' : 'medium',
-        count: h.count,
-        increase: Math.floor(Math.random() * 40) + 10,
-        topType: h.topType
-      }))
-
-      if (hz.length > 0) {
-        setHeatmapZones(hz)
-        setEmergingHotspots(eh)
-      } else {
-        setHeatmapZones([
-          { name: 'Nyamirambo', lat: -1.9708, lng: 30.0526, count: 42, topType: 'Traffic Accident', density: 'high' },
-          { name: 'Biryogo', lat: -1.9608, lng: 30.0626, count: 28, topType: 'Theft', density: 'high' },
-          { name: 'Kimihurura', lat: -1.9608, lng: 30.0626, count: 15, topType: 'Medical', density: 'medium' },
-        ])
-        setEmergingHotspots([
-          { zone: 'Nyamirambo', severity: 'critical', count: 42, increase: 45, topType: 'Traffic Accident' },
-          { zone: 'Biryogo', severity: 'medium', count: 28, increase: 25, topType: 'Theft' },
-        ])
-      }
-    }).catch(() => {
-      setHeatmapZones([
-        { name: 'Nyamirambo', lat: -1.9708, lng: 30.0526, count: 42, topType: 'Traffic Accident', density: 'high' },
-        { name: 'Biryogo', lat: -1.9608, lng: 30.0626, count: 28, topType: 'Theft', density: 'high' },
-        { name: 'Kimihurura', lat: -1.9608, lng: 30.0626, count: 15, topType: 'Medical', density: 'medium' },
-      ])
-      setEmergingHotspots([
-        { zone: 'Nyamirambo', severity: 'critical', count: 42, increase: 45, topType: 'Traffic Accident' },
-        { zone: 'Biryogo', severity: 'medium', count: 28, increase: 25, topType: 'Theft' },
-      ])
-    })
+    listDistricts().then(setDistricts).catch(() => {})
   }, [])
-  const hourMax = Math.max(...PLANNER_HOUR_DATA.map((d) => d.n))
-  const dayMax = Math.max(...PLANNER_DAY_DATA.map((d) => d.n))
-  const monthMax = Math.max(...PLANNER_MONTH_DATA.map((d) => d.n))
+
+  useEffect(() => {
+    Promise.resolve().then(() => setLoading(true))
+    const params = {
+      days: period.days,
+      districtId: districtId || undefined,
+      incidentType: incidentType !== 'All Types' ? incidentType : undefined,
+    }
+    Promise.allSettled([getHotspots(params), getIncidentTimeDistribution(params)])
+      .then(([hotspotsRes, distRes]) => {
+        setHeatmapZones(hotspotsRes.status === 'fulfilled' ? hotspotsRes.value : [])
+        setTimeDist(distRes.status === 'fulfilled' ? distRes.value : { by_hour: [], by_day: [], by_month: [] })
+      })
+      .finally(() => setLoading(false))
+  }, [period, districtId, incidentType])
+
+  // Real emerging zones: a genuine increase (increase_pct > 0) against the
+  // immediately preceding window of equal length — no fabricated percentage.
+  const emergingHotspots = [...heatmapZones]
+    .filter((h) => h.increase_pct != null && h.increase_pct > 0)
+    .sort((a, b) => b.increase_pct - a.increase_pct)
+    .slice(0, 6)
+
+  const hourMax = Math.max(0, ...timeDist.by_hour.map((d) => d.count))
+  const dayMax = Math.max(0, ...timeDist.by_day.map((d) => d.count))
+  const monthMax = Math.max(0, ...timeDist.by_month.map((d) => d.count))
 
   return (
     <div className="portal-page flex flex-col gap-4 min-w-[1024px]">
       <PlannerPageHeader
         title="Hotspot Analysis"
-        subtitle="Incident clustering patterns and emerging risk zones."
+        subtitle="Incident clustering patterns and emerging risk zones, from real incident data."
       />
 
       <div className="flex flex-wrap gap-2 items-center mb-2">
-        <select className="dispatcher-input h-9 w-40 text-[12px]" defaultValue="All Districts">
-          {RWANDA_DISTRICTS.map((d) => (
-            <option key={d}>{d}</option>
+        <select
+          className="dispatcher-input h-9 w-40 text-[12px]"
+          value={districtId}
+          onChange={(e) => setDistrictId(e.target.value)}
+        >
+          <option value="">All Districts</option>
+          {districts.map((d) => (
+            <option key={d.district_id} value={d.district_id}>{d.name}</option>
           ))}
         </select>
-        <select className="dispatcher-input h-9 w-[150px] text-[12px]" defaultValue="All Types">
-          <option>All Types</option>
-          <option>Theft</option>
-          <option>Traffic Accident</option>
-          <option>Medical</option>
+        <select
+          className="dispatcher-input h-9 w-[150px] text-[12px]"
+          value={incidentType}
+          onChange={(e) => setIncidentType(e.target.value)}
+        >
+          {INCIDENT_TYPES.map((t) => (
+            <option key={t} value={t}>{t === 'All Types' ? t : t.replace(/_/g, ' ')}</option>
+          ))}
         </select>
         <div className="flex flex-wrap gap-2 ml-auto">
           {PERIODS.map((p) => (
             <button
-              key={p}
+              key={p.label}
               type="button"
               className="text-[11px] font-semibold px-3 py-1.5 rounded-full border cursor-pointer"
               style={{
-                background: period === p ? 'var(--accent-ghost)' : 'var(--bg-elevated)',
-                borderColor: period === p ? 'var(--accent)' : 'var(--border)',
-                color: period === p ? 'var(--accent)' : 'var(--text-secondary)',
+                background: period.label === p.label ? 'var(--accent-ghost)' : 'var(--bg-elevated)',
+                borderColor: period.label === p.label ? 'var(--accent)' : 'var(--border)',
+                color: period.label === p.label ? 'var(--accent)' : 'var(--text-secondary)',
               }}
               onClick={() => setPeriod(p)}
             >
-              {p}
+              {p.label}
             </button>
           ))}
         </div>
@@ -152,20 +146,26 @@ export default function PlannerHotspots() {
                   <Popup>
                     <strong>{z.name}</strong>
                     <br />
-                    {z.count} incidents · {z.topType}
+                    {z.count} incidents · {z.top_type}
                   </Popup>
                 </Circle>
               ))}
             </MapContainer>
+            {!loading && heatmapZones.length === 0 && (
+              <p className="text-[12px] text-(--text-muted) text-center mt-2 mb-0">
+                No incidents recorded for this filter/period.
+              </p>
+            )}
           </div>
 
           <div className="dispatcher-surface p-4">
             <h3 className="text-[13px] font-semibold m-0 mb-3">When Do Incidents Happen?</h3>
+            <p className="text-[11px] text-(--text-muted) m-0 mb-3">Real counts from call time, for the selected filters.</p>
             <div className="flex flex-col sm:flex-row gap-4">
               {[
-                { title: 'By Hour', data: PLANNER_HOUR_DATA, key: 'hour', max: hourMax },
-                { title: 'By Day', data: PLANNER_DAY_DATA, key: 'day', max: dayMax },
-                { title: 'By Month', data: PLANNER_MONTH_DATA, key: 'month', max: monthMax },
+                { title: 'By Hour', data: timeDist.by_hour, key: 'label', max: hourMax },
+                { title: 'By Day', data: timeDist.by_day, key: 'label', max: dayMax },
+                { title: 'By Month', data: timeDist.by_month, key: 'label', max: monthMax },
               ].map((chart) => (
                 <div key={chart.title} className="flex-1 min-w-0">
                   <div className="text-[12px] text-(--text-muted) mb-1">{chart.title}</div>
@@ -174,9 +174,9 @@ export default function PlannerHotspots() {
                       <BarChart data={chart.data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                         <XAxis dataKey={chart.key} tick={{ fontSize: 8, fill: 'var(--text-muted)' }} interval="preserveStartEnd" />
                         <YAxis hide />
-                        <Bar dataKey="n" radius={[2, 2, 0, 0]}>
+                        <Bar dataKey="count" radius={[2, 2, 0, 0]}>
                           {chart.data.map((entry, i) => (
-                            <Cell key={i} fill={barColor(entry.n, chart.max)} />
+                            <Cell key={i} fill={barColor(entry.count, chart.max)} />
                           ))}
                         </Bar>
                       </BarChart>
@@ -192,47 +192,44 @@ export default function PlannerHotspots() {
           <div>
             <h3 className="text-[13px] font-semibold m-0">Emerging Hotspots</h3>
             <p className="text-[12px] text-(--text-secondary) m-0 mt-1">
-              Zones with increased activity vs prior 14 days
+              Zones with a real increase vs the preceding {period.label.toLowerCase()}
             </p>
           </div>
+          {!loading && emergingHotspots.length === 0 && (
+            <div className="dispatcher-surface p-4 text-[12px] text-(--text-muted) text-center">
+              No zone is trending up for this filter/period.
+            </div>
+          )}
           {emergingHotspots.map((h, i) => {
+            const severity = h.density === 'high' ? 'critical' : h.density === 'medium' ? 'medium' : 'accent'
             const borderColor =
-              h.severity === 'critical'
-                ? 'var(--status-critical)'
-                : h.severity === 'medium'
-                  ? 'var(--status-medium)'
-                  : 'var(--accent)'
-            const dotColor = borderColor
+              severity === 'critical' ? 'var(--status-critical)' : severity === 'medium' ? 'var(--status-medium)' : 'var(--accent)'
             return (
               <div
-                key={`${h.zone}-${i}`}
+                key={`${h.name}-${i}`}
                 className="dispatcher-surface p-4"
                 style={{ borderLeft: `3px solid ${borderColor}` }}
               >
                 <div className="flex justify-between items-start gap-2 mb-1">
                   <div className="flex items-center gap-2">
-                    <span
-                      className="w-2 h-2 rounded-full shrink-0 animate-pulse"
-                      style={{ background: dotColor }}
-                    />
-                    <span className="font-semibold text-[13px]">{h.zone}</span>
+                    <span className="w-2 h-2 rounded-full shrink-0 animate-pulse" style={{ background: borderColor }} />
+                    <span className="font-semibold text-[13px]">{h.name}</span>
                   </div>
                   <span
                     className="text-[10px] font-bold px-2 py-0.5 rounded"
                     style={{ background: 'var(--status-critical-bg)', color: 'var(--status-critical)' }}
                   >
-                    +{h.increase}%
+                    +{h.increase_pct}%
                   </span>
                 </div>
-                <div className="text-[12px] text-(--text-secondary)">{h.count} incidents · last 14 days</div>
-                <div className="text-[12px] font-semibold mt-1" style={{ color: 'var(--status-critical)' }}>
-                  ↑ {h.increase}% vs prior 14 days
+                <div className="text-[12px] text-(--text-secondary)">
+                  {h.count} incidents · {period.label.toLowerCase()} (vs {h.previous_count} prior)
                 </div>
-                <div className="text-[11px] text-(--text-muted) mt-0.5">Predominantly: {h.topType}</div>
+                <div className="text-[11px] text-(--text-muted) mt-0.5">Predominantly: {h.top_type}</div>
                 <button
                   type="button"
                   className="dispatcher-btn-outline w-full mt-2 text-[11px] h-[34px] flex items-center justify-center gap-1"
-                  onClick={() => navigate(`/planner/deployment?zone=${encodeURIComponent(h.zone)}`)}
+                  onClick={() => navigate(`/planner/deployment?zone=${encodeURIComponent(h.name)}`)}
                 >
                   <Plus size={14} />
                   Prepare Response Plan →
@@ -240,46 +237,6 @@ export default function PlannerHotspots() {
               </div>
             )
           })}
-
-          <div className="dispatcher-surface p-4">
-            <h3 className="text-[13px] font-semibold m-0">Correlation Analysis</h3>
-            <p className="text-[12px] text-(--text-secondary) m-0 mt-1 mb-3">
-              Test relationships between factors and incident rates
-            </p>
-            <div className="flex flex-col sm:flex-row gap-2 mb-3">
-              <select className="dispatcher-input h-9 flex-1 text-[12px]" defaultValue="Rainfall">
-                <option>Rainfall</option>
-                <option>Market Day</option>
-                <option>Public Holiday</option>
-                <option>Time of Day</option>
-              </select>
-              <select className="dispatcher-input h-9 flex-1 text-[12px]" defaultValue="Traffic Accident">
-                <option>All Types</option>
-                <option>Traffic Accident</option>
-                <option>Theft</option>
-              </select>
-            </div>
-            <button
-              type="button"
-              className="dispatcher-btn-primary text-[12px] px-3 py-1.5 inline-flex items-center gap-1.5"
-              onClick={() => setShowResult(true)}
-            >
-              <LineChart size={14} />
-              Analyze
-            </button>
-            {showResult && (
-              <div className="mt-4">
-                <div className="text-[12px] font-semibold mb-2">Correlation: STRONG (0.74)</div>
-                <div className="h-2 rounded-full bg-(--border) overflow-hidden mb-2">
-                  <div className="h-full rounded-full" style={{ width: '74%', background: 'var(--accent)' }} />
-                </div>
-                <p className="text-[12px] text-(--text-secondary) m-0">
-                  Rainfall strongly correlates with traffic incidents in Nyarugenge. Effect strongest during peak
-                  hours.
-                </p>
-              </div>
-            )}
-          </div>
         </div>
       </div>
     </div>

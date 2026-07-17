@@ -84,6 +84,7 @@ import PlannerDeployment from './pages/planner/PlannerDeployment'
 import PlannerSimulation from './pages/planner/PlannerSimulation'
 import PlannerPrediction from './pages/planner/PlannerPrediction'
 import PlannerReports from './pages/planner/PlannerReports'
+import PlannerMutualAid from './pages/planner/PlannerMutualAid'
 import PlannerProfile from './pages/planner/PlannerProfile'
 import PlannerSettings from './pages/planner/PlannerSettings'
 import AnalystRoute from './components/layout/AnalystRoute'
@@ -213,6 +214,7 @@ export default function App() {
             <Route path="simulation" element={<PlannerSimulation />} />
             <Route path="prediction" element={<PlannerPrediction />} />
             <Route path="reports" element={<PlannerReports />} />
+            <Route path="mutual-aid" element={<PlannerMutualAid />} />
             <Route path="profile" element={<PlannerProfile />} />
             <Route path="settings" element={<Navigate to="/planner/settings/profile" replace />} />
             <Route path="settings/:section" element={<PlannerSettings />} />

@@ -1,35 +1,65 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Plus, Send, X, ChartLine } from 'lucide-react'
+import { Plus, Send, X, ChartLine, ChevronDown, ChevronUp } from 'lucide-react'
 import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
-import { PLANNER_DEFAULT_INSTRUCTIONS, RWANDA_DISTRICTS, planStatusVariant } from '../../data/mockPlannerData'
+import { planStatusVariant } from '../../data/mockPlannerData'
 import { getCurrentUser } from '../../utils/authSession'
-import { useNotificationsStore } from '../../store/notificationsStore'
-import { listPlans, createPlan } from '../../api/planning'
+import { listPlans, createPlan, updatePlanStatus, createInstruction, listInstructions, getDistrictCoverage } from '../../api/planning'
+import { listDistricts } from '../../api/districts'
+import { listVehicles } from '../../api/vehicles'
 
 const EMPTY_INSTRUCTION = { vehicle_id: '', from_location: '', to_location: '', move_time: '' }
-const BASE_COVERAGE = 82
+const PLAN_FILTERS = ['All', 'Draft', 'Submitted', 'Approved', 'Implemented']
 
 function generateId() {
   return Math.random().toString(36).slice(2, 10)
 }
 
-function projectedFromInstructions(instructions) {
-  const filled = instructions.filter((i) => i.vehicle_id.trim() && i.to_location.trim())
-  const boost = filled.reduce((sum, _, idx) => sum + (3 + (idx % 3)), 0)
-  return Math.min(98, BASE_COVERAGE + boost)
+function fmtDate(iso) {
+  if (!iso || iso === '—') return '—'
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
+
+function InstructionsPanel({ planId }) {
+  const [instructions, setInstructions] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    listInstructions(planId)
+      .then(setInstructions)
+      .catch(() => setInstructions([]))
+      .finally(() => setLoading(false))
+  }, [planId])
+
+  if (loading) return <p className="text-[11px] text-(--text-muted) m-0 py-2">Loading instructions…</p>
+  if (instructions.length === 0) return <p className="text-[11px] text-(--text-muted) m-0 py-2">No positioning instructions on this plan.</p>
+
+  return (
+    <div className="flex flex-col gap-1.5 py-2">
+      {instructions.map((i) => (
+        <div key={i.instruction_id} className="text-[11px] text-(--text-secondary) flex flex-wrap gap-x-2">
+          <span className="font-mono text-(--accent)">{i.vehicle_plate ?? '—'}</span>
+          <span>{i.from_location || '—'} → {i.to_location || '—'}</span>
+          {i.move_time && <span className="text-(--text-muted)">at {new Date(i.move_time).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}</span>}
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export default function PlannerDeployment() {
   const [searchParams] = useSearchParams()
   const zoneHint = searchParams.get('zone')
-  const addNotification = useNotificationsStore((s) => s.addNotification)
 
-  const [instructions, setInstructions] = useState(() =>
-    PLANNER_DEFAULT_INSTRUCTIONS.map((i) => ({ ...i }))
-  )
+  const [districts, setDistricts] = useState([])
+  const [vehicles, setVehicles] = useState([])
+  const [districtCoverage, setDistrictCoverage] = useState([])
+  const [selectedDistrictId, setSelectedDistrictId] = useState('')
+
+  const [instructions, setInstructions] = useState([{ ...EMPTY_INSTRUCTION }])
   const [planFilter, setPlanFilter] = useState('All')
   const [planName, setPlanName] = useState(zoneHint ? `${zoneHint} Response Plan` : '')
   const [activeFrom, setActiveFrom] = useState('')
@@ -40,6 +70,7 @@ export default function PlannerDeployment() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
   const [toast, setToast] = useState(null)
+  const [openPlanId, setOpenPlanId] = useState(null)
 
   function showToast(msg) {
     setToast(msg)
@@ -47,14 +78,29 @@ export default function PlannerDeployment() {
   }
 
   useEffect(() => {
+    listDistricts().then((d) => {
+      setDistricts(d)
+      const cu = getCurrentUser()
+      setSelectedDistrictId(cu?.district_id || d[0]?.district_id || '')
+    }).catch(() => {})
+    getDistrictCoverage().then(setDistrictCoverage).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (!selectedDistrictId) { Promise.resolve().then(() => setVehicles([])); return }
+    listVehicles({ districtId: selectedDistrictId }).then(setVehicles).catch(() => setVehicles([]))
+  }, [selectedDistrictId])
+
+  useEffect(() => {
     listPlans()
       .then((apiPlans) => {
         setPlans(apiPlans.map((p) => ({
-          id: p.plan_id ? p.plan_id.slice(0, 8).toUpperCase() : '—',
+          id: p.plan_id,
+          shortId: p.plan_id ? p.plan_id.slice(0, 8).toUpperCase() : '—',
           plan_name: p.title ?? '(Untitled)',
           district: p.district_name ?? '—',
-          active_from: p.event_date ?? '—',
-          active_until: '—',
+          active_from: p.active_from ?? '—',
+          active_until: p.active_until ?? '—',
           status: p.status ?? 'DRAFT',
         })))
       })
@@ -62,8 +108,9 @@ export default function PlannerDeployment() {
       .finally(() => setPlansLoading(false))
   }, [])
 
-  const projected = useMemo(() => projectedFromInstructions(instructions), [instructions])
-  const improvement = projected - BASE_COVERAGE
+  const selectedDistrict = districts.find((d) => d.district_id === selectedDistrictId)
+  const coverageNow = districtCoverage.find((d) => d.district_id === selectedDistrictId)
+  const filledInstructions = instructions.filter((i) => i.vehicle_id.trim() && i.to_location.trim())
 
   const filteredPlans =
     planFilter === 'All' ? plans : plans.filter((p) => p.status === planFilter.toUpperCase())
@@ -75,38 +122,43 @@ export default function PlannerDeployment() {
 
   const savePlan = async (isDraft) => {
     if (saving) return
+    if (!planName.trim()) { setSaveError('Plan name is required.'); return }
     setSaving(true)
     setSaveError(null)
-    const currentUser = getCurrentUser()
-    const activeUntilFull = activeUntil + (activeUntilTime ? 'T' + activeUntilTime : '')
+    const activeUntilFull = activeUntil + (activeUntilTime ? 'T' + activeUntilTime : 'T00:00')
     try {
+      // The backend's active_from/active_until are LocalDateTime — the raw
+      // value from a plain <input type="date"> (e.g. "2026-07-17") has no
+      // time component and fails JSON deserialization (400), so a
+      // midnight time is appended here.
       const created = await createPlan({
         title: planName || '(Untitled Plan)',
-        district_id: currentUser?.district_id ?? null,
-        description: '',
-        event_date: activeFrom || null,
+        district_id: selectedDistrictId || null,
+        active_from: activeFrom ? `${activeFrom}T00:00` : null,
+        active_until: activeUntil ? activeUntilFull : null,
       })
+
+      // Persist each real positioning instruction against the newly created
+      // plan — previously these rows only ever lived in local component
+      // state and were discarded the moment the page was left.
+      for (const row of filledInstructions) {
+        await createInstruction(created.plan_id, row).catch(() => {})
+      }
+
+      const finalPlan = isDraft ? created : await updatePlanStatus(created.plan_id, 'SUBMITTED')
       const libraryEntry = {
-        id: created.plan_id ? created.plan_id.slice(0, 8).toUpperCase() : generateId().toUpperCase(),
-        plan_name: created.title ?? planName,
-        district: created.district_name ?? '—',
-        active_from: created.event_date ?? activeFrom ?? '—',
+        id: finalPlan.plan_id,
+        shortId: finalPlan.plan_id ? finalPlan.plan_id.slice(0, 8).toUpperCase() : generateId().toUpperCase(),
+        plan_name: finalPlan.title ?? planName,
+        district: finalPlan.district_name ?? selectedDistrict?.name ?? '—',
+        active_from: finalPlan.active_from ?? activeFrom ?? '—',
         active_until: activeUntilFull || '—',
-        status: isDraft ? 'DRAFT' : 'SUBMITTED',
+        status: finalPlan.status ?? (isDraft ? 'DRAFT' : 'SUBMITTED'),
       }
       setPlans((prev) => [libraryEntry, ...prev])
       showToast(isDraft ? 'Draft saved.' : 'Plan submitted to Operations Manager.')
-      if (!isDraft) {
-        addNotification({
-          id: 'notif-' + generateId(),
-          type: 'DEPLOYMENT_PLAN_SUBMITTED',
-          target_role: 'operations_manager',
-          title: 'Deployment Plan Submitted',
-          message: `Planner submitted "${libraryEntry.plan_name}" for OM approval.`,
-          timestamp: new Date().toISOString(),
-          read: false,
-        })
-      }
+      setInstructions([{ ...EMPTY_INSTRUCTION }])
+      setPlanName('')
     } catch {
       setSaveError('Failed to save plan. Please try again.')
     } finally {
@@ -123,7 +175,7 @@ export default function PlannerDeployment() {
       )}
       <PlannerPageHeader
         title="Deployment Planning"
-        subtitle="Create and manage evidence-based unit positioning plans."
+        subtitle="Create and manage real unit positioning plans."
       />
 
       <div className="portal-split-45-55 gap-4">
@@ -133,7 +185,7 @@ export default function PlannerDeployment() {
             <label className="text-[12px] font-medium text-(--text-secondary)">
               Plan name *
               <input
-                className="dispatcher-input h-10 w-full mt-1 text-[13px]"
+                className="dispatcher-input dispatcher-text-input h-10 w-full mt-1 text-[13px]"
                 placeholder="e.g. Friday PM Kimihurura Surge Plan"
                 value={planName}
                 onChange={(e) => setPlanName(e.target.value)}
@@ -141,34 +193,38 @@ export default function PlannerDeployment() {
             </label>
             <label className="text-[12px] font-medium text-(--text-secondary)">
               District *
-              <select className="dispatcher-input h-10 w-full mt-1 text-[13px]">
-                {RWANDA_DISTRICTS.map((d) => (
-                  <option key={d}>{d}</option>
+              <select
+                className="dispatcher-input dispatcher-select h-10 w-full mt-1 text-[13px]"
+                value={selectedDistrictId}
+                onChange={(e) => setSelectedDistrictId(e.target.value)}
+              >
+                {districts.map((d) => (
+                  <option key={d.district_id} value={d.district_id}>{d.name}</option>
                 ))}
               </select>
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex flex-col gap-3">
               <label className="text-[12px] font-medium text-(--text-secondary)">
                 Active from *
                 <input
                   type="date"
-                  className="dispatcher-input h-10 w-full mt-1"
+                  className="dispatcher-input dispatcher-text-input h-10 w-full mt-1"
                   value={activeFrom}
                   onChange={(e) => setActiveFrom(e.target.value)}
                 />
               </label>
               <label className="text-[12px] font-medium text-(--text-secondary)">
                 Active until *
-                <div className="flex gap-2 mt-1">
+                <div className="flex flex-wrap gap-2 mt-1">
                   <input
                     type="date"
-                    className="dispatcher-input h-10 flex-1"
+                    className="dispatcher-input dispatcher-text-input h-10 flex-1 min-w-0"
                     value={activeUntil}
                     onChange={(e) => setActiveUntil(e.target.value)}
                   />
                   <input
                     type="time"
-                    className="dispatcher-input h-10 w-28"
+                    className="dispatcher-input dispatcher-text-input h-10 flex-1 min-w-0"
                     value={activeUntilTime}
                     onChange={(e) => setActiveUntilTime(e.target.value)}
                   />
@@ -177,6 +233,7 @@ export default function PlannerDeployment() {
             </div>
 
             <div className="text-[13px] font-semibold mt-2 mb-1">Unit Positioning Instructions</div>
+            <p className="text-[11px] text-(--text-muted) m-0 -mt-1 mb-1">Units shown are from the selected district's real fleet.</p>
             {instructions.map((row, idx) => (
               <div key={idx} className="relative rounded-lg p-3 mb-2" style={{ background: 'var(--bg-elevated)' }}>
                 <button
@@ -189,14 +246,20 @@ export default function PlannerDeployment() {
                   <X size={16} />
                 </button>
                 <div className="grid grid-cols-2 gap-2 mb-2 pr-8">
-                  <input
-                    className="dispatcher-input h-9 text-[12px]"
-                    placeholder="Unit ID"
+                  <select
+                    className="dispatcher-input dispatcher-select h-9 text-[12px]"
                     value={row.vehicle_id}
                     onChange={(e) => updateInstruction(idx, 'vehicle_id', e.target.value)}
-                  />
+                  >
+                    <option value="">Select unit…</option>
+                    {vehicles.map((v) => (
+                      <option key={v.vehicle_id} value={v.vehicle_id}>
+                        {v.plate_number} · {v.vehicle_type}
+                      </option>
+                    ))}
+                  </select>
                   <input
-                    className="dispatcher-input h-9 text-[12px]"
+                    className="dispatcher-input dispatcher-text-input h-9 text-[12px]"
                     placeholder="Current location"
                     value={row.from_location}
                     onChange={(e) => updateInstruction(idx, 'from_location', e.target.value)}
@@ -204,14 +267,14 @@ export default function PlannerDeployment() {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <input
-                    className="dispatcher-input h-9 text-[12px]"
+                    className="dispatcher-input dispatcher-text-input h-9 text-[12px]"
                     placeholder="Target standby point"
                     value={row.to_location}
                     onChange={(e) => updateInstruction(idx, 'to_location', e.target.value)}
                   />
                   <input
-                    className="dispatcher-input h-9 text-[12px]"
-                    placeholder="Move time"
+                    type="datetime-local"
+                    className="dispatcher-input dispatcher-text-input h-9 text-[12px]"
                     value={row.move_time}
                     onChange={(e) => updateInstruction(idx, 'move_time', e.target.value)}
                   />
@@ -222,14 +285,6 @@ export default function PlannerDeployment() {
               <Plus size={16} />
               Add Instruction
             </button>
-
-            <label className="text-[12px] font-medium text-(--text-secondary)">
-              Planning notes
-              <textarea
-                className="dispatcher-textarea w-full mt-1 min-h-[80px] text-[13px]"
-                placeholder="Rationale for this plan, data sources used..."
-              />
-            </label>
 
             {saveError && (
               <div className="text-[12px] px-3 py-2 rounded" style={{ background: 'var(--status-critical-bg)', color: 'var(--status-critical)' }}>
@@ -252,56 +307,38 @@ export default function PlannerDeployment() {
           <div className="dispatcher-surface p-4">
             <div className="flex items-center gap-2 mb-4">
               <ChartLine size={18} className="text-(--accent)" />
-              <h3 className="text-[13px] font-semibold m-0">Coverage Simulator</h3>
+              <h3 className="text-[13px] font-semibold m-0">District Coverage</h3>
               <span
                 className="text-[10px] font-mono font-bold px-2 py-0.5 rounded ml-auto"
                 style={{ background: 'var(--accent-ghost)', color: 'var(--accent)' }}
               >
-                AUTO-CALCULATES
+                LIVE
               </span>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <div className="text-[11px] font-mono uppercase text-(--text-muted)">Current Coverage</div>
-                <div className="text-[28px] font-bold font-mono" style={{ color: 'var(--status-medium)' }}>
-                  {BASE_COVERAGE}%
+            {coverageNow ? (
+              <>
+                <div className="text-[11px] font-mono uppercase text-(--text-muted)">Current Fleet Availability — {selectedDistrict?.name}</div>
+                <div className="text-[28px] font-bold font-mono" style={{ color: coverageNow.coverage_pct >= 60 ? 'var(--status-low)' : 'var(--status-critical)' }}>
+                  {coverageNow.coverage_pct}%
                 </div>
                 <div className="h-2 rounded-full bg-(--border) mt-2 overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: `${BASE_COVERAGE}%`, background: 'var(--status-medium)' }} />
+                  <div className="h-full rounded-full" style={{ width: `${coverageNow.coverage_pct}%`, background: coverageNow.coverage_pct >= 60 ? 'var(--accent)' : 'var(--status-critical)' }} />
                 </div>
-              </div>
-              <div>
-                <div className="text-[11px] font-mono uppercase text-(--text-muted)">With This Plan</div>
-                <div className="text-[28px] font-bold font-mono" style={{ color: 'var(--status-low)' }}>
-                  {projected}%
-                </div>
-                <div className="h-2 rounded-full bg-(--border) mt-2 overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: `${projected}%`, background: 'var(--accent)' }} />
-                </div>
-              </div>
-            </div>
-            <div className="text-center text-[12px] font-semibold mt-2" style={{ color: 'var(--status-low)' }}>
-              +{improvement}% improvement projected
-            </div>
-            {projected < 90 && (
-              <div
-                className="mt-3 p-2.5 rounded text-[12px]"
-                style={{
-                  background: 'var(--status-medium-bg)',
-                  border: '1px solid var(--status-medium)',
-                  color: 'var(--status-medium)',
-                }}
-              >
-                Still below 90% target — consider adding more instructions
-              </div>
+                <div className="text-[11px] text-(--text-muted) mt-2">{coverageNow.available} of {coverageNow.total} units available right now</div>
+              </>
+            ) : (
+              <p className="text-[12px] text-(--text-muted) m-0">No fleet data for this district.</p>
             )}
+            <div className="text-[12px] mt-3 pt-3 border-t border-(--border-subtle)">
+              {filledInstructions.length} real unit{filledInstructions.length === 1 ? '' : 's'} being repositioned in this plan
+            </div>
           </div>
 
           <div className="dispatcher-surface p-4">
             <div className="flex flex-wrap justify-between gap-2 mb-3">
               <h3 className="text-[13px] font-semibold m-0">Plan Library</h3>
               <div className="flex flex-wrap gap-1">
-                {['All', 'Draft', 'Pending', 'Approved', 'Rejected'].map((f) => (
+                {PLAN_FILTERS.map((f) => (
                   <button
                     key={f}
                     type="button"
@@ -325,18 +362,27 @@ export default function PlannerDeployment() {
               <div className="text-[12px] text-(--text-muted) py-4 text-center">No plans found.</div>
             )}
             {filteredPlans.map((plan) => (
-              <div
-                key={plan.id}
-                className="flex flex-wrap items-center gap-2 py-2.5 border-t border-(--border-subtle) text-[12px] hover:bg-(--bg-elevated) -mx-2 px-2 rounded"
-              >
-                <span className="font-mono text-(--accent) font-bold">{plan.id}</span>
-                <span className="text-[13px] truncate flex-1 min-w-[120px]">{plan.plan_name}</span>
-                <span className="text-(--text-secondary)">{plan.district}</span>
-                <span className="font-mono text-[11px] text-(--text-muted)">{plan.active_from}</span>
-                <StatusBadge label={plan.status} variant={planStatusVariant(plan.status)} />
-                <button type="button" className="dispatcher-btn-ghost text-[11px] py-1 px-2">
-                  Open
-                </button>
+              <div key={plan.id} className="border-t border-(--border-subtle)">
+                <div className="flex flex-wrap items-center gap-2 py-2.5 text-[12px] hover:bg-(--bg-elevated) -mx-2 px-2 rounded">
+                  <span className="font-mono text-(--accent) font-bold">{plan.shortId}</span>
+                  <span className="text-[13px] truncate flex-1 min-w-[120px]">{plan.plan_name}</span>
+                  <span className="text-(--text-secondary)">{plan.district}</span>
+                  <span className="font-mono text-[11px] text-(--text-muted)">{fmtDate(plan.active_from)}</span>
+                  <StatusBadge label={plan.status} variant={planStatusVariant(plan.status)} />
+                  <button
+                    type="button"
+                    className="dispatcher-btn-ghost text-[11px] py-1 px-2 inline-flex items-center gap-1"
+                    onClick={() => setOpenPlanId(openPlanId === plan.id ? null : plan.id)}
+                  >
+                    {openPlanId === plan.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    Instructions
+                  </button>
+                </div>
+                {openPlanId === plan.id && (
+                  <div className="pl-2 -mt-1">
+                    <InstructionsPanel planId={plan.id} />
+                  </div>
+                )}
               </div>
             ))}
           </div>

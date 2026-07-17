@@ -19,27 +19,30 @@ function transformInstruction(i) {
     instruction_id: i.instructionId,
     plan_id: i.planId,
     vehicle_id: i.vehicleId,
-    vehicle_plate: i.vehiclePlate,
+    vehicle_plate: i.vehiclePlateNumber,
     from_location: i.fromLocation,
     to_location: i.toLocation,
     move_time: i.moveTime,
-    notes: i.notes,
   }
 }
 
 function transformSimulation(s) {
   return {
     simulation_id: s.simulationId,
-    name: s.name,
     scenario_type: s.scenarioType,
-    district_id: s.districtId,
-    status: s.status,
-    coverage_score: s.coverageScore,
-    response_time_avg: s.responseTimeAvg,
-    units_deployed: s.unitsDeployed,
-    run_by_name: s.runByName,
-    ran_at: s.ranAt,
-    notes: s.notes,
+    disaster_scenario: s.disasterScenario,
+    multiplier: s.multiplier,
+    duration_hours: s.durationHours,
+    focus_area: s.focusArea,
+    projected_response_time: s.projectedResponseTime,
+    projected_coverage: s.projectedCoverage,
+    projected_incidents: s.projectedIncidents,
+    baseline_response_time: s.baselineResponseTime,
+    target_response_time: s.targetResponseTime,
+    units_available: s.unitsAvailable,
+    units_total: s.unitsTotal,
+    units_short: s.unitsShort,
+    created_at: s.createdAt,
   }
 }
 
@@ -102,6 +105,17 @@ export async function listInstructions(planId) {
   return (data.data ?? data).map(transformInstruction)
 }
 
+export async function createInstruction(planId, body) {
+  const payload = {
+    vehicleId: body.vehicle_id || null,
+    fromLocation: body.from_location || null,
+    toLocation: body.to_location || null,
+    moveTime: body.move_time || null,
+  }
+  const { data } = await api.post(`/api/planning/plans/${planId}/instructions`, payload)
+  return transformInstruction(data.data ?? data)
+}
+
 export async function listSimulations() {
   const { data } = await api.get('/api/planning/simulations')
   return (data.data ?? data).map(transformSimulation)
@@ -110,9 +124,10 @@ export async function listSimulations() {
 export async function runSimulation(body) {
   const payload = {
     scenarioType: body.scenario_type,
+    disasterScenario: body.disaster_scenario ?? null,
     multiplier: body.multiplier ?? 1,
     durationHours: body.duration_hours ?? 4,
-    focusArea: body.focus_area ?? null,
+    districtId: body.district_id ?? null,
   }
   const { data } = await api.post('/api/planning/simulations', payload)
   return transformSimulation(data.data ?? data)
@@ -148,7 +163,64 @@ export async function getPredictions(params = {}) {
   return data.data ?? data
 }
 
-export async function getHotspots() {
-  const { data } = await api.get('/api/planning/hotspots')
-  return data.data ?? data
+export async function getHotspots(params = {}) {
+  const mapped = {}
+  if (params.districtId) mapped.districtId = params.districtId
+  if (params.incidentType) mapped.incidentType = params.incidentType
+  if (params.days) mapped.days = params.days
+  const { data } = await api.get('/api/planning/hotspots', { params: mapped })
+  return (data.data ?? data).map((h) => ({
+    name: h.name,
+    lat: h.lat,
+    lng: h.lng,
+    count: h.count,
+    top_type: h.topType,
+    density: h.density,
+    previous_count: h.previousCount,
+    increase_pct: h.increasePct,
+  }))
+}
+
+export async function getDistrictCoverage() {
+  const { data } = await api.get('/api/planning/district-coverage')
+  return (data.data ?? data).map((d) => ({
+    district_id: d.districtId,
+    district_name: d.districtName,
+    lat: d.lat,
+    lng: d.lng,
+    coverage_pct: d.coveragePct,
+    available: d.available,
+    total: d.total,
+  }))
+}
+
+export async function getCoverageGapDetails(districtId) {
+  const { data } = await api.get('/api/planning/coverage-gap-details', {
+    params: districtId ? { districtId } : {},
+  })
+  return (data.data ?? data).map((g) => ({
+    zone: g.zone,
+    district_id: g.districtId,
+    district_name: g.districtName,
+    coverage: g.currentCoverage,
+    target_coverage: g.targetCoverage,
+    recommendation: g.recommendation,
+    district_incidents_30d: g.districtIncidents30d,
+    nearest_unit_plate: g.nearestUnitPlate,
+    nearest_unit_distance_km: g.nearestUnitDistanceKm,
+  }))
+}
+
+export async function getIncidentTimeDistribution(params = {}) {
+  const mapped = {}
+  if (params.districtId) mapped.districtId = params.districtId
+  if (params.incidentType) mapped.incidentType = params.incidentType
+  if (params.days) mapped.days = params.days
+  const { data } = await api.get('/api/planning/incident-time-distribution', { params: mapped })
+  const d = data.data ?? data
+  return {
+    by_hour: d.byHour ?? [],
+    by_day: d.byDay ?? [],
+    by_month: d.byMonth ?? [],
+  }
 }

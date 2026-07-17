@@ -23,6 +23,8 @@ function timeAgo(isoString) {
 function statusVariant(status) {
   if (status === "APPROVED" || status === "FULFILLED") return "resolved";
   if (status === "PENDING") return "handover";
+  if (status === "RETURNED") return "active";
+  if (status === "DECLINED") return "info";
   return "critical";
 }
 
@@ -103,9 +105,10 @@ function MutualAidPanel() {
     if (!districtId) return;
     setSubmitError(null);
     try {
-      // You state what you need — your own District Commander decides how
-      // to fulfill it (including coordinating with other districts), so
-      // there's no "pick a source district" step here.
+      // You state what you need — the Emergency Planner decides how to
+      // fulfill it (they run the AI recommendation across every district
+      // and send whichever real spare unit makes sense), so there's no
+      // "pick a source district" step here.
       const created = await createMutualAidRequest({
         requesting_district_id: districtId,
         unit_type: form.unitType,
@@ -115,7 +118,7 @@ function MutualAidPanel() {
       });
       setHistory((prev) => [created, ...prev]);
       setSubmitted(true);
-      showToast("Request sent to your District Commander");
+      showToast("Request sent to the Emergency Planner");
     } catch (err) {
       setSubmitError(err?.response?.data?.message ?? "Could not submit request. Please retry.");
     }
@@ -134,7 +137,7 @@ function MutualAidPanel() {
       <div className="dispatcher-surface p-5">
         <SectionTitle title="Request Mutual Aid" />
         <p className="text-[12px] text-(--text-muted) m-0 mt-1">
-          Sent to your District Commander — they decide how to fulfill it.
+          Sent to the Emergency Planner — they run an AI recommendation across every district and send a real spare unit.
         </p>
         {submitError && (
           <p className="text-[12px] mt-3 m-0" style={{ color: "var(--status-critical)" }}>{submitError}</p>
@@ -221,14 +224,19 @@ function MutualAidPanel() {
               <div key={r.request_id} className="py-3 border-b border-(--border-subtle) last:border-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[12px] text-(--text-secondary)">
-                    {r.source_district_name ?? "—"} · {r.quantity}× {r.unit_type}
+                    {r.status === "FULFILLED"
+                      ? `${r.vehicle_plate_number ?? r.unit_type} from ${r.source_district_name ?? "—"}`
+                      : `${r.quantity}× ${r.unit_type}`}
                   </span>
                   <StatusBadge label={r.status} variant={statusVariant(r.status)} />
                   <span className="text-[11px] font-mono text-(--text-muted) ml-auto">
-                    {timeAgo(r.created_at)}
+                    {timeAgo(r.resolved_at ?? r.created_at)}
                   </span>
                 </div>
-                {r.reason && (
+                {r.status === "DECLINED" && r.resolution_notes && (
+                  <div className="text-[11px] text-(--text-secondary) mt-1">{r.resolution_notes}</div>
+                )}
+                {r.status !== "DECLINED" && r.reason && (
                   <div className="text-[11px] text-(--text-secondary) mt-1">{r.reason}</div>
                 )}
               </div>
