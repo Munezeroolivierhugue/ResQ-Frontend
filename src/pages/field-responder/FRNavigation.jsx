@@ -2,13 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MapContainer, TileLayer, CircleMarker, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
-import { MapPin, Navigation } from 'lucide-react'
+import { MapPin, Navigation, CloudRain } from 'lucide-react'
 import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
 import { RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../components/map/rwandaConstants'
 import FieldResponderProgressStrip from '../../components/field-responder/FieldResponderProgressStrip'
 import { useFieldResponderStore } from '../../store/fieldResponderStore'
 import { formatIncidentType } from '../../utils/incidentTypeLabels'
 import { getVehicle } from '../../api/vehicles'
+import { getWeather } from '../../api/planning'
 import 'leaflet/dist/leaflet.css'
 
 const MAP_HEIGHT = '100vh'
@@ -92,6 +93,19 @@ export default function FRNavigation() {
   const hasRealFixRef = useRef(false)
 
   const inc = assignment?.incident ?? null
+
+  // Real live weather for the incident's district — same OpenWeatherMap-backed
+  // endpoint Operations Manager uses, so a responder knows before arriving if
+  // conditions on scene are hazardous (heavy rain/thunderstorm), not just
+  // routine. Doesn't change the OSRM route itself (no hazard-avoidance
+  // routing exists), just alerts the responder honestly.
+  const [weather, setWeather] = useState(null)
+  useEffect(() => {
+    if (!inc?.district) return
+    getWeather()
+      .then((all) => setWeather(all.find((w) => w.district_name === inc.district) ?? null))
+      .catch(() => setWeather(null))
+  }, [inc?.district])
 
   // Officer position — prefer browser geolocation, fallback to Kigali center.
   // Was a one-shot getCurrentPosition() call, so the marker/route was frozen
@@ -238,6 +252,25 @@ export default function FRNavigation() {
       </div>
 
       <div className="fr-nav-top">
+        {weather?.hazard_level === 'HAZARDOUS' && !weather.stale && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 12px',
+              marginBottom: '8px',
+              borderRadius: '8px',
+              background: 'var(--status-critical-bg)',
+              color: 'var(--status-critical)',
+              fontSize: '12px',
+              fontWeight: 600,
+            }}
+          >
+            <CloudRain size={16} aria-hidden />
+            Hazardous weather at destination: {weather.description} ({Math.round(weather.temperature_c)}°C) — drive with caution.
+          </div>
+        )}
         <div className="fr-nav-incident-bar">
           <div className="fr-nav-incident-head">
             <span className="fr-nav-incident-id font-mono">

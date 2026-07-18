@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, CircleMarker, Circle, Tooltip } from 'react-leaflet'
 import L from 'leaflet'
-import { Megaphone } from 'lucide-react'
+import { Megaphone, CloudRain } from 'lucide-react'
 import OpsManagerDistrictLabel from '../../components/ops-manager/OpsManagerDistrictLabel'
 import { useThemeStore } from '../../store/themeStore'
 import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
@@ -11,8 +11,15 @@ import { getCurrentUser } from '../../utils/authSession'
 import { createBroadcast } from '../../api/broadcasts'
 import { listIncidents } from '../../api/incidents'
 import { listVehicles } from '../../api/vehicles'
+import { getWeather } from '../../api/planning'
 import { formatIncidentType } from '../../utils/incidentTypeLabels'
 import 'leaflet/dist/leaflet.css'
+
+const HAZARD_COLORS = {
+  CLEAR: 'var(--text-secondary)',
+  MODERATE: 'var(--status-medium)',
+  HAZARDOUS: 'var(--status-critical)',
+}
 
 // Only "Incidents" and "All Units" ever actually rendered anything —
 // "Coverage Rings" too, but "Traffic" and "Agency Units" were toggles that
@@ -59,7 +66,9 @@ export default function OpsManagerMap() {
   const { theme } = useThemeStore()
   const [incidents, setIncidents] = useState([])
   const [units, setUnits] = useState([])
+  const [weather, setWeather] = useState(null)
   const districtId = getCurrentUser()?.district_id
+  const omDistrict = getCurrentUser()?.district_name
 
   useEffect(() => {
     if (!districtId) return
@@ -70,6 +79,13 @@ export default function OpsManagerMap() {
       .catch(() => {})
     listVehicles({ districtId }).then(setUnits).catch(() => {})
   }, [districtId])
+
+  useEffect(() => {
+    if (!omDistrict) return
+    getWeather()
+      .then((all) => setWeather(all.find((w) => w.district_name === omDistrict) ?? null))
+      .catch(() => setWeather(null))
+  }, [omDistrict])
 
   const [layers, setLayers] = useState({
     'All Units': true,
@@ -131,8 +147,6 @@ export default function OpsManagerMap() {
     ? L.latLngBounds(districtPoints).pad(0.4)
     : null
 
-  const omDistrict = getCurrentUser()?.district_name
-
   return (
     <div className="flex flex-col h-full min-h-[calc(100vh-56px)]">
       <div className="shrink-0 px-4 pt-4 pb-2 border-b border-(--border) bg-(--bg-surface)">
@@ -155,6 +169,24 @@ export default function OpsManagerMap() {
           >
             📍 {omDistrict ?? 'Your'} District
           </span>
+          {weather && !weather.stale && (
+            <span
+              className="inline-flex items-center gap-1.5 shrink-0"
+              style={{
+                background: 'var(--bg-input)',
+                border: `1px solid ${HAZARD_COLORS[weather.hazard_level] ?? 'var(--border)'}`,
+                color: HAZARD_COLORS[weather.hazard_level] ?? 'var(--text-secondary)',
+                borderRadius: '6px',
+                padding: '0.25rem 0.65rem',
+                fontSize: '11px',
+                fontWeight: 600,
+              }}
+              title={`Real live weather (OpenWeatherMap): ${weather.description}`}
+            >
+              <CloudRain size={12} />
+              {weather.temperature_c != null ? `${Math.round(weather.temperature_c)}°C · ` : ''}{weather.description}
+            </span>
+          )}
           {LAYERS.map((name) => (
             <button
               key={name}
@@ -189,6 +221,16 @@ export default function OpsManagerMap() {
           </button>
         </div>
       </div>
+
+      {weather?.hazard_level === 'HAZARDOUS' && !weather.stale && (
+        <div
+          className="shrink-0 px-4 py-2 text-[12px] font-semibold flex items-center gap-2"
+          style={{ background: 'var(--status-critical-bg)', color: 'var(--status-critical)' }}
+        >
+          <CloudRain size={14} />
+          Hazardous weather in {omDistrict}: {weather.description} — consider factoring this into dispatch and field-responder routing decisions.
+        </div>
+      )}
 
       {broadcastOpen && (
         <div className="shrink-0 px-4 py-3 border-b border-(--border) bg-(--bg-surface) flex flex-wrap gap-3 items-end">

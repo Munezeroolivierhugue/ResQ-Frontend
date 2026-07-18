@@ -1,192 +1,139 @@
-import { useState } from 'react'
-import { Plus, Pencil, Share2 } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
 import AnalystPageHeader from '../../components/analyst/AnalystPageHeader'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
-import { ANALYST_LIBRARY_ROWS, ANALYST_SCHEDULES } from '../../data/mockAnalystData'
-
-const TABS = ['Report Library', 'Scheduled Delivery']
+import { listReports, getReport } from '../../api/reporting'
+import { listDistricts } from '../../api/districts'
 
 export default function AnalystLibrary() {
-  const [tab, setTab] = useState(TABS[0])
-  const [annotate, setAnnotate] = useState(null)
-  const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [reports, setReports] = useState([])
+  const [districts, setDistricts] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [typeFilter, setTypeFilter] = useState('')
+  const [districtFilter, setDistrictFilter] = useState('')
+  const [preview, setPreview] = useState(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+
+  useEffect(() => {
+    Promise.all([listReports(), listDistricts()])
+      .then(([r, d]) => {
+        setReports(r)
+        setDistricts(d)
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  const reportTypes = useMemo(() => [...new Set(reports.map((r) => r.report_type).filter(Boolean))], [reports])
+
+  const filtered = reports.filter((r) => {
+    if (typeFilter && r.report_type !== typeFilter) return false
+    if (districtFilter && r.district_id !== districtFilter) return false
+    if (search) {
+      const q = search.toLowerCase()
+      const hay = `${r.report_type ?? ''} ${r.district_name ?? ''} ${r.generated_by_name ?? ''}`.toLowerCase()
+      if (!hay.includes(q)) return false
+    }
+    return true
+  })
+
+  function openPreview(reportId) {
+    setPreviewLoading(true)
+    setPreview({ report_id: reportId })
+    getReport(reportId)
+      .then(setPreview)
+      .finally(() => setPreviewLoading(false))
+  }
 
   return (
     <div className="portal-page flex flex-col gap-4 min-w-[1024px]">
       <AnalystPageHeader
-        title="Report Library & Scheduled Delivery"
-        subtitle="All reports, schedules, and access management."
+        title="Report Library"
+        subtitle="Every generated report, real data only."
         badge="Report Library"
       />
 
-      <div className="flex flex-wrap gap-2 border-b border-(--border) pb-2">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            type="button"
-            className="text-[12px] font-semibold px-4 py-2 cursor-pointer border-none bg-transparent"
-            style={{
-              color: tab === t ? 'var(--accent)' : 'var(--text-secondary)',
-              borderBottom: tab === t ? '2px solid var(--accent)' : '2px solid transparent',
-            }}
-            onClick={() => setTab(t)}
-          >
-            {t}
-          </button>
-        ))}
-        {tab === TABS[1] && (
-          <button
-            type="button"
-            className="dispatcher-btn-primary text-[12px] h-9 ml-auto inline-flex items-center gap-1"
-            onClick={() => setShowScheduleModal(true)}
-          >
-            <Plus size={14} />
-            Create New Schedule
-          </button>
-        )}
+      <div className="flex flex-wrap gap-2">
+        <input
+          className="dispatcher-input dispatcher-text-input h-10 flex-1 min-w-[200px]"
+          placeholder="Search by type, district, author..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <select className="dispatcher-input dispatcher-select h-10 w-44 text-[12px]" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+          <option value="">All types</option>
+          {reportTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select className="dispatcher-input dispatcher-select h-10 w-44 text-[12px]" value={districtFilter} onChange={(e) => setDistrictFilter(e.target.value)}>
+          <option value="">All districts</option>
+          {districts.map((d) => <option key={d.district_id} value={d.district_id}>{d.name}</option>)}
+        </select>
       </div>
 
-      {tab === TABS[0] && (
-        <>
-          <div className="flex flex-wrap gap-2">
-            <input className="dispatcher-input h-10 flex-1 min-w-[200px]" placeholder="Search by type, district, keyword..." />
-            <select className="dispatcher-input h-10 w-36 text-[12px]"><option>Type</option></select>
-            <select className="dispatcher-input h-10 w-36 text-[12px]"><option>Date range</option></select>
-            <select className="dispatcher-input h-10 w-32 text-[12px]"><option>Author</option></select>
-            <select className="dispatcher-input h-10 w-36 text-[12px]"><option>District</option></select>
-          </div>
-
-          <div className={`flex gap-4 ${annotate ? '' : ''}`}>
-            <div className="dispatcher-surface overflow-x-auto flex-1 min-w-0">
-              <table className="w-full text-[12px] min-w-[720px]">
-                <thead>
-                  <tr className="text-(--text-muted) border-b border-(--border)">
-                    <th className="text-left p-3">Report Name</th>
-                    <th className="text-left p-3">Type</th>
-                    <th className="text-left p-3">District</th>
-                    <th className="p-3">Author</th>
-                    <th className="p-3">Generated</th>
-                    <th className="text-left p-3">Shared With</th>
-                    <th className="p-3">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ANALYST_LIBRARY_ROWS.map((row) => (
-                    <tr key={row.report_name} className="border-b border-(--border-subtle) dispatcher-table-row">
-                      <td className="p-3 font-medium">{row.report_name}</td>
-                      <td className="p-3">{row.report_type}</td>
-                      <td className="p-3">{row.district}</td>
-                      <td className="p-3">{row.created_by}</td>
-                      <td className="p-3 font-mono">{row.created_at}</td>
-                      <td className="p-3">{row.shared_with}</td>
-                      <td className="p-3">
-                        <div className="flex flex-wrap gap-1">
-                          <button type="button" className="dispatcher-btn-ghost text-[10px] h-7 px-2">Preview</button>
-                          <button
-                            type="button"
-                            className="dispatcher-btn-ghost text-[10px] h-7 px-2 inline-flex items-center gap-0.5"
-                            onClick={() => setAnnotate(row.report_name)}
-                          >
-                            <Pencil size={10} />
-                            Annotate
-                          </button>
-                          <button type="button" className="dispatcher-btn-ghost text-[10px] h-7 px-2 inline-flex items-center gap-0.5">
-                            <Share2 size={10} />
-                            Share
-                          </button>
-                          <button type="button" className="text-[10px] h-7 px-2 bg-transparent border-none cursor-pointer text-(--text-muted) hover:text-(--status-critical)">
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {annotate && (
-              <div className="dispatcher-surface p-4 w-[280px] shrink-0">
-                <h4 className="text-[13px] font-semibold m-0 mb-3">Add Annotation — {annotate}</h4>
-                <textarea className="dispatcher-textarea min-h-[120px] w-full" placeholder="Add key findings, anomaly flags, or recommendations..." />
-                <select className="dispatcher-input h-9 w-full mt-2 text-[12px]">
-                  <option>Key Finding</option>
-                  <option>Anomaly Flag</option>
-                  <option>Recommendation</option>
-                  <option>Context Note</option>
-                </select>
-                {/* NOTE: Report annotations have no report_annotations column in the schema.
-                     Save Annotation is decorative until the column is added. */}
-                <button type="button" className="dispatcher-btn-primary w-full mt-3 text-[12px]">Save Annotation</button>
-                <button type="button" className="dispatcher-btn-ghost w-full mt-2 text-[12px]" onClick={() => setAnnotate(null)}>
-                  Cancel
-                </button>
-              </div>
+      <div className="dispatcher-surface overflow-x-auto">
+        <table className="w-full text-[12px] min-w-[760px]">
+          <thead>
+            <tr className="text-(--text-muted) border-b border-(--border)">
+              <th className="text-left p-3">Report Type</th>
+              <th className="text-left p-3">District</th>
+              <th className="text-left p-3">Period</th>
+              <th className="p-3">Author</th>
+              <th className="p-3">Generated</th>
+              <th className="p-3">Status</th>
+              <th className="p-3">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading && (
+              <tr><td colSpan={7} className="p-6 text-center text-(--text-muted)">Loading…</td></tr>
             )}
-          </div>
-        </>
-      )}
-
-      {tab === TABS[1] && (
-        <div className="dispatcher-surface overflow-x-auto">
-          <table className="w-full text-[12px] min-w-[720px]">
-            <thead>
-              <tr className="text-(--text-muted) border-b border-(--border)">
-                <th className="text-left p-3">Schedule Name</th>
-                <th className="text-left p-3">Report Type</th>
-                <th className="text-left p-3">Frequency</th>
-                <th className="p-3">Next Delivery</th>
-                <th className="text-left p-3">Recipients</th>
-                <th className="p-3">Status</th>
-                <th className="p-3">Actions</th>
+            {!loading && filtered.length === 0 && (
+              <tr><td colSpan={7} className="p-6 text-center text-(--text-muted)">No reports found.</td></tr>
+            )}
+            {filtered.map((r) => (
+              <tr key={r.report_id} className="border-b border-(--border-subtle) dispatcher-table-row">
+                <td className="p-3 font-medium">{r.report_type}</td>
+                <td className="p-3">{r.district_name ?? 'All Districts'}</td>
+                <td className="p-3 font-mono">{r.period_start ?? '—'} → {r.period_end ?? '—'}</td>
+                <td className="p-3 text-center">{r.generated_by_name ?? '—'}</td>
+                <td className="p-3 text-center font-mono">{r.generated_at ? new Date(r.generated_at).toLocaleDateString() : '—'}</td>
+                <td className="p-3 text-center">
+                  <StatusBadge label={r.status} variant={r.status === 'SUBMITTED' ? 'resolved' : 'handover'} />
+                </td>
+                <td className="p-3 text-center">
+                  <button type="button" className="dispatcher-btn-ghost text-[10px] h-7 px-2" onClick={() => openPreview(r.report_id)}>
+                    Preview
+                  </button>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {ANALYST_SCHEDULES.map((row) => (
-                <tr key={row.name} className="border-b border-(--border-subtle)">
-                  <td className="p-3 font-medium">{row.name}</td>
-                  <td className="p-3">{row.type}</td>
-                  <td className="p-3">{row.frequency}</td>
-                  <td className="p-3 font-mono">{row.next}</td>
-                  <td className="p-3">{row.recipients}</td>
-                  <td className="p-3">
-                    <StatusBadge label={row.status} variant={row.status === 'ACTIVE' ? 'resolved' : 'handover'} />
-                  </td>
-                  <td className="p-3">
-                    {row.status === 'ACTIVE' ? (
-                      <>
-                        <button type="button" className="dispatcher-btn-ghost text-[10px] h-7 px-2 mr-1">Edit</button>
-                        <button type="button" className="dispatcher-btn-ghost text-[10px] h-7 px-2">Pause</button>
-                      </>
-                    ) : (
-                      <>
-                        <button type="button" className="dispatcher-btn-ghost text-[10px] h-7 px-2 mr-1">Resume</button>
-                        <button type="button" className="text-[10px] h-7 px-2 text-(--status-critical) bg-transparent border-none cursor-pointer">Delete</button>
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-      {showScheduleModal && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
-          <div className="dispatcher-surface p-6 w-full max-w-[520px]">
-            <h3 className="text-[15px] font-bold m-0 mb-4">Create Schedule</h3>
-            <div className="flex flex-col gap-3">
-              <input className="dispatcher-input h-10" placeholder="Schedule name" />
-              <select className="dispatcher-input h-10"><option>Report configuration</option></select>
-              <select className="dispatcher-input h-10"><option>Weekly</option><option>Daily</option></select>
-              <select className="dispatcher-input h-10"><option>Monday</option></select>
-              <input type="time" className="dispatcher-input h-10" defaultValue="07:00" />
-              <input className="dispatcher-input h-10" placeholder="Recipients (emails or roles)" />
-            </div>
-            <div className="flex gap-2 mt-4 justify-end">
-              <button type="button" className="dispatcher-btn-ghost" onClick={() => setShowScheduleModal(false)}>Cancel</button>
-              <button type="button" className="dispatcher-btn-primary" onClick={() => setShowScheduleModal(false)}>Save Schedule</button>
+      {preview && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setPreview(null)}>
+          <div className="dispatcher-surface p-6 w-full max-w-[640px] max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            {previewLoading ? (
+              <p className="text-[12px] text-(--text-muted)">Loading…</p>
+            ) : (
+              <>
+                <h3 className="text-[15px] font-bold m-0 mb-1">{preview.report_type}</h3>
+                <p className="text-[12px] text-(--text-muted) m-0 mb-4">
+                  {preview.district_name ?? 'All Districts'} · {preview.period_start ?? '—'} → {preview.period_end ?? '—'}
+                </p>
+                <div className="grid grid-cols-2 gap-3 mb-4 text-[12px]">
+                  <div><span className="text-(--text-muted)">Total incidents</span><div className="font-mono font-semibold">{preview.total_incidents ?? '—'}</div></div>
+                  <div><span className="text-(--text-muted)">Avg response time</span><div className="font-mono font-semibold">{preview.avg_response_time != null ? `${preview.avg_response_time.toFixed(1)}m` : '—'}</div></div>
+                  <div><span className="text-(--text-muted)">Resolution rate</span><div className="font-mono font-semibold">{preview.resolution_rate != null ? `${preview.resolution_rate.toFixed(1)}%` : '—'}</div></div>
+                  <div><span className="text-(--text-muted)">Status</span><div className="font-mono font-semibold">{preview.status}</div></div>
+                </div>
+                {preview.content && (
+                  <pre className="text-[11px] whitespace-pre-wrap p-3 rounded" style={{ background: 'var(--bg-elevated)' }}>{preview.content}</pre>
+                )}
+              </>
+            )}
+            <div className="flex justify-end mt-4">
+              <button type="button" className="dispatcher-btn-ghost" onClick={() => setPreview(null)}>Close</button>
             </div>
           </div>
         </div>

@@ -63,6 +63,8 @@ function ResultCard({ title, result, tone }) {
   )
 }
 
+const SCENARIOS_PAGE_SIZE = 6
+
 export default function PlannerSimulation() {
   const [districts, setDistricts] = useState([])
   const [districtId, setDistrictId] = useState('')
@@ -74,6 +76,17 @@ export default function PlannerSimulation() {
   const [optimizedResult, setOptimizedResult] = useState(null)
   const [savedScenarios, setSavedScenarios] = useState([])
   const [runError, setRunError] = useState(null)
+  const [scenariosPage, setScenariosPage] = useState(1)
+
+  // Excludes legacy rows saved before scenario config existed — they carry
+  // no disaster_scenario/focus_area and share identical fabricated-looking
+  // values (12.8m / 75% on every one), so they aren't real simulation runs.
+  const accurateScenarios = savedScenarios.filter((s) => s.disaster_scenario != null && s.focus_area != null)
+  const totalScenarioPages = Math.max(1, Math.ceil(accurateScenarios.length / SCENARIOS_PAGE_SIZE))
+  const pagedScenarios = accurateScenarios.slice(
+    (scenariosPage - 1) * SCENARIOS_PAGE_SIZE,
+    scenariosPage * SCENARIOS_PAGE_SIZE
+  )
 
   useEffect(() => {
     listDistricts().then(setDistricts).catch(() => {})
@@ -93,6 +106,7 @@ export default function PlannerSimulation() {
       setCurrentResult(current)
       setOptimizedResult(optimized)
       setSavedScenarios((prev) => [optimized, current, ...prev])
+      setScenariosPage(1)
     } catch {
       setRunError('Could not run simulation — please retry.')
     } finally {
@@ -128,7 +142,7 @@ export default function PlannerSimulation() {
         subtitle="Test system performance under load, using this district's real incident and fleet data."
       />
 
-      <div className="flex flex-col lg:flex-row gap-4">
+      <div className="flex flex-col lg:flex-row gap-4 items-start">
         <div className="dispatcher-surface p-4 lg:flex-[2] min-w-0">
           <SectionTitle title="Scenario Configuration" />
           <div className="flex flex-col gap-3 mt-4">
@@ -277,17 +291,22 @@ export default function PlannerSimulation() {
           </div>
 
           <div className="dispatcher-surface p-4">
-            <h3 className="text-[13px] font-semibold m-0 mb-3">Saved Scenarios</h3>
-            {savedScenarios.length === 0 && (
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-[13px] font-semibold m-0">Saved Scenarios</h3>
+              {accurateScenarios.length > 0 && (
+                <span className="text-[11px] text-(--text-muted)">{accurateScenarios.length} total</span>
+              )}
+            </div>
+            {accurateScenarios.length === 0 && (
               <p className="text-[12px] text-(--text-muted) m-0">No simulations run yet.</p>
             )}
-            {savedScenarios.map((row, i) => (
+            {pagedScenarios.map((row, i) => (
               <div
                 key={row.simulation_id ?? i}
                 className="flex flex-wrap items-center gap-2 py-2 border-t border-(--border-subtle) text-[12px]"
               >
                 <span className="font-medium flex-1 min-w-[140px]">
-                  {row.disaster_scenario ?? '—'} · {row.multiplier}× · {row.focus_area}
+                  {row.disaster_scenario} · {row.multiplier}× · {row.focus_area}
                 </span>
                 <span className="text-(--text-secondary)">{row.scenario_type === 'AI_OPTIMIZED' ? 'AI Optimized' : 'Current'}</span>
                 <span className="font-mono text-(--text-muted)">
@@ -304,6 +323,31 @@ export default function PlannerSimulation() {
                 </button>
               </div>
             ))}
+            {totalScenarioPages > 1 && (
+              <div className="flex justify-between items-center pt-3 mt-1 border-t border-(--border-subtle)">
+                <span className="text-[11px] text-(--text-muted)">
+                  Page {scenariosPage} of {totalScenarioPages}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className="dispatcher-btn-ghost text-[11px] h-7 px-2"
+                    disabled={scenariosPage <= 1}
+                    onClick={() => setScenariosPage((p) => p - 1)}
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    className="dispatcher-btn-ghost text-[11px] h-7 px-2"
+                    disabled={scenariosPage >= totalScenarioPages}
+                    onClick={() => setScenariosPage((p) => p + 1)}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

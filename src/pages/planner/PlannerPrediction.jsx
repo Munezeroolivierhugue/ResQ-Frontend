@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { MapContainer, TileLayer, Circle, Popup } from 'react-leaflet'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { useThemeStore } from '../../store/themeStore'
 import MapInvalidateSize from '../../components/map/MapInvalidateSize'
 import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
-import { getHotspots } from '../../api/planning'
+import { getHotspots, getPredictions } from '../../api/planning'
+import { listDistricts } from '../../api/districts'
 import { listVehicles } from '../../api/vehicles'
 import { haversineMeters } from '../../utils/geo'
 import { responseTimeColor } from '../../data/mockPlannerData'
@@ -66,6 +68,34 @@ export default function PlannerPrediction() {
   const [testVehicleId, setTestVehicleId] = useState('')
   const [testZoneName, setTestZoneName] = useState('')
   const [testResult, setTestResult] = useState(null)
+
+  const [districts, setDistricts] = useState([])
+  const [forecastDistrictId, setForecastDistrictId] = useState('')
+  const [predictions, setPredictions] = useState([])
+  const [predictionsModelVersion, setPredictionsModelVersion] = useState('')
+  const [predictionsLoading, setPredictionsLoading] = useState(false)
+
+  useEffect(() => {
+    listDistricts().then((d) => {
+      setDistricts(d)
+      if (d.length > 0) setForecastDistrictId(d[0].district_id)
+    }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (!forecastDistrictId) return
+    Promise.resolve().then(() => setPredictionsLoading(true))
+    getPredictions({ districtId: forecastDistrictId, windowHours: 6 })
+      .then((res) => {
+        setPredictions(res.predictions ?? [])
+        setPredictionsModelVersion(res.modelVersion ?? '')
+      })
+      .catch(() => {
+        setPredictions([])
+        setPredictionsModelVersion('')
+      })
+      .finally(() => setPredictionsLoading(false))
+  }, [forecastDistrictId])
 
   useEffect(() => {
     Promise.allSettled([getHotspots({ days: 30 }), listVehicles()])
@@ -259,12 +289,57 @@ export default function PlannerPrediction() {
           </div>
 
           <div className="dispatcher-surface p-4">
-            <h3 className="text-[13px] font-semibold m-0 mb-1">Incident Volume Forecasting</h3>
-            <p className="text-[12px] text-(--text-secondary) m-0">
-              Not available yet. A trained forecasting model needs real historical incident data to be trustworthy —
-              this district currently has too little history to train on. This section will populate once there's
-              enough real data to validate predictions against real outcomes, instead of showing a fabricated result.
+            <div className="flex flex-wrap justify-between gap-2 items-center mb-1">
+              <h3 className="text-[13px] font-semibold m-0">Incident Volume Forecasting</h3>
+              <select
+                className="dispatcher-input dispatcher-select h-8 text-[11px]"
+                value={forecastDistrictId}
+                onChange={(e) => setForecastDistrictId(e.target.value)}
+              >
+                {districts.map((d) => (
+                  <option key={d.district_id} value={d.district_id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+            <p className="text-[12px] text-(--text-secondary) m-0 mb-3">
+              Trained on 6 months of synthetic incident history (calibrated on a structured RNP interview response) —
+              real incident data is still too sparse to train on directly. Treat as advisory planning intelligence,
+              not a guarantee.
             </p>
+            {predictionsLoading && <p className="text-[12px] text-(--text-muted) m-0">Loading…</p>}
+            {!predictionsLoading && predictionsModelVersion === 'unavailable' && (
+              <p className="text-[12px] text-(--status-critical) m-0">Prediction service unavailable.</p>
+            )}
+            {!predictionsLoading && predictionsModelVersion !== 'unavailable' && predictions.length === 0 && (
+              <p className="text-[12px] text-(--text-muted) m-0">No forecast available for this district.</p>
+            )}
+            {!predictionsLoading && predictions.length > 0 && (
+              <>
+                <ResponsiveContainer width="100%" height={180}>
+                  <BarChart
+                    data={predictions.map((p) => ({
+                      window: new Date(p.windowStart).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+                      count: p.predictedCount,
+                      confidence: p.confidence,
+                      hotspot: p.hotspotZone,
+                    }))}
+                    margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid stroke="var(--border-subtle)" vertical={false} />
+                    <XAxis dataKey="window" tick={{ fontSize: 10 }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={24} />
+                    <Tooltip
+                      formatter={(value, name, props) => [
+                        `${value} incidents (${Math.round(props.payload.confidence * 100)}% confidence)`,
+                        props.payload.hotspot,
+                      ]}
+                    />
+                    <Bar dataKey="count" fill="var(--accent)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+                <p className="text-[10px] text-(--text-muted) m-0 mt-1 font-mono truncate">{predictionsModelVersion}</p>
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -224,3 +224,17 @@ export async function getIncidentTimeDistribution(params = {}) {
     by_month: d.byMonth ?? [],
   }
 }
+
+export async function getWeather() {
+  const { data } = await api.get('/api/planning/weather')
+  return (data.data ?? data).map((w) => ({
+    district_name: w.districtName,
+    condition: w.condition,
+    description: w.description,
+    temperature_c: w.temperatureC,
+    wind_speed_ms: w.windSpeedMs,
+    hazard_level: w.hazardLevel,
+    stale: w.stale,
+    fetched_at: w.fetchedAt,
+  }))
+}

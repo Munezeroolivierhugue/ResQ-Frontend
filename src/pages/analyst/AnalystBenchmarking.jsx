@@ -1,101 +1,105 @@
-import { useState } from 'react'
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceLine,
-} from 'recharts'
+import { useState, useEffect } from 'react'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 import AnalystPageHeader from '../../components/analyst/AnalystPageHeader'
-import { ANALYST_BENCHMARK_ROWS } from '../../data/mockAnalystData'
+import { getDistrictBenchmark } from '../../api/reporting'
+import { getResponseTimeTarget } from '../../api/admin'
+import { listIncidents } from '../../api/incidents'
 
-const TREND_DATA = [
-  { m: 'Jun', kicukiro: 7.2, nyarugenge: 7.5, gasabo: 8.1, musanze: 9.5, rubavu: 10.2 },
-  { m: 'Jul', kicukiro: 7.0, nyarugenge: 7.3, gasabo: 8.0, musanze: 9.3, rubavu: 10.0 },
-  { m: 'Aug', kicukiro: 6.9, nyarugenge: 7.2, gasabo: 7.9, musanze: 9.1, rubavu: 9.8 },
-  { m: 'Sep', kicukiro: 6.8, nyarugenge: 7.1, gasabo: 7.8, musanze: 8.9, rubavu: 9.6 },
-  { m: 'Oct', kicukiro: 6.7, nyarugenge: 7.0, gasabo: 7.7, musanze: 8.7, rubavu: 9.4 },
-  { m: 'Nov', kicukiro: 6.8, nyarugenge: 7.1, gasabo: 7.6, musanze: 8.5, rubavu: 9.3 },
-  { m: 'Dec', kicukiro: 6.9, nyarugenge: 7.2, gasabo: 7.6, musanze: 8.4, rubavu: 9.2 },
-  { m: 'Jan', kicukiro: 6.8, nyarugenge: 7.1, gasabo: 7.5, musanze: 8.3, rubavu: 9.1 },
-  { m: 'Feb', kicukiro: 6.7, nyarugenge: 7.0, gasabo: 7.5, musanze: 8.2, rubavu: 9.0 },
-  { m: 'Mar', kicukiro: 6.8, nyarugenge: 7.1, gasabo: 7.6, musanze: 8.4, rubavu: 9.2 },
-  { m: 'Apr', kicukiro: 6.8, nyarugenge: 7.1, gasabo: 7.6, musanze: 8.4, rubavu: 9.2 },
-  { m: 'May', kicukiro: 6.8, nyarugenge: 7.1, gasabo: 7.6, musanze: 8.4, rubavu: 9.2 },
-]
+const PERIODS = [{ label: '30 Days', days: 30 }, { label: 'Quarter', days: 91 }, { label: 'Year', days: 365 }]
+const LINE_COLORS = ['var(--accent)', 'var(--status-info)', 'var(--status-medium)', 'var(--status-critical)', 'var(--text-muted)']
 
-const DISTRICT_PILLS = [
-  { id: 'kicukiro', label: 'Kicukiro', color: 'var(--accent)' },
-  { id: 'nyarugenge', label: 'Nyarugenge', color: 'var(--status-info)' },
-  { id: 'gasabo', label: 'Gasabo', color: 'var(--status-medium)' },
-  { id: 'musanze', label: 'Musanze', color: 'var(--status-critical)' },
-  { id: 'rubavu', label: 'Rubavu', color: 'var(--text-muted)' },
-]
-
-function responseColor(rt) {
-  const m = parseFloat(rt)
-  if (m < 8) return 'var(--status-low)'
-  if (m <= 10) return 'var(--status-medium)'
+function responseColor(m, target) {
+  if (m == null) return 'var(--text-muted)'
+  if (m <= target) return 'var(--status-low)'
+  if (m <= target * 1.3) return 'var(--status-medium)'
   return 'var(--status-critical)'
 }
 
 export default function AnalystBenchmarking() {
-  const [sigOn, setSigOn] = useState(true)
-  const [selected, setSelected] = useState(['kicukiro', 'nyarugenge', 'gasabo', 'musanze', 'rubavu'])
+  const [period, setPeriod] = useState(PERIODS[1])
+  const [rows, setRows] = useState([])
+  const [targetMinutes, setTargetMinutes] = useState(8)
+  const [trend, setTrend] = useState([])
+  const [selectedDistricts, setSelectedDistricts] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    getResponseTimeTarget().then(setTargetMinutes).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    Promise.resolve().then(() => setLoading(true))
+    Promise.allSettled([getDistrictBenchmark(period.days), listIncidents()])
+      .then(([benchRes, incidentsRes]) => {
+        const benchRows = benchRes.status === 'fulfilled' ? benchRes.value : []
+        setRows(benchRows)
+        setSelectedDistricts((prev) => prev.length ? prev.filter((d) => benchRows.some((r) => r.district === d)) : benchRows.slice(0, 5).map((r) => r.district))
+
+        if (incidentsRes.status === 'fulfilled') {
+          const since = new Date(Date.now() - period.days * 86400000).toISOString().slice(0, 10)
+          const scoped = incidentsRes.value.filter(
+            (i) => i.call_time && i.call_time.slice(0, 10) >= since && i.response_time_minutes != null && i.response_time_minutes >= 0 && i.response_time_minutes <= 180
+          )
+          const byDayDistrict = {}
+          for (const i of scoped) {
+            const day = i.call_time.slice(0, 10)
+            const key = day
+            if (!byDayDistrict[key]) byDayDistrict[key] = { day }
+            const d = i.district ?? 'Unknown'
+            if (!byDayDistrict[key][d]) byDayDistrict[key][d] = { total: 0, count: 0 }
+            byDayDistrict[key][d].total += i.response_time_minutes
+            byDayDistrict[key][d].count += 1
+          }
+          const chartData = Object.values(byDayDistrict)
+            .sort((a, b) => a.day.localeCompare(b.day))
+            .map((row) => {
+              const out = { day: new Date(row.day).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) }
+              for (const [k, v] of Object.entries(row)) {
+                if (k === 'day') continue
+                out[k] = Math.round((v.total / v.count) * 10) / 10
+              }
+              return out
+            })
+          setTrend(chartData)
+        }
+      })
+      .finally(() => setLoading(false))
+  }, [period])
 
   return (
     <div className="portal-page flex flex-col gap-5 min-w-[1024px]">
       <AnalystPageHeader
         title="Cross-District Benchmarking"
-        subtitle="Performance comparison across all Rwanda districts."
+        subtitle="Real performance comparison across districts with recorded incidents."
         badge="Benchmarking"
       />
 
       <div className="flex flex-wrap gap-2 items-center">
-        <button type="button" className="dispatcher-btn-outline text-[12px] h-9">
-          Metrics (4 selected)
-        </button>
         <div className="flex gap-2">
-          {['30 Days', 'Quarter', 'Year'].map((p) => (
+          {PERIODS.map((p) => (
             <button
-              key={p}
+              key={p.label}
               type="button"
               className="text-[11px] font-semibold px-3 py-1.5 rounded-full border cursor-pointer"
               style={{
-                background: p === 'Quarter' ? 'var(--accent-ghost)' : 'var(--bg-elevated)',
-                borderColor: p === 'Quarter' ? 'var(--accent)' : 'var(--border)',
-                color: p === 'Quarter' ? 'var(--accent)' : 'var(--text-secondary)',
+                background: period.label === p.label ? 'var(--accent-ghost)' : 'var(--bg-elevated)',
+                borderColor: period.label === p.label ? 'var(--accent)' : 'var(--border)',
+                color: period.label === p.label ? 'var(--accent)' : 'var(--text-secondary)',
               }}
+              onClick={() => setPeriod(p)}
             >
-              {p}
+              {p.label}
             </button>
           ))}
         </div>
-        <button type="button" className="dispatcher-btn-ghost text-[12px] h-9 ml-auto">
-          Select Districts
-        </button>
       </div>
 
       <div className="dispatcher-surface overflow-x-auto">
         <div className="flex justify-between items-center p-4 border-b border-(--border)">
           <h3 className="text-[13px] font-semibold m-0">District Performance Comparison</h3>
-          <button
-            type="button"
-            className="text-[11px] font-bold px-3 py-1 rounded-full border cursor-pointer"
-            style={{
-              background: sigOn ? 'var(--accent-ghost)' : 'var(--bg-elevated)',
-              borderColor: sigOn ? 'var(--accent)' : 'var(--border)',
-              color: sigOn ? 'var(--accent)' : 'var(--text-secondary)',
-            }}
-            onClick={() => setSigOn((v) => !v)}
-          >
-            Statistical significance: {sigOn ? 'ON' : 'OFF'}
-          </button>
+          <span className="text-[11px] font-mono text-(--text-muted)">Target: {targetMinutes}m response</span>
         </div>
-        <table className="w-full text-[12px] min-w-[800px]">
+        <table className="w-full text-[12px] min-w-[760px]">
           <thead>
             <tr className="text-(--text-muted) border-b border-(--border)">
               <th className="text-left p-3">District</th>
@@ -109,100 +113,91 @@ export default function AnalystBenchmarking() {
             </tr>
           </thead>
           <tbody>
-            {ANALYST_BENCHMARK_ROWS.map((row) => (
+            {loading && (
+              <tr><td colSpan={8} className="p-6 text-center text-(--text-muted)">Loading…</td></tr>
+            )}
+            {!loading && rows.length === 0 && (
+              <tr><td colSpan={8} className="p-6 text-center text-(--text-muted)">No incidents recorded in this period.</td></tr>
+            )}
+            {rows.map((row) => (
               <tr key={row.district} className="border-b border-(--border-subtle) dispatcher-table-row">
                 <td className="p-3 font-medium">
                   {row.district}
                   {row.rank === 1 && <span className="ml-1" style={{ color: 'var(--accent)' }}>★</span>}
                 </td>
                 <td className="p-3 text-center font-mono">{row.incidents}</td>
-                <td className="p-3 text-center font-mono font-semibold" style={{ color: responseColor(row.response) }}>
-                  {row.response}
+                <td className="p-3 text-center font-mono font-semibold" style={{ color: responseColor(row.avg_response, targetMinutes) }}>
+                  {row.avg_response != null ? `${row.avg_response}m` : '—'}
                 </td>
                 <td className="p-3 text-center">
-                  <span style={{ color: row.met ? 'var(--status-low)' : 'var(--status-critical)' }}>
-                    {row.met ? '✓ MET' : '✗ MISSED'}
+                  <span style={{ color: row.target_met ? 'var(--status-low)' : 'var(--status-critical)' }}>
+                    {row.target_met ? '✓ MET' : '✗ MISSED'}
                   </span>
                 </td>
-                <td className="p-3 text-center">{row.coverage}</td>
-                <td className="p-3 text-center">{row.resolution}</td>
-                <td className="p-3 text-center">{row.ai}</td>
-                <td
-                  className="p-3 text-center font-mono font-bold"
-                  style={{
-                    color: row.rank <= 3 ? 'var(--accent)' : row.rank <= 7 ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  }}
-                >
+                <td className="p-3 text-center">{row.coverage_pct}%</td>
+                <td className="p-3 text-center">{row.resolution_pct}%</td>
+                <td className="p-3 text-center">{row.ai_acceptance_pct}%</td>
+                <td className="p-3 text-center font-mono font-bold" style={{ color: row.rank <= 3 ? 'var(--accent)' : 'var(--text-secondary)' }}>
                   #{row.rank}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        <p className="text-[11px] text-(--text-muted) italic p-4 m-0">
-          *Differences between #1 and #2 are within margin of error (±0.4m). Difference vs #7 is statistically significant (p &lt; 0.01).
-        </p>
       </div>
 
       <div className="dispatcher-surface p-4">
-        <h3 className="text-[13px] font-semibold m-0">Response Time Trend — All Districts</h3>
-        <p className="text-[12px] text-(--text-muted) m-0 mb-3">Select up to 5 districts to compare</p>
-        <ResponsiveContainer width="100%" height={260}>
-          <LineChart data={TREND_DATA}>
-            <CartesianGrid stroke="var(--border-subtle)" />
-            <XAxis dataKey="m" />
-            <YAxis domain={[5, 15]} unit="m" />
-            <Tooltip />
-            <ReferenceLine y={8} stroke="var(--status-critical)" strokeDasharray="4 4" label="Target" />
-            {DISTRICT_PILLS.filter((d) => selected.includes(d.id)).map((d) => (
-              <Line key={d.id} type="monotone" dataKey={d.id} stroke={d.color} dot={false} strokeWidth={2} />
-            ))}
-          </LineChart>
-        </ResponsiveContainer>
+        <h3 className="text-[13px] font-semibold m-0">Response Time Trend — Real Data</h3>
+        <p className="text-[12px] text-(--text-muted) m-0 mb-3">
+          Daily average, real districts with recorded incidents in this period. Districts with very few incidents may appear as isolated points rather than a continuous line.
+        </p>
+        {trend.length === 0 ? (
+          <p className="text-[12px] text-(--text-muted) m-0 py-8 text-center">No incidents with a recorded response time in this period.</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={260}>
+            <LineChart data={trend}>
+              <CartesianGrid stroke="var(--border-subtle)" />
+              <XAxis dataKey="day" tick={{ fontSize: 10 }} />
+              <YAxis unit="m" tick={{ fontSize: 10 }} />
+              <Tooltip />
+              <ReferenceLine y={targetMinutes} stroke="var(--status-critical)" strokeDasharray="4 4" label="Target" />
+              {selectedDistricts.map((d, i) => (
+                <Line key={d} type="monotone" dataKey={d} stroke={LINE_COLORS[i % LINE_COLORS.length]} dot={{ r: 3 }} strokeWidth={2} connectNulls />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        )}
         <div className="flex flex-wrap gap-2 mt-3">
-          {DISTRICT_PILLS.map((d) => (
+          {rows.map((r, i) => (
             <button
-              key={d.id}
+              key={r.district}
               type="button"
               className="text-[11px] font-semibold px-3 py-1 rounded-full border cursor-pointer"
               style={{
-                background: selected.includes(d.id) ? 'var(--accent-ghost)' : 'var(--bg-elevated)',
-                borderColor: selected.includes(d.id) ? 'var(--accent)' : 'var(--border)',
-                color: selected.includes(d.id) ? 'var(--accent)' : 'var(--text-secondary)',
+                background: selectedDistricts.includes(r.district) ? 'var(--accent-ghost)' : 'var(--bg-elevated)',
+                borderColor: selectedDistricts.includes(r.district) ? LINE_COLORS[i % LINE_COLORS.length] : 'var(--border)',
+                color: selectedDistricts.includes(r.district) ? LINE_COLORS[i % LINE_COLORS.length] : 'var(--text-secondary)',
               }}
               onClick={() =>
-                setSelected((s) =>
-                  s.includes(d.id) ? s.filter((x) => x !== d.id) : s.length < 5 ? [...s, d.id] : s
+                setSelectedDistricts((s) =>
+                  s.includes(r.district) ? s.filter((x) => x !== r.district) : s.length < 5 ? [...s, r.district] : s
                 )
               }
             >
-              {d.label}
+              {r.district}
             </button>
           ))}
         </div>
       </div>
 
       <div className="dispatcher-surface p-4">
-        <h3 className="text-[13px] font-semibold m-0 mb-4">Benchmark Library</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[
-            { title: 'RNP National Target', lines: ['8-minute average response time', '90% coverage score', '85% AI acceptance rate'], source: 'RNP HQ Standards 2026' },
-            { title: 'East Africa Comparable', lines: ['9.2-minute regional average', '85% coverage typical'], source: 'East Africa Urban Police Network 2025' },
-            { title: 'Previous Year Rwanda', lines: ['8.9m national avg (2025)', '87% coverage (2025)'], source: 'RNP Annual Report 2025' },
-          ].map((b) => (
-            <div
-              key={b.title}
-              className="dispatcher-surface p-4"
-              style={{ borderLeft: '3px solid var(--accent)' }}
-            >
-              <div className="font-semibold text-[13px] mb-2">{b.title}</div>
-              {b.lines.map((l) => (
-                <div key={l} className="text-[12px] text-(--text-secondary)">{l}</div>
-              ))}
-              <div className="text-[11px] text-(--text-muted) mt-2">Source: {b.source}</div>
-              <button type="button" className="dispatcher-btn-ghost text-[11px] mt-3 h-8">Apply to Chart</button>
-            </div>
-          ))}
+        <h3 className="text-[13px] font-semibold m-0 mb-4">Benchmark Reference</h3>
+        <div
+          className="dispatcher-surface p-4 max-w-sm"
+          style={{ borderLeft: '3px solid var(--accent)' }}
+        >
+          <div className="font-semibold text-[13px] mb-2">RNP National Target</div>
+          <div className="text-[12px] text-(--text-secondary)">{targetMinutes}-minute average response time</div>
         </div>
       </div>
     </div>

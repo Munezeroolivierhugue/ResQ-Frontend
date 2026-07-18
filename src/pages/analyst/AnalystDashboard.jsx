@@ -1,109 +1,159 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { FileBarChart, AlertCircle, Cpu, Calendar, Server, RefreshCw } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { FileBarChart, AlertCircle, Cpu, CalendarCheck, Server, RefreshCw } from 'lucide-react'
 import MetricCard from '../../components/dispatcher/MetricCard'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import AnalystPageHeader from '../../components/analyst/AnalystPageHeader'
-import { getCurrentUser } from '../../utils/authSession'
-import { mockAuditLogs } from '../../data/mockAuditLogs'
-import { listDataQuality } from '../../api/reporting'
-import {
-  ANALYST_ANOMALIES,
-  ANALYST_CALENDAR_MARKS,
-  severityDotColor,
-  sourceStatusVariant,
-} from '../../data/mockAnalystData'
+import { listDataQuality, runDataQualityCheck, listReports, listModels } from '../../api/reporting'
+import { sourceStatusVariant } from '../../data/mockAnalystData'
 
-const MAY_2026_START = new Date(2026, 4, 1)
-const MAY_DAYS = 31
-const MAY_FIRST_DOW = MAY_2026_START.getDay()
-const MON_OFFSET = MAY_FIRST_DOW === 0 ? 6 : MAY_FIRST_DOW - 1
+const CHECKED_SOURCES = ['Incidents', 'Vehicles', 'Dispatches']
 
-function dayMark(day) {
-  if (ANALYST_CALENDAR_MARKS.overdue.includes(day)) return 'overdue'
-  if (ANALYST_CALENDAR_MARKS.dueToday.includes(day)) return 'dueToday'
-  if (ANALYST_CALENDAR_MARKS.dueFuture.includes(day)) return 'dueFuture'
-  if (ANALYST_CALENDAR_MARKS.delivered.includes(day)) return 'delivered'
-  return null
+function statusOf(record) {
+  const score = record.overall_score ?? 0
+  if (score >= 90) return 'OK'
+  if (score >= 70) return 'DEGRADED'
+  return 'ERROR'
 }
 
-const DOT_COLORS = {
-  delivered: 'var(--status-low)',
-  dueToday: 'var(--status-medium)',
-  overdue: 'var(--status-critical)',
-  dueFuture: 'var(--status-medium)',
+function borderOf(status) {
+  if (status === 'OK') return 'var(--status-low)'
+  if (status === 'DEGRADED') return 'var(--status-medium)'
+  return 'var(--status-critical)'
+}
+
+function timeAgo(iso) {
+  if (!iso) return '—'
+  const diffMin = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+  if (diffMin < 1) return 'Just now'
+  if (diffMin < 60) return `${diffMin}m ago`
+  return `${Math.floor(diffMin / 60)}h ago`
+}
+
+function isThisMonth(iso) {
+  if (!iso) return false
+  const d = new Date(iso)
+  const now = new Date()
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
+}
+
+function isThisWeek(iso) {
+  if (!iso) return false
+  return Date.now() - new Date(iso).getTime() <= 7 * 24 * 60 * 60 * 1000
 }
 
 export default function AnalystDashboard() {
-  const navigate = useNavigate()
-  const [dataSources, setDataSources] = useState([])
+  const [dataQuality, setDataQuality] = useState([])
+  const [reports, setReports] = useState([])
+  const [models, setModels] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
 
-  useEffect(() => {
-    listDataQuality().then((records) => {
-      const mapped = records.map((r) => ({
-        source_name: r.source,
-        status: (r.overall_score ?? 0) >= 90 ? 'OK' : (r.overall_score ?? 0) >= 70 ? 'DEGRADED' : 'ERROR',
-        completeness_pct: Math.round(r.completeness ?? 0),
-        last_updated_at: r.checked_at ? new Date(r.checked_at).toLocaleTimeString() : '—',
-        border: (r.overall_score ?? 0) >= 90 ? 'var(--status-low)' : (r.overall_score ?? 0) >= 70 ? 'var(--status-medium)' : 'var(--status-critical)'
-      }))
-      setDataSources(mapped)
-    }).catch(() => {
-      setDataSources([
-        { source_name: 'Incidents DB', status: 'OK', completeness_pct: 98, last_updated_at: 'Just now', border: 'var(--status-low)' },
-        { source_name: 'GPS Tracker', status: 'DEGRADED', completeness_pct: 84, last_updated_at: '1m ago', border: 'var(--status-medium)' },
-        { source_name: 'Rwanda Meteo Weather', status: 'OK', completeness_pct: 90, last_updated_at: '2m ago', border: 'var(--status-low)' },
-      ])
-    })
-  }, [])
-
-  const dateStr = new Date().toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
-
-  function handleInvestigate(anomaly) {
-    const currentUser = getCurrentUser()
-    mockAuditLogs.push({
-      log_id: Math.random().toString(36).slice(2, 10),
-      user_id: currentUser?.user_id ?? null,
-      timestamp: new Date().toISOString(),
-      action: 'ANOMALY_REVIEWED: ' + anomaly.alert_type,
-      module: 'ANALYST',
-      status: 'SUCCESS',
-    })
-    navigate(anomaly.link)
+  function loadAll() {
+    return Promise.allSettled([listDataQuality(), listReports(), listModels()])
+      .then(([dqRes, reportsRes, modelsRes]) => {
+        setDataQuality(dqRes.status === 'fulfilled' ? dqRes.value : [])
+        setReports(reportsRes.status === 'fulfilled' ? reportsRes.value : [])
+        setModels(modelsRes.status === 'fulfilled' ? modelsRes.value : [])
+      })
   }
 
-  const blanks = Array.from({ length: MON_OFFSET }, (_, i) => `b-${i}`)
-  const days = Array.from({ length: MAY_DAYS }, (_, i) => i + 1)
+  useEffect(() => {
+    loadAll().finally(() => setLoading(false))
+  }, [])
+
+  async function handleRefresh() {
+    setRefreshing(true)
+    try {
+      for (const source of CHECKED_SOURCES) {
+        await runDataQualityCheck(source).catch(() => {})
+      }
+      await loadAll()
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  const dateStr = new Date().toLocaleDateString('en-GB', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  })
+
+  // Latest record per source — a source can have many historical checks.
+  const latestBySource = Object.values(
+    dataQuality.reduce((acc, r) => {
+      if (!acc[r.source] || new Date(r.checked_at) > new Date(acc[r.source].checked_at)) acc[r.source] = r
+      return acc
+    }, {})
+  )
+  const dataSources = latestBySource.map((r) => {
+    const status = statusOf(r)
+    return {
+      source_name: r.source,
+      status,
+      completeness_pct: Math.round(r.completeness ?? 0),
+      last_updated_at: timeAgo(r.checked_at),
+      border: borderOf(status),
+    }
+  })
+  const lastChecked = latestBySource.length
+    ? timeAgo(latestBySource.map((r) => r.checked_at).sort().reverse()[0])
+    : 'never'
+
+  const reportsThisMonth = reports.filter((r) => isThisMonth(r.generated_at)).length
+  const reportsSubmittedThisWeek = reports.filter((r) => isThisWeek(r.submitted_at)).length
+  const degradedSources = dataSources.filter((s) => s.status !== 'OK')
+  const flaggedModels = models.filter((m) => m.status !== 'ACTIVE')
+
+  // Real alerts feed — data sources below quality threshold, and any AI
+  // model not in ACTIVE status. Both are real DB-backed facts; no
+  // fabricated "deviation sigma" or invented anomaly text.
+  const alerts = [
+    ...degradedSources.map((s) => ({
+      key: `dq-${s.source_name}`,
+      type: 'DATA QUALITY',
+      title: `${s.source_name} data quality is ${s.status.toLowerCase()}`,
+      detail: `Completeness at ${s.completeness_pct}% — last checked ${s.last_updated_at}.`,
+      severity: s.status === 'ERROR' ? 'critical' : 'medium',
+      link: '/analyst/data-quality',
+    })),
+    ...flaggedModels.map((m) => ({
+      key: `model-${m.modelId}`,
+      type: 'AI MODEL',
+      title: `${m.modelName} is ${(m.status ?? 'unknown').toLowerCase()}`,
+      detail: `${m.algorithm ?? 'Unknown algorithm'} · accuracy ${m.accuracy != null ? Math.round(m.accuracy) + '%' : '—'}.`,
+      severity: 'medium',
+      link: '/analyst/models',
+    })),
+  ]
+
+  const recentReports = [...reports]
+    .sort((a, b) => new Date(b.generated_at ?? 0) - new Date(a.generated_at ?? 0))
+    .slice(0, 6)
 
   return (
     <div className="portal-page flex flex-col gap-5 min-w-[1024px]">
       <AnalystPageHeader title="Analyst Dashboard" subtitle={`System intelligence overview · ${dateStr}`} badge="Dashboard" />
 
       <div className="portal-grid-4">
-        <MetricCard icon={FileBarChart} label="Reports Generated (Month)" value="24" hint="↑ 3 vs last month" hintTone="positive" />
+        <MetricCard icon={FileBarChart} label="Reports Generated (Month)" value={loading ? '—' : String(reportsThisMonth)} hint="Real reports this calendar month" hintTone="neutral" />
         <MetricCard
           icon={AlertCircle}
-          label="Pending Data Quality Alerts"
-          value="3"
-          hint="2 new since yesterday"
-          hintTone="warning"
-          className="dispatcher-metric-card--alert"
+          label="Data Quality Alerts"
+          value={loading ? '—' : String(degradedSources.length)}
+          hint={degradedSources.length > 0 ? 'Source(s) below target' : 'All sources healthy'}
+          hintTone={degradedSources.length > 0 ? 'warning' : 'positive'}
+          className={degradedSources.length > 0 ? 'dispatcher-metric-card--alert' : ''}
         />
         <MetricCard
           icon={Cpu}
-          label="AI Model Anomalies Flagged"
-          value="1"
-          hint="Dispatch model drift detected"
-          hintTone="warning"
-          className="dispatcher-metric-card--alert"
+          label="AI Model Alerts"
+          value={loading ? '—' : String(flaggedModels.length)}
+          hint={flaggedModels.length > 0 ? 'Model(s) not active' : 'All models active'}
+          hintTone={flaggedModels.length > 0 ? 'warning' : 'positive'}
+          className={flaggedModels.length > 0 ? 'dispatcher-metric-card--alert' : ''}
         />
-        <MetricCard icon={Calendar} label="Reports Due This Week" value="3" hint="1 due today" hintTone="neutral" />
+        <MetricCard icon={CalendarCheck} label="Reports Submitted (7d)" value={loading ? '—' : String(reportsSubmittedThisWeek)} hint="Real submissions this week" hintTone="neutral" />
       </div>
 
       <div className="dispatcher-surface p-4">
@@ -113,14 +163,22 @@ export default function AnalystDashboard() {
             <span className="font-semibold text-[14px]">Data Source Health</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="font-mono text-[11px] text-(--text-muted)">Last checked: 2 minutes ago</span>
-            <button type="button" className="dispatcher-btn-ghost text-[11px] h-8 px-2 inline-flex items-center gap-1">
-              <RefreshCw size={12} />
-              Refresh
+            <span className="font-mono text-[11px] text-(--text-muted)">Last checked: {lastChecked}</span>
+            <button
+              type="button"
+              className="dispatcher-btn-ghost text-[11px] h-8 px-2 inline-flex items-center gap-1"
+              onClick={handleRefresh}
+              disabled={refreshing}
+            >
+              <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+              {refreshing ? 'Checking…' : 'Refresh'}
             </button>
           </div>
         </div>
         <div className="flex flex-wrap gap-4">
+          {!loading && dataSources.length === 0 && (
+            <p className="text-[12px] text-(--text-muted) m-0">No data quality checks run yet — click Refresh to run one.</p>
+          )}
           {dataSources.map((src) => (
             <div
               key={src.source_name}
@@ -133,9 +191,6 @@ export default function AnalystDashboard() {
               </div>
               <div className="text-[12px] text-(--text-secondary)">Completeness: {src.completeness_pct}%</div>
               <div className="font-mono text-[11px] text-(--text-muted) mt-0.5">Last update: {src.last_updated_at}</div>
-              {src.warning && (
-                <p className="text-[11px] m-0 mt-2" style={{ color: 'var(--status-medium)' }}>{src.warning}</p>
-              )}
             </div>
           ))}
         </div>
@@ -144,80 +199,52 @@ export default function AnalystDashboard() {
       <div className="portal-split-60-40 gap-4">
         <div className="flex flex-col gap-3 min-w-0">
           <SectionTitle
-            title="Anomaly Detection Feed"
-            badge={<span className="font-mono text-[10px] text-(--text-muted) ml-auto">AUTO-REFRESHED HOURLY</span>}
+            title="Alerts Feed"
+            badge={<span className="font-mono text-[10px] text-(--text-muted) ml-auto">DATA QUALITY + AI MODEL STATUS</span>}
           />
-          {ANALYST_ANOMALIES.map((a) => (
-            <div key={a.alert_type + a.description} className="dispatcher-surface p-4">
+          {!loading && alerts.length === 0 && (
+            <div className="dispatcher-surface p-4 text-[13px] text-(--text-muted) text-center">No active alerts — data sources and AI models are healthy.</div>
+          )}
+          {alerts.map((a) => (
+            <div key={a.key} className="dispatcher-surface p-4">
               <div className="flex flex-wrap justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span
-                    className="w-2 h-2 rounded-full shrink-0 animate-pulse"
-                    style={{ background: severityDotColor(a.severity) }}
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ background: a.severity === 'critical' ? 'var(--status-critical)' : 'var(--status-medium)' }}
                   />
-                  <span className="font-mono text-[10px] uppercase text-(--text-muted)">{a.alert_type}</span>
+                  <span className="font-mono text-[10px] uppercase text-(--text-muted)">{a.type}</span>
                 </div>
-                <span className="font-mono text-[11px] text-(--text-muted)">{a.created_at}</span>
               </div>
-              <p className="font-medium text-[13px] text-(--text-primary) my-1.5 m-0">{a.description}</p>
+              <p className="font-medium text-[13px] text-(--text-primary) my-1.5 m-0">{a.title}</p>
               <p className="text-[12px] text-(--text-secondary) m-0">{a.detail}</p>
-              <div className="flex flex-wrap justify-between items-center gap-2 mt-3">
-                <span
-                  className="text-[10px] font-mono font-bold px-2 py-0.5 rounded"
-                  style={{ background: 'var(--accent-ghost)', color: 'var(--accent)' }}
-                >
-                  {a.deviation_sigma}
-                </span>
-                <button
-                  type="button"
-                  className="dispatcher-btn-outline text-[11px] h-[30px] px-3 inline-flex items-center"
-                  onClick={() => handleInvestigate(a)}
-                >
+              <div className="flex justify-end mt-3">
+                <Link to={a.link} className="dispatcher-btn-outline text-[11px] h-[30px] px-3 inline-flex items-center no-underline">
                   Investigate →
-                </button>
+                </Link>
               </div>
             </div>
           ))}
         </div>
 
         <div className="flex flex-col gap-3 min-w-0">
-          <SectionTitle title="Report Delivery Calendar" />
+          <SectionTitle title="Recent Reports" />
           <div className="dispatcher-surface p-4">
-            <div className="grid grid-cols-7 gap-1 mb-2">
-              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
-                <div key={d} className="text-center text-[10px] font-bold text-(--text-muted) py-1">{d}</div>
-              ))}
-              {blanks.map((k) => <div key={k} />)}
-              {days.map((day) => {
-                const mark = dayMark(day)
-                const isToday = day === 28
-                return (
-                  <div
-                    key={day}
-                    className="aspect-square flex flex-col items-center justify-center rounded text-[12px] relative"
-                    style={{
-                      background: isToday ? 'var(--accent-ghost)' : 'transparent',
-                      border: isToday ? '1px solid var(--accent)' : 'none',
-                    }}
-                  >
-                    <span className="font-medium">{day}</span>
-                    {mark && (
-                      <span
-                        className="w-1.5 h-1.5 rounded-full mt-0.5"
-                        style={{ background: DOT_COLORS[mark] }}
-                      />
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-            <div className="flex flex-wrap gap-4 text-[11px] text-(--text-muted) mt-3">
-              <span><span style={{ color: 'var(--status-low)' }}>●</span> Delivered</span>
-              <span><span style={{ color: 'var(--status-medium)' }}>●</span> Due Today</span>
-              <span><span style={{ color: 'var(--status-critical)' }}>●</span> Overdue</span>
-            </div>
+            {loading && <p className="text-[12px] text-(--text-muted) m-0">Loading…</p>}
+            {!loading && recentReports.length === 0 && (
+              <p className="text-[12px] text-(--text-muted) m-0">No reports generated yet.</p>
+            )}
+            {recentReports.map((r) => (
+              <div key={r.report_id} className="flex items-center justify-between gap-2 py-2 border-t border-(--border-subtle) first:border-0 text-[12px]">
+                <div className="min-w-0">
+                  <div className="font-medium truncate">{r.report_type} · {r.district_name ?? 'All Districts'}</div>
+                  <div className="text-(--text-muted) text-[11px]">{timeAgo(r.generated_at)}</div>
+                </div>
+                <StatusBadge label={r.status ?? '—'} variant={r.status === 'SUBMITTED' ? 'resolved' : 'handover'} />
+              </div>
+            ))}
             <Link to="/analyst/library" className="text-[12px] font-semibold text-(--accent) mt-3 inline-block no-underline hover:underline">
-              View Report Schedule →
+              View Report Library →
             </Link>
           </div>
         </div>

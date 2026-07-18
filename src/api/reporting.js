@@ -18,8 +18,7 @@ function transformReport(r) {
     period_start: periodStart,
     period_end: periodEnd,
     status: r.status,
-    // Backend uses createdById/creatorRole; generatedByName may be null
-    generated_by_name: r.generatedByName ?? r.createdByName ?? null,
+    generated_by_name: r.createdByName ?? null,
     generated_at: r.generatedAt ?? r.createdAt ?? null,
     total_incidents: r.totalIncidents,
     avg_response_time: r.avgResponseTime,
@@ -154,4 +153,67 @@ export async function listPatterns() {
 export async function listModels() {
   const { data } = await api.get('/api/reporting/models')
   return data.data ?? data
+}
+
+export async function getAnomalies() {
+  const { data } = await api.get('/api/reporting/anomalies')
+  const d = data.data ?? data
+  return {
+    anomalies: (d.anomalies ?? []).map((a) => ({
+      incident_id: a.incidentId,
+      incident_ref: a.incidentRef,
+      incident_type: a.incidentType,
+      district_name: a.districtName,
+      anomaly_score: a.anomalyScore,
+      reasoning: a.reasoning,
+    })),
+    total_analyzed: d.totalAnalyzed,
+    model_version: d.modelVersion,
+    message: d.message,
+    analysed_at: d.analysedAt,
+  }
+}
+
+export async function getDistrictBenchmark(days) {
+  const { data } = await api.get('/api/reporting/district-benchmark', { params: days ? { days } : {} })
+  return (data.data ?? data).map((r) => ({
+    district: r.districtName,
+    incidents: r.incidents,
+    avg_response: r.avgResponseTime,
+    target_met: r.targetMet,
+    coverage_pct: r.coveragePct,
+    resolution_pct: r.resolutionRate,
+    ai_acceptance_pct: r.aiAcceptance,
+    rank: r.rank,
+  }))
+}
+
+export async function getFieldReportQuality() {
+  const { data } = await api.get('/api/reporting/field-report-quality')
+  const d = data.data ?? data
+  return {
+    fully_complete_pct: d.fullyCompletePct,
+    partially_complete_pct: d.partiallyCompletePct,
+    not_submitted_pct: d.notSubmittedPct,
+    missed_fields: (d.missedFields ?? []).map((f) => ({ field: f.field, skip_rate_pct: f.skipRatePct })),
+    low_units: (d.lowUnits ?? []).map((u) => ({
+      vehicle_plate: u.vehiclePlate,
+      officer_name: u.officerName,
+      completion_rate_pct: u.completionRatePct,
+      missing_fields: u.missingFields,
+    })),
+  }
+}
+
+export async function getOverrideAnalysis() {
+  const { data } = await api.get('/api/reporting/override-analysis')
+  return (data.data ?? data).map((r) => ({
+    reason: r.reason,
+    count: r.count,
+    avg_response_overridden: r.avgResponseOverridden,
+    avg_response_baseline: r.avgResponseBaseline,
+    better_count: r.betterCount,
+    worse_count: r.worseCount,
+    recommendation: r.recommendation,
+  }))
 }
