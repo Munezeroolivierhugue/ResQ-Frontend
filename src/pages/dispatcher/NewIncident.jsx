@@ -9,6 +9,7 @@ import { checkDuplicates, createIncident } from '../../api/incidents'
 import { listDistricts } from '../../api/districts'
 import { getCallerByPhone } from '../../api/callers'
 import { calculateSeverity } from '../../utils/severityEngine'
+import { estimateAmbulanceNeed } from '../../utils/ambulanceEstimate'
 import { haversineMeters } from '../../utils/geo'
 import { generateCallerName } from '../../utils/rwandaNames'
 import TriageLocationMap from '../../components/dispatcher/TriageLocationMap'
@@ -118,7 +119,6 @@ export default function NewIncident() {
   const [overrideReason, setOverrideReason]       = useState('')
   const [overrideReasonError, setOverrideReasonError] = useState(false)
   const [location, setLocation]                   = useState(null)
-  const [peopleCount, setPeopleCount]             = useState(1)
   const [submitting, setSubmitting]               = useState(false)
   const [submitError, setSubmitError]             = useState(null)
   const [occurrenceTime, setOccurrenceTime]       = useState('')
@@ -150,7 +150,6 @@ export default function NewIncident() {
         if (s.district)                   setDistrict(s.district)
         if (s.sector)                     setSector(s.sector)
         if (s.notes !== undefined)        setNotes(s.notes)
-        if (s.peopleCount)                setPeopleCount(s.peopleCount)
         if (s.occurrenceTime)             setOccurrenceTime(s.occurrenceTime)
         if (s.location)                   { setLocation(s.location); setDetectedLocation(s.location) }
         if (s.streetAddress !== undefined) setStreetAddress(s.streetAddress)
@@ -167,13 +166,13 @@ export default function NewIncident() {
     if (!hydrated || !callId) return
     try {
       sessionStorage.setItem(intakeKey(callId), JSON.stringify({
-        incidentType, triageResponses, district, sector, streetAddress, notes, peopleCount,
+        incidentType, triageResponses, district, sector, streetAddress, notes,
         occurrenceTime, location, callerData, finalSeverity,
         severityOverrideActive, overrideReason,
       }))
     } catch {}
   }, [hydrated, callId, incidentType, triageResponses, district, sector, streetAddress, notes,
-      peopleCount, occurrenceTime, location, callerData, finalSeverity,
+      occurrenceTime, location, callerData, finalSeverity,
       severityOverrideActive, overrideReason])
 
   // ── Districts from backend ───────────────────────────────────────────────────
@@ -240,11 +239,22 @@ export default function NewIncident() {
   )
   const effectiveSeverity = severityOverrideActive ? finalSeverity : calculatedSeverity
 
+  // ── Ambulance need — derived from triage answers, not a manual headcount field ──
+  // Triage already asks "how many people/patients" and captures how badly hurt
+  // they are (unconscious, trapped, severe bleeding, etc). We use that instead of
+  // a duplicate manual "number of people involved" input. Rule: 1 ambulance per
+  // critically injured/immobile person; people who can self-transport don't each
+  // need one.
+  const { peopleCount, recommendedAmbulances } = useMemo(
+    () => estimateAmbulanceNeed(CATEGORY_TO_TRIAGE_TYPE[incidentType], triageResponses),
+    [incidentType, triageResponses]
+  )
+
   // ── AI recommendation ────────────────────────────────────────────────────────
   const aiRecommendation = useMemo(() => {
     const sev = (effectiveSeverity || 'LOW').toLowerCase()
     const n = peopleCount || 1
-    const ambCount   = Math.min(4, Math.max(1, Math.ceil(n / 5)))
+    const ambCount   = recommendedAmbulances || 1
     const policeCount = sev === 'critical' ? 3 : n > 10 ? 2 : 1
     const type = (incidentType ?? '').toUpperCase()
 
@@ -275,7 +285,7 @@ export default function NewIncident() {
     const confidence  = sev === 'critical' ? 96 : sev === 'high' ? 91 : sev === 'medium' ? 84 : 76
     const responseTime = sev === 'critical' ? '2 minutes' : sev === 'high' ? '4 minutes' : '7 minutes'
     return { threat: effectiveSeverity || 'LOW', context, resources, responseTime, reasoning, confidence }
-  }, [incidentType, effectiveSeverity, peopleCount])
+  }, [incidentType, effectiveSeverity, peopleCount, recommendedAmbulances])
 
   // AI recommendation is only meaningful once incident type, triage and district are known
   const showAiRecommendation =
@@ -961,23 +971,32 @@ export default function NewIncident() {
               </p>
             )}
 
-            {/* People involved */}
-            <IntakePanel className="p-4 md:p-5 shrink-0">
-              <label className="dispatcher-field m-0">
-                <span className="field-label">Number of people involved</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={500}
-                  className="dispatcher-input dispatcher-text-input mt-1"
-                  value={peopleCount}
-                  onChange={(e) => setPeopleCount(Math.max(1, parseInt(e.target.value) || 1))}
-                />
-                <p className="m-0 mt-1" style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                  Affects number of ambulances / units the AI recommends.
+            {/* People involved — derived from triage answers, not manually typed.
+                Triage already asks headcount + injury severity, so this is read-only:
+                it shows what the AI is using to compute the ambulance recommendation. */}
+            {incidentType && (
+              <IntakePanel className="p-4 md:p-5 shrink-0">
+                <span className="field-label">People involved (from triage)</span>
+                <div className="flex items-center gap-4 mt-1.5 flex-wrap">
+                  <div>
+                    <span className="text-[18px] font-bold text-(--text-primary)" style={{ fontFamily: 'var(--font-mono)' }}>
+                      {peopleCount || '—'}
+                    </span>
+                    <span className="text-[11px] text-(--text-muted) ml-1.5">people reported</span>
+                  </div>
+                  <div>
+                    <span className="text-[18px] font-bold text-(--accent)" style={{ fontFamily: 'var(--font-mono)' }}>
+                      {recommendedAmbulances || '—'}
+                    </span>
+                    <span className="text-[11px] text-(--text-muted) ml-1.5">ambulance{recommendedAmbulances === 1 ? '' : 's'} recommended</span>
+                  </div>
+                </div>
+                <p className="m-0 mt-1.5" style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                  Derived from triage answers: 1 ambulance per critically injured / immobile
+                  person. People who can self-transport don&apos;t each need one.
                 </p>
-              </label>
-            </IntakePanel>
+              </IntakePanel>
+            )}
 
             {/* Occurrence time */}
             <IntakePanel className="p-4 md:p-5 shrink-0">

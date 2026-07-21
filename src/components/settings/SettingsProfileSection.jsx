@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
-import { User, Clock, Calendar, Pencil, Save, Loader2 } from "lucide-react";
-import SettingsToast from "./SettingsToast";
+import { useEffect, useRef, useState } from "react";
+import { User, Clock, Calendar, Pencil, Save, Loader2, Camera } from "lucide-react";
+import { useToastStore } from "../../store/toastStore";
 import { getCurrentUser } from "../../utils/authSession";
-import { getUser, updateSelf } from "../../api/users";
+import { getUser, updateSelf, uploadProfilePhoto } from "../../api/users";
+import { getMyShifts } from "../../api/shifts";
 
 const DUTY_OPTIONS = [
   { id: "on_duty", label: "On Duty" },
@@ -43,9 +44,11 @@ export default function SettingsProfileSection({
   shiftStats: shiftStatsProp,
   stationAdminNote = "Assigned by administrator · contact ops manager to change",
   onUserLoaded,
+  showShift = true,
 }) {
   const sessionUser = getCurrentUser();
   const userId = sessionUser?.user_id;
+  const pushToast = useToastStore((s) => s.pushToast);
 
   const [user, setUser] = useState(null);
   const [loadingUser, setLoadingUser] = useState(true);
@@ -57,15 +60,41 @@ export default function SettingsProfileSection({
   });
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [duty, setDuty] = useState("on_duty");
-  const [toast, setToast] = useState(false);
-  const [toastMsg, setToastMsg] = useState("Profile updated");
+  const [duty, setDuty] = useState("off_duty");
   const [elapsed, setElapsed] = useState(0);
+  const [photoUrl, setPhotoUrl] = useState(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
+    // Only ticks while On Duty — On Break/Off Duty pause the counter so the
+    // recorded "time on duty" reflects actual worked time, not wall-clock
+    // time, which is what makes it usable for analyst/admin time-on-work
+    // analysis.
+    if (duty !== "on_duty") return undefined;
     const t = setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [duty]);
+
+  // Seed duty/elapsed from a real active shift record instead of always
+  // starting at "on_duty"/00:00:00 — previously this reset on every mount,
+  // so "time on duty" was a naive incrementing counter with no connection
+  // to when the user's shift actually started.
+  useEffect(() => {
+    if (!userId || userId === "demo-user-uuid") return;
+    getMyShifts()
+      .then((shifts) => {
+        const active = shifts.find((s) => s.status === "ACTIVE");
+        if (active?.shift_start) {
+          const secs = Math.max(0, Math.floor((Date.now() - new Date(active.shift_start).getTime()) / 1000));
+          setElapsed(secs);
+          setDuty("on_duty");
+        } else {
+          setDuty("off_duty");
+        }
+      })
+      .catch(() => {});
+  }, [userId]);
 
   useEffect(() => {
     if (!userId || userId === "demo-user-uuid") {
@@ -89,6 +118,7 @@ export default function SettingsProfileSection({
         };
         setForm(f);
         setSavedForm(f);
+        setPhotoUrl(u.photo_url || null);
         onUserLoaded?.(u);
       })
       .catch(() => {
@@ -102,12 +132,6 @@ export default function SettingsProfileSection({
       })
       .finally(() => setLoadingUser(false));
   }, [userId]);
-
-  const flashToast = (msg = "Profile updated") => {
-    setToastMsg(msg);
-    setToast(true);
-    setTimeout(() => setToast(false), 2500);
-  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -128,17 +152,37 @@ export default function SettingsProfileSection({
         setSavedForm({ ...form });
       }
       setIsEditing(false);
-      flashToast("Profile updated");
+      pushToast({ variant: "success", title: "Saved", message: "Profile updated" });
     } catch (err) {
       const msg = err?.response?.data?.message;
       if (err?.response?.status === 403) {
-        flashToast("Contact your administrator to update profile details");
+        pushToast({ variant: "error", title: "Not Allowed", message: "Contact your administrator to update profile details" });
       } else {
-        flashToast(msg || "Failed to save changes");
+        pushToast({ variant: "error", title: "Save Failed", message: msg || "Failed to save changes" });
       }
       setIsEditing(false);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePhotoChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !userId || userId === "demo-user-uuid") return;
+    if (!file.type.startsWith("image/")) {
+      pushToast({ variant: "warning", title: "Invalid File", message: "Please choose an image file" });
+      return;
+    }
+    setUploadingPhoto(true);
+    try {
+      const url = await uploadProfilePhoto(file);
+      setPhotoUrl(url);
+      pushToast({ variant: "success", title: "Saved", message: "Profile photo updated" });
+    } catch (err) {
+      pushToast({ variant: "error", title: "Upload Failed", message: err?.response?.data?.message || "Failed to upload photo" });
+    } finally {
+      setUploadingPhoto(false);
     }
   };
 
@@ -174,20 +218,52 @@ export default function SettingsProfileSection({
         className="dispatcher-surface flex flex-wrap items-center gap-4 w-full"
         style={{ padding: "1.25rem 1.5rem" }}
       >
-        <span
-          className="w-[52px] h-[52px] rounded-full flex items-center justify-center text-[15px] font-bold shrink-0"
-          style={{
-            background: "var(--accent-ghost)",
-            color: "var(--accent)",
-            fontFamily: "var(--font-display)",
-          }}
-        >
-          {loadingUser ? (
-            <Loader2 size={20} className="animate-spin" />
-          ) : (
-            initials
+        <div className="relative w-[52px] h-[52px] shrink-0">
+          <span
+            className="w-[52px] h-[52px] rounded-full flex items-center justify-center text-[15px] font-bold overflow-hidden"
+            style={{
+              background: "var(--accent-ghost)",
+              color: "var(--accent)",
+              fontFamily: "var(--font-display)",
+            }}
+          >
+            {loadingUser || uploadingPhoto ? (
+              <Loader2 size={20} className="animate-spin" />
+            ) : photoUrl ? (
+              <img
+                src={photoUrl}
+                alt="Profile"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              initials
+            )}
+          </span>
+          {!loadingUser && userId && userId !== "demo-user-uuid" && (
+            <button
+              type="button"
+              className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center border-2 cursor-pointer"
+              style={{
+                background: "var(--accent)",
+                borderColor: "var(--bg-surface)",
+                color: "var(--text-on-accent, #fff)",
+              }}
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingPhoto}
+              aria-label="Change profile photo"
+              title="Change profile photo"
+            >
+              <Camera size={12} />
+            </button>
           )}
-        </span>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handlePhotoChange}
+          />
+        </div>
         <div className="flex-1 min-w-[200px]">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[17px] font-semibold text-(--text-primary)">
@@ -268,71 +344,75 @@ export default function SettingsProfileSection({
         </div>
       </div>
 
-      <div className="settings-section-card dispatcher-surface p-5 w-full">
-        <div className="dispatcher-section-title">
-          <span className="dispatcher-section-accent" aria-hidden />
-          <Clock size={16} className="text-(--accent)" />
-          <span className="panel-title">Duty Status</span>
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-4 mt-4">
-          <div>
-            <div className="text-[13px] font-medium text-(--text-primary)">
-              Current Status
-            </div>
-            <p className="text-[12px] text-(--text-secondary) m-0 mt-0.5">
-              Visible to Operations Manager and all supervisors
-            </p>
+      {showShift && (
+        <div className="settings-section-card dispatcher-surface p-5 w-full">
+          <div className="dispatcher-section-title">
+            <span className="dispatcher-section-accent" aria-hidden />
+            <Clock size={16} className="text-(--accent)" />
+            <span className="panel-title">Duty Status</span>
           </div>
-          <div
-            className="settings-duty-segmented"
-            role="group"
-            aria-label="Duty status"
-          >
-            {DUTY_OPTIONS.map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                className={`settings-duty-segment${duty === opt.id ? " settings-duty-segment--active" : ""}`}
-                onClick={() => setDuty(opt.id)}
+          <div className="flex flex-wrap items-center justify-between gap-4 mt-4">
+            <div>
+              <div className="text-[13px] font-medium text-(--text-primary)">
+                Current Status
+              </div>
+              <p className="text-[12px] text-(--text-secondary) m-0 mt-0.5">
+                Visible to Operations Manager and all supervisors
+              </p>
+            </div>
+            <div
+              className="settings-duty-segmented"
+              role="group"
+              aria-label="Duty status"
+            >
+              {DUTY_OPTIONS.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  className={`settings-duty-segment${duty === opt.id ? " settings-duty-segment--active" : ""}`}
+                  onClick={() => setDuty(opt.id)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showShift && (
+        <div className="settings-section-card dispatcher-surface p-5 w-full">
+          <div className="dispatcher-section-title mb-4">
+            <span className="dispatcher-section-accent" aria-hidden />
+            <Calendar size={16} className="text-(--accent)" />
+            <span className="panel-title">Current Shift</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {shiftStats.map((stat) => (
+              <div
+                key={stat.label}
+                className="rounded-lg p-3 px-4"
+                style={{
+                  background: "var(--bg-elevated)",
+                  borderRadius: "var(--border-radius-md, 8px)",
+                }}
               >
-                {opt.label}
-              </button>
+                <div
+                  className="text-[10px] uppercase tracking-wider text-(--text-muted) mb-1"
+                  style={{ fontFamily: "var(--font-mono)" }}
+                >
+                  {stat.label}
+                </div>
+                <div
+                  className={`text-[16px] font-semibold text-(--text-primary)${stat.mono ? " font-mono" : ""}`}
+                >
+                  {stat.value}
+                </div>
+              </div>
             ))}
           </div>
         </div>
-      </div>
-
-      <div className="settings-section-card dispatcher-surface p-5 w-full">
-        <div className="dispatcher-section-title mb-4">
-          <span className="dispatcher-section-accent" aria-hidden />
-          <Calendar size={16} className="text-(--accent)" />
-          <span className="panel-title">Current Shift</span>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {shiftStats.map((stat) => (
-            <div
-              key={stat.label}
-              className="rounded-lg p-3 px-4"
-              style={{
-                background: "var(--bg-elevated)",
-                borderRadius: "var(--border-radius-md, 8px)",
-              }}
-            >
-              <div
-                className="text-[10px] uppercase tracking-wider text-(--text-muted) mb-1"
-                style={{ fontFamily: "var(--font-mono)" }}
-              >
-                {stat.label}
-              </div>
-              <div
-                className={`text-[16px] font-semibold text-(--text-primary)${stat.mono ? " font-mono" : ""}`}
-              >
-                {stat.value}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      )}
 
       {isEditing && (
         <div className="settings-profile-actions sticky bottom-0 z-10 flex justify-end gap-3 py-3 border-t border-(--border-subtle) bg-(--bg-surface)">
@@ -359,8 +439,6 @@ export default function SettingsProfileSection({
           </button>
         </div>
       )}
-
-      <SettingsToast show={toast} message={toastMsg} />
     </div>
   );
 }

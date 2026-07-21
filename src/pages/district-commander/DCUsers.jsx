@@ -1,14 +1,18 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { UserPlus, FileText, Pencil, Send, X, Users as UsersIcon, UserCheck, Mail, UserX } from 'lucide-react'
+import { UserPlus, FileText, Pencil, Send, X, Users as UsersIcon, UserCheck, Mail, UserX, Search } from 'lucide-react'
 import DCPageHeader from '../../components/district-commander/DCPageHeader'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
-import MetricCard from '../../components/dispatcher/MetricCard'
-import { listUsers, updateUser, resendInvite } from '../../api/users'
+import AdminStatCard from '../../components/admin/AdminStatCard'
+import FilterDropdown from '../../components/admin/FilterDropdown'
+import ConfirmDangerModal from '../../components/admin/ConfirmDangerModal'
+import { updateUser, resendInvite } from '../../api/users'
+import { listDistrictUsers, setDistrictUserStatus } from '../../api/districtCommander'
 import { listVehicles } from '../../api/vehicles'
 import { getCurrentUser } from '../../utils/authSession'
 import { getDistrictCommanderDistrict } from '../../utils/districtCommanderSession'
 import { buildPdfHtml, openPdfWindow, sectionHtml, tableHtml } from '../../utils/pdfExport'
+import { useToastStore } from '../../store/toastStore'
 
 const SHIFT_OPTIONS = [
   { value: 'MORNING',  label: 'Morning (07:00 – 15:00)' },
@@ -17,12 +21,17 @@ const SHIFT_OPTIONS = [
   { value: 'ROTATING', label: 'Rotating / Not fixed' },
 ]
 
+// All roles /api/dc/users returns for this district — matches
+// DistrictCommanderController.VISIBLE_ROLES on the backend.
 const ROLE_LABELS = {
   FIELD_RESPONDER: 'Field Responder',
   OPERATIONS_MANAGER: 'Operations Manager',
+  DISPATCHER: 'Dispatcher',
+  EMERGENCY_PLANNER: 'Emergency Planner',
+  ANALYST: 'Analyst',
 }
 
-const ROLE_FILTERS = ['All Roles', 'Field Responder', 'Operations Manager']
+const ROLE_FILTERS = ['All Roles', 'Field Responder', 'Operations Manager', 'Dispatcher', 'Emergency Planner', 'Analyst']
 const STATUS_FILTERS = ['All', 'Active', 'Pending', 'Suspended']
 
 function statusVariant(s) {
@@ -35,9 +44,8 @@ function initials(name) {
   return (name || '').split(' ').map((n) => n[0]).filter(Boolean).join('').slice(0, 2).toUpperCase()
 }
 
-function showToast(setToast, msg) {
-  setToast(msg)
-  setTimeout(() => setToast(null), 2500)
+function showToast(msg, variant = 'success') {
+  useToastStore.getState().pushToast({ variant, title: variant === 'error' ? 'Error' : 'Users', message: msg })
 }
 
 function EditUserModal({ user, vehicles, onClose, onSaved }) {
@@ -155,17 +163,16 @@ export default function DCUsers() {
   const [roleFilter, setRoleFilter] = useState('All Roles')
   const [statusFilter, setStatusFilter] = useState('All')
   const [editingUser, setEditingUser] = useState(null)
-  const [toast, setToast] = useState(null)
   const [actingId, setActingId] = useState(null)
+  const [statusTarget, setStatusTarget] = useState(null) // user pending suspend/reactivate confirmation
+
+  function refreshUsers() {
+    return listDistrictUsers().then(setUsers).catch(() => {})
+  }
 
   useEffect(() => {
     if (!districtId) { Promise.resolve().then(() => setLoading(false)); return }
-    listUsers()
-      .then((all) => setUsers(all.filter((u) =>
-        u.district_id === districtId && (u.role === 'FIELD_RESPONDER' || u.role === 'OPERATIONS_MANAGER')
-      )))
-      .catch(() => {})
-      .finally(() => setLoading(false))
+    refreshUsers().finally(() => setLoading(false))
     listVehicles({ districtId }).then(setVehicles).catch(() => {})
   }, [districtId])
 
@@ -176,8 +183,8 @@ export default function DCUsers() {
       list = list.filter((u) => (u.full_name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q))
     }
     if (roleFilter !== 'All Roles') {
-      const role = roleFilter === 'Field Responder' ? 'FIELD_RESPONDER' : 'OPERATIONS_MANAGER'
-      list = list.filter((u) => u.role === role)
+      const role = Object.entries(ROLE_LABELS).find(([, label]) => label === roleFilter)?.[0]
+      if (role) list = list.filter((u) => u.role === role)
     }
     if (statusFilter !== 'All') {
       list = list.filter((u) => u.status === statusFilter.toUpperCase())
@@ -189,18 +196,34 @@ export default function DCUsers() {
     setActingId(u.user_id)
     try {
       await resendInvite(u.user_id)
-      showToast(setToast, `Invitation resent to ${u.email}`)
+      showToast(`Invitation resent to ${u.email}`)
     } catch (err) {
-      showToast(setToast, err?.response?.data?.message ?? 'Failed to resend invitation')
+      showToast(err?.response?.data?.message ?? 'Failed to resend invitation', 'error')
     } finally {
       setActingId(null)
+    }
+  }
+
+  async function handleConfirmStatusChange() {
+    if (!statusTarget) return
+    const { user_id, nextStatus } = statusTarget
+    setActingId(user_id)
+    try {
+      await setDistrictUserStatus(user_id, nextStatus)
+      setUsers((prev) => prev.map((u) => (u.user_id === user_id ? { ...u, status: nextStatus } : u)))
+      showToast(nextStatus === 'SUSPENDED' ? 'User suspended' : 'User reactivated successfully')
+    } catch (err) {
+      showToast(err?.response?.data?.message ?? 'Failed to update user status', 'error')
+    } finally {
+      setActingId(null)
+      setStatusTarget(null)
     }
   }
 
   function handleEditSaved(updated) {
     setUsers((prev) => prev.map((u) => (u.user_id === updated.user_id ? { ...u, ...updated } : u)))
     setEditingUser(null)
-    showToast(setToast, 'User updated successfully')
+    showToast('User updated successfully')
   }
 
   function handleGeneratePdf() {
@@ -214,7 +237,7 @@ export default function DCUsers() {
     ])
     openPdfWindow(buildPdfHtml({
       title: 'District User Roster',
-      subtitle: `${districtName ?? 'District'} · Field Responders & Operations Managers`,
+      subtitle: `${districtName ?? 'District'} · All district roles`,
       reportType: 'USER ROSTER',
       idPrefix: 'USR',
       metaItems: [
@@ -235,15 +258,9 @@ export default function DCUsers() {
 
   return (
     <div className="portal-page flex flex-col gap-5">
-      {toast && (
-        <div className="fixed bottom-5 right-5 z-[9999] dispatcher-surface px-4 py-2.5 text-[13px] font-medium shadow-lg" style={{ borderLeft: '3px solid var(--accent)' }}>
-          {toast}
-        </div>
-      )}
-
       <DCPageHeader
         title="Users"
-        subtitle={`Field Responders and Operations Managers provisioned for ${districtName ?? 'your district'}.`}
+        subtitle={`All district accounts provisioned for ${districtName ?? 'your district'}.`}
         action={
           <div className="flex gap-2">
             <button type="button" className="dispatcher-btn-primary inline-flex items-center gap-2" onClick={handleGeneratePdf}>
@@ -259,73 +276,66 @@ export default function DCUsers() {
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <MetricCard icon={UsersIcon} label="Total Users" value={loading ? '—' : String(users.length)} hintTone="neutral" />
-        <MetricCard icon={UserCheck} label="Active" value={loading ? '—' : String(users.filter((u) => u.status === 'ACTIVE').length)} hintTone="positive" />
-        <MetricCard icon={Mail} label="Pending Invitations" value={loading ? '—' : String(users.filter((u) => u.status === 'PENDING').length)} hintTone="neutral" />
-        <MetricCard icon={UserX} label="Suspended" value={loading ? '—' : String(users.filter((u) => u.status === 'SUSPENDED').length)} hintTone="warning" />
+        <AdminStatCard icon={UsersIcon} label="Total Users" value={loading ? '—' : String(users.length)} />
+        <AdminStatCard icon={UserCheck} label="Active" value={loading ? '—' : String(users.filter((u) => u.status === 'ACTIVE').length)} />
+        <AdminStatCard icon={Mail} label="Pending Invitations" value={loading ? '—' : String(users.filter((u) => u.status === 'PENDING').length)} />
+        <AdminStatCard icon={UserX} label="Suspended" value={loading ? '—' : String(users.filter((u) => u.status === 'SUSPENDED').length)} />
       </div>
 
-      <div className="flex flex-wrap gap-2 items-center">
-        <input
-          className="dispatcher-input h-10 flex-1 min-w-[200px]"
-          placeholder="Search by name or email..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+      <div className="flex flex-nowrap items-center gap-2">
+        <div className="relative w-56 shrink-0">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-(--text-muted)" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name or email…"
+            className="dispatcher-input h-8 w-full rounded-full pl-8 pr-3 text-[11px]"
+            style={{ borderRadius: 9999 }}
+          />
+        </div>
+        <div className="ml-auto">
+          <FilterDropdown
+            label="All Roles"
+            value={roleFilter}
+            onChange={setRoleFilter}
+            options={ROLE_FILTERS.map((r) => ({ value: r, label: r }))}
+          />
+        </div>
+        <FilterDropdown
+          label="All Statuses"
+          value={statusFilter}
+          onChange={setStatusFilter}
+          options={STATUS_FILTERS.map((s) => ({ value: s, label: s === 'All' ? 'All statuses' : s }))}
         />
-        <div className="flex flex-wrap gap-1">
-          {ROLE_FILTERS.map((r) => (
-            <button key={r} type="button" className="text-[10px] font-semibold px-2.5 py-1 rounded-full border cursor-pointer"
-              style={{
-                background: roleFilter === r ? 'var(--accent-ghost)' : 'var(--bg-elevated)',
-                borderColor: roleFilter === r ? 'var(--accent)' : 'var(--border)',
-                color: roleFilter === r ? 'var(--accent)' : 'var(--text-secondary)',
-              }}
-              onClick={() => setRoleFilter(r)}>
-              {r}
-            </button>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-1">
-          {STATUS_FILTERS.map((s) => (
-            <button key={s} type="button" className="text-[10px] font-semibold px-2.5 py-1 rounded-full border cursor-pointer"
-              style={{
-                background: statusFilter === s ? 'var(--accent-ghost)' : 'var(--bg-elevated)',
-                borderColor: statusFilter === s ? 'var(--accent)' : 'var(--border)',
-                color: statusFilter === s ? 'var(--accent)' : 'var(--text-secondary)',
-              }}
-              onClick={() => setStatusFilter(s)}>
-              {s}
-            </button>
-          ))}
-        </div>
       </div>
 
-      <div className="dispatcher-surface overflow-x-auto">
-        <table className="w-full text-[12px] min-w-[820px]">
+      <div className="dispatcher-surface table-scroll">
+        <table className="w-full min-w-[860px] text-left border-collapse text-[12px]">
           <thead>
-            <tr className="text-(--text-muted) border-b border-(--border)">
-              <th className="text-left p-3">User</th>
-              <th className="text-left p-3">Role</th>
-              <th className="text-center p-3">Status</th>
-              <th className="text-center p-3">Last Login</th>
-              <th className="text-center p-3">Actions</th>
+            <tr className="text-[12px] font-medium text-(--text-secondary) border-b border-(--border-subtle)">
+              <th className="py-2 px-3 font-bold">User</th>
+              <th className="py-2 px-3 font-bold text-center">Role</th>
+              <th className="py-2 px-3 font-bold text-center">Status</th>
+              <th className="py-2 px-3 font-bold text-center">Last Login</th>
+              <th className="py-2 px-3 font-bold text-center">Actions</th>
             </tr>
           </thead>
           <tbody>
             {displayed.length === 0 && (
               <tr>
-                <td colSpan={5} className="p-6 text-center text-[13px] text-(--text-muted)">
+                <td colSpan={5} className="py-6 text-center text-[13px] text-(--text-muted)">
                   {loading ? 'Loading users…' : 'No users found.'}
                 </td>
               </tr>
             )}
             {displayed.map((u) => (
-              <tr key={u.user_id} className="border-b border-(--border-subtle) dispatcher-table-row group"
+              <tr key={u.user_id} className="border-b border-(--border-subtle) last:border-0 dispatcher-table-row group"
                 style={{
                   background: u.status === 'SUSPENDED' ? 'var(--status-critical-bg)' : undefined,
                   opacity: u.status === 'SUSPENDED' ? 0.85 : 1,
                 }}>
-                <td className="p-3">
+                <td className="py-3 px-3">
                   <div className="flex items-center gap-2">
                     <span className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
                       style={{ background: 'var(--accent-ghost)', color: 'var(--accent)' }}>
@@ -337,19 +347,30 @@ export default function DCUsers() {
                     </div>
                   </div>
                 </td>
-                <td className="p-3">{ROLE_LABELS[u.role] ?? u.role}</td>
-                <td className="p-3 text-center">
+                <td className="py-3 px-3 text-center">{ROLE_LABELS[u.role] ?? u.role}</td>
+                <td className="py-3 px-3 text-center">
                   <StatusBadge label={u.status} variant={statusVariant(u.status)} />
                 </td>
-                <td className="p-3 text-center font-mono text-(--text-muted)">
+                <td className="py-3 px-3 text-center">
                   {u.last_login ? new Date(u.last_login).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                 </td>
-                <td className="p-3">
-                  <div className="flex gap-1 justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <td className="py-3 px-3">
+                  <div className="flex gap-1 justify-center">
                     {u.status === 'PENDING' && (
                       <button type="button" title="Resend invitation link" className="dispatcher-btn-icon"
                         disabled={actingId === u.user_id} onClick={() => handleReinvite(u)}>
                         <Send size={14} />
+                      </button>
+                    )}
+                    {(u.status === 'ACTIVE' || u.status === 'SUSPENDED') && (
+                      <button
+                        type="button"
+                        title={u.status === 'ACTIVE' ? 'Suspend account' : 'Reactivate account'}
+                        className="dispatcher-btn-icon"
+                        disabled={actingId === u.user_id}
+                        onClick={() => setStatusTarget({ user_id: u.user_id, name: u.full_name, nextStatus: u.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE' })}
+                      >
+                        {u.status === 'ACTIVE' ? <UserX size={14} /> : <UserCheck size={14} />}
                       </button>
                     )}
                     <button type="button" title="Edit user details" className="dispatcher-btn-icon" onClick={() => setEditingUser(u)}>
@@ -374,6 +395,19 @@ export default function DCUsers() {
           onSaved={handleEditSaved}
         />
       )}
+
+      <ConfirmDangerModal
+        open={!!statusTarget}
+        title={statusTarget?.nextStatus === 'SUSPENDED' ? 'Suspend User Account' : 'Reactivate User Account'}
+        message={
+          statusTarget?.nextStatus === 'SUSPENDED'
+            ? `Suspend ${statusTarget?.name ?? 'this user'}? They will immediately lose access until reactivated.`
+            : `Reactivate ${statusTarget?.name ?? 'this user'}? They will regain access immediately.`
+        }
+        confirmLabel={statusTarget?.nextStatus === 'SUSPENDED' ? 'Suspend' : 'Reactivate'}
+        onConfirm={handleConfirmStatusChange}
+        onCancel={() => setStatusTarget(null)}
+      />
     </div>
   )
 }

@@ -9,6 +9,7 @@ export default function AdminProfile() {
         initials="SA"
         roleLabel="SUPER ADMIN"
         badge="ADM-0001"
+        showShift={false}
         defaultForm={{
           name: 'System Admin',
           email: 'admin@resq.rw',

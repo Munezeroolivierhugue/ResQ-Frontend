@@ -1,11 +1,10 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Shield, Mail, Lock, Plus, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Shield, Mail, ChevronLeft, ChevronRight, Search, Lock, Unlock } from 'lucide-react'
 
 
 const SESSION_PAGE_SIZE = 10
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import ConfirmDangerModal from '../../components/admin/ConfirmDangerModal'
-import { adminRoleBadge } from '../../data/mockAdminData'
 import {
   listSecurityEvents,
   listSessions,
@@ -13,10 +12,11 @@ import {
   revokeAllSessions,
   sendMfaReminder,
   sendMfaReminderAll,
-  getSystemSettings,
-  saveSystemSettings,
+  listLockedUsers,
+  unlockUser,
 } from '../../api/admin'
 import { listUsers } from '../../api/users'
+import { useToastStore } from '../../store/toastStore'
 
 const ROLE_LABELS = {
   DISPATCHER: 'Dispatcher',
@@ -28,39 +28,32 @@ const ROLE_LABELS = {
   SUPER_ADMIN: 'Super Admin',
 }
 
-const PASSWORD_MAX_AGE_OPTIONS = [30, 60, 90, 180, 365]
-
 export default function AdminSecurity() {
   const [sessions, setSessions] = useState([])
   const [sessionsLoading, setSessionsLoading] = useState(true)
+  const [sessionSearch, setSessionSearch] = useState('')
   const [sessionPage, setSessionPage] = useState(1)
   const [revokeId, setRevokeId] = useState(null)
   const [revoking, setRevoking] = useState(false)
-  const [toast, setToast] = useState(null)
+  const pushToast = useToastStore((s) => s.pushToast)
   const [securityEvents, setSecurityEvents] = useState([])
   const [eventsLoading, setEventsLoading] = useState(true)
   const [eventsError, setEventsError] = useState(null)
   const [users, setUsers] = useState([])
   const [usersLoading, setUsersLoading] = useState(true)
   const [sendingReminder, setSendingReminder] = useState(null)
+  const [lockedUsers, setLockedUsers] = useState([])
+  const [lockedLoading, setLockedLoading] = useState(true)
+  const [unlockId, setUnlockId] = useState(null)
+  const [unlocking, setUnlocking] = useState(false)
 
-  // Password policy state
-  const [policy, setPolicy] = useState({
-    minPasswordLength: 12,
-    maxFailedAttempts: 5,
-    complexityRequired: true,
-    passwordMaxAgeDays: 90,
-  })
-  const [savingPolicy, setSavingPolicy] = useState(false)
-
-  // IP Allowlist state
-  const [ipAllowlistEnabled, setIpAllowlistEnabled] = useState(false)
-  const [ipRanges, setIpRanges] = useState([])
-  const [newRange, setNewRange] = useState('')
-  const [newRangeLabel, setNewRangeLabel] = useState('')
-  const [showAddRange, setShowAddRange] = useState(false)
-  const [savingIp, setSavingIp] = useState(false)
-  const [settingsLoading, setSettingsLoading] = useState(true)
+  function refreshLockedUsers() {
+    setLockedLoading(true)
+    listLockedUsers()
+      .then((u) => setLockedUsers(u))
+      .catch(() => {})
+      .finally(() => setLockedLoading(false))
+  }
 
   useEffect(() => {
     listSecurityEvents()
@@ -75,19 +68,7 @@ export default function AdminSecurity() {
       .then((u) => setUsers(u))
       .catch(() => {})
       .finally(() => setUsersLoading(false))
-    getSystemSettings()
-      .then((s) => {
-        setPolicy({
-          minPasswordLength: s.minPasswordLength ?? 12,
-          maxFailedAttempts: s.maxFailedAttempts ?? 5,
-          complexityRequired: s.complexityRequired ?? true,
-          passwordMaxAgeDays: s.passwordMaxAgeDays ?? 90,
-        })
-        setIpAllowlistEnabled(s.ipAllowlistEnabled ?? false)
-        setIpRanges(s.ipRanges ?? [])
-      })
-      .catch(() => {})
-      .finally(() => setSettingsLoading(false))
+    Promise.resolve().then(() => refreshLockedUsers())
   }, [])
 
   const mfaRoles = useMemo(() => {
@@ -106,15 +87,26 @@ export default function AdminSecurity() {
     [users],
   )
 
-  const totalSessionPages = Math.max(1, Math.ceil(sessions.length / SESSION_PAGE_SIZE))
+  const filteredSessions = useMemo(() => {
+    const q = sessionSearch.trim().toLowerCase()
+    if (!q) return sessions
+    return sessions.filter((s) =>
+      (s.user_name ?? '').toLowerCase().includes(q) ||
+      (s.device ?? '').toLowerCase().includes(q) ||
+      (s.ip_address ?? '').toLowerCase().includes(q)
+    )
+  }, [sessions, sessionSearch])
+
+  const totalSessionPages = Math.max(1, Math.ceil(filteredSessions.length / SESSION_PAGE_SIZE))
   const pagedSessions = useMemo(
-    () => sessions.slice((sessionPage - 1) * SESSION_PAGE_SIZE, sessionPage * SESSION_PAGE_SIZE),
-    [sessions, sessionPage],
+    () => filteredSessions.slice((sessionPage - 1) * SESSION_PAGE_SIZE, sessionPage * SESSION_PAGE_SIZE),
+    [filteredSessions, sessionPage],
   )
 
-  function showToast(msg) {
-    setToast(msg)
-    setTimeout(() => setToast(null), 3000)
+  useEffect(() => { Promise.resolve().then(() => setSessionPage(1)) }, [sessionSearch])
+
+  function showToast(msg, variant = 'success') {
+    pushToast({ variant, title: variant === 'error' ? 'Error' : 'Security', message: msg })
   }
 
   async function handleSendReminder(userId) {
@@ -123,7 +115,7 @@ export default function AdminSecurity() {
       await sendMfaReminder(userId)
       showToast('MFA setup reminder sent')
     } catch {
-      showToast('Failed to send reminder')
+      showToast('Failed to send reminder', 'error')
     } finally {
       setSendingReminder(null)
     }
@@ -135,9 +127,24 @@ export default function AdminSecurity() {
       const result = await sendMfaReminderAll()
       showToast(`Reminders sent to ${result.sent} user${result.sent !== 1 ? 's' : ''}`)
     } catch {
-      showToast('Failed to send reminders')
+      showToast('Failed to send reminders', 'error')
     } finally {
       setSendingReminder(null)
+    }
+  }
+
+  async function handleConfirmUnlock() {
+    if (!unlockId) return
+    setUnlocking(true)
+    try {
+      await unlockUser(unlockId)
+      setLockedUsers((prev) => prev.filter((u) => u.user_id !== unlockId))
+      showToast('Account unlocked')
+    } catch {
+      showToast('Failed to unlock account — try again', 'error')
+    } finally {
+      setUnlocking(false)
+      setUnlockId(null)
     }
   }
 
@@ -155,76 +162,16 @@ export default function AdminSecurity() {
         showToast('Session revoked')
       }
     } catch {
-      showToast('Failed to revoke session — try again')
+      showToast('Failed to revoke session — try again', 'error')
     } finally {
       setRevoking(false)
       setRevokeId(null)
     }
   }
 
-  async function handleSavePolicy() {
-    setSavingPolicy(true)
-    try {
-      await saveSystemSettings(policy)
-      showToast('Password policy saved')
-    } catch {
-      showToast('Failed to save policy')
-    } finally {
-      setSavingPolicy(false)
-    }
-  }
-
-  async function handleToggleAllowlist(enabled) {
-    setIpAllowlistEnabled(enabled)
-    try {
-      await saveSystemSettings({ ipAllowlistEnabled: enabled })
-      showToast(`IP Allowlist ${enabled ? 'enabled' : 'disabled'}`)
-    } catch {
-      showToast('Failed to update allowlist setting')
-      setIpAllowlistEnabled(!enabled)
-    }
-  }
-
-  async function handleAddRange() {
-    if (!newRange.trim()) return
-    const updated = [...ipRanges, { range: newRange.trim(), label: newRangeLabel.trim() || newRange.trim() }]
-    setSavingIp(true)
-    try {
-      await saveSystemSettings({ ipRanges: updated })
-      setIpRanges(updated)
-      setNewRange('')
-      setNewRangeLabel('')
-      setShowAddRange(false)
-      showToast('IP range added')
-    } catch {
-      showToast('Failed to add IP range')
-    } finally {
-      setSavingIp(false)
-    }
-  }
-
-  async function handleRemoveRange(rangeValue) {
-    const updated = ipRanges.filter((r) => r.range !== rangeValue)
-    setSavingIp(true)
-    try {
-      await saveSystemSettings({ ipRanges: updated })
-      setIpRanges(updated)
-      showToast('IP range removed')
-    } catch {
-      showToast('Failed to remove IP range')
-    } finally {
-      setSavingIp(false)
-    }
-  }
 
   return (
     <div className="portal-page flex flex-col gap-5 min-w-[1024px]">
-      {toast && (
-        <div className="fixed bottom-5 right-5 z-[9999] dispatcher-surface px-4 py-2.5 text-[13px] font-medium shadow-lg" style={{ borderLeft: '3px solid var(--accent)' }}>
-          {toast}
-        </div>
-      )}
-
       <AdminPageHeader title="Security Management" subtitle="MFA compliance, sessions, and security policies." eyebrow="Super Admin Portal" badge="2 Open Alerts" />
 
       {eventsError && (
@@ -247,14 +194,14 @@ export default function AdminSecurity() {
           <div className="overflow-x-auto">
             <table className="w-full text-[12px] min-w-[640px]">
               <thead>
-                <tr className="text-(--text-muted) border-b border-(--border)">
-                  <th className="text-left p-2">Event ID</th>
-                  <th className="text-left p-2">Type</th>
-                  <th className="text-left p-2">Source</th>
-                  <th className="p-2">IP Address</th>
-                  <th className="p-2">Occurred At</th>
-                  <th className="p-2">Severity</th>
-                  <th className="p-2">Status</th>
+                <tr className="text-[12px] font-medium text-(--text-secondary) border-b border-(--border)">
+                  <th className="text-left p-2 font-bold">Event ID</th>
+                  <th className="text-left p-2 font-bold">Type</th>
+                  <th className="text-left p-2 font-bold">Source</th>
+                  <th className="p-2 font-bold">IP Address</th>
+                  <th className="p-2 font-bold">Occurred At</th>
+                  <th className="p-2 font-bold">Severity</th>
+                  <th className="p-2 font-bold">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -332,20 +279,20 @@ export default function AdminSecurity() {
             ) : (
               <table className="w-full text-[12px]">
                 <thead>
-                  <tr className="text-(--text-muted) border-b border-(--border)">
-                    <th className="text-left py-2">User</th>
-                    <th className="text-left py-2">Role</th>
-                    <th className="text-left py-2">Email</th>
-                    <th className="py-2">MFA</th>
-                    <th className="py-2">Action</th>
+                  <tr className="text-[12px] font-medium text-(--text-secondary) border-b border-(--border)">
+                    <th className="text-left py-2 font-bold">User</th>
+                    <th className="text-left py-2 font-bold">Role</th>
+                    <th className="text-left py-2 font-bold">Email</th>
+                    <th className="py-2 font-bold">MFA</th>
+                    <th className="py-2 font-bold">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {nonCompliantUsers.map((u) => (
                     <tr key={u.user_id} className="border-b border-(--border-subtle)">
-                      <td className="py-2 font-medium">{u.full_name}</td>
-                      <td className="py-2 text-(--text-secondary)">{ROLE_LABELS[u.role] ?? u.role}</td>
-                      <td className="py-2 font-mono text-(--text-muted)">{u.email}</td>
+                      <td className="py-2">{u.full_name}</td>
+                      <td className="py-2">{ROLE_LABELS[u.role] ?? u.role}</td>
+                      <td className="py-2">{u.email}</td>
                       <td className="py-2 text-center font-bold text-[10px]" style={{ color: 'var(--status-critical)' }}>NOT ENABLED</td>
                       <td className="py-2 text-center">
                         <button
@@ -366,7 +313,61 @@ export default function AdminSecurity() {
         )}
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-4">
+      <div className="dispatcher-surface p-4">
+        <div className="flex items-center gap-2 mb-4">
+          <Lock size={16} style={{ color: 'var(--status-critical)' }} />
+          <span className="font-semibold text-[14px]">
+            Locked Accounts{lockedLoading ? '' : ` — ${lockedUsers.length}`}
+          </span>
+        </div>
+        {lockedLoading ? (
+          <div className="text-[12px] text-(--text-muted) py-4">Loading locked accounts…</div>
+        ) : lockedUsers.length === 0 ? (
+          <p className="text-[12px] text-center py-4" style={{ color: 'var(--status-low)' }}>
+            ✓ No accounts are currently locked
+          </p>
+        ) : (
+          <table className="w-full text-[12px]">
+            <thead>
+              <tr className="text-[12px] font-medium text-(--text-secondary) border-b border-(--border)">
+                <th className="text-left py-2 font-bold">User</th>
+                <th className="text-left py-2 font-bold">Role</th>
+                <th className="text-left py-2 font-bold">District</th>
+                <th className="py-2 font-bold">Attempted IP</th>
+                <th className="py-2 font-bold">Locked At</th>
+                <th className="py-2 font-bold">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lockedUsers.map((u) => (
+                <tr key={u.user_id} className="border-b border-(--border-subtle)">
+                  <td className="py-2">
+                    <div className="font-medium">{u.full_name}</div>
+                    <div className="text-[11px] text-(--text-muted)">{u.email}</div>
+                  </td>
+                  <td className="py-2">{ROLE_LABELS[u.role] ?? u.role}</td>
+                  <td className="py-2">{u.district_name ?? '—'}</td>
+                  <td className="py-2 text-center font-mono">{u.attempted_ip ?? '—'}</td>
+                  <td className="py-2 text-center font-mono text-(--text-muted)">
+                    {u.locked_at ? new Date(u.locked_at).toLocaleString() : '—'}
+                  </td>
+                  <td className="py-2 text-center">
+                    <button
+                      type="button"
+                      className="dispatcher-btn-ghost text-[10px] h-7 inline-flex items-center gap-1"
+                      onClick={() => setUnlockId(u.user_id)}
+                    >
+                      <Unlock size={12} /> Unlock
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-4">
         <div className="dispatcher-surface p-4 flex-1 min-w-0">
           <div className="flex flex-wrap justify-between gap-2 mb-4">
             <span className="font-semibold text-[13px]">
@@ -381,49 +382,52 @@ export default function AdminSecurity() {
               Revoke All Sessions
             </button>
           </div>
+          <div className="relative w-56 mb-3">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-(--text-muted)" />
+            <input
+              type="text"
+              value={sessionSearch}
+              onChange={(e) => setSessionSearch(e.target.value)}
+              placeholder="Search by user, device, or IP…"
+              className="dispatcher-input h-8 w-full rounded-full pl-8 pr-3 text-[11px]"
+              style={{ borderRadius: 9999 }}
+            />
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-[12px] min-w-[640px]">
               <thead>
-                <tr className="text-(--text-muted) border-b border-(--border)">
-                  <th className="text-left p-2">User</th>
-                  <th className="p-2">Role</th>
-                  <th className="text-left p-2">Device</th>
-                  <th className="p-2">IP Address</th>
-                  <th className="p-2">Login</th>
-                  <th className="p-2">Action</th>
+                <tr className="text-[12px] font-medium text-(--text-secondary) border-b border-(--border)">
+                  <th className="text-left p-2 font-bold">User</th>
+                  <th className="p-2 font-bold">Role</th>
+                  <th className="text-left p-2 font-bold">Device IP</th>
+                  <th className="p-2 font-bold">Login</th>
+                  <th className="p-2 font-bold">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {sessionsLoading && (
-                  <tr><td colSpan={6} className="p-6 text-center text-(--text-muted)">Loading sessions…</td></tr>
+                  <tr><td colSpan={5} className="p-6 text-center text-(--text-muted)">Loading sessions…</td></tr>
                 )}
-                {!sessionsLoading && sessions.length === 0 && (
-                  <tr><td colSpan={6} className="p-6 text-center text-(--text-muted)">No active sessions in the last 24 h</td></tr>
+                {!sessionsLoading && filteredSessions.length === 0 && (
+                  <tr><td colSpan={5} className="p-6 text-center text-(--text-muted)">
+                    {sessions.length === 0 ? 'No active sessions in the last 24 h' : 'No sessions match your search.'}
+                  </td></tr>
                 )}
                 {pagedSessions.map((s) => {
-                  const rb = adminRoleBadge(s.user_role)
                   return (
                     <tr key={s.session_id} className="border-b border-(--border-subtle)">
                       <td className="p-2 font-medium">{s.user_name}</td>
+                      <td className="p-2 text-center">{ROLE_LABELS[s.user_role] ?? s.user_role}</td>
                       <td className="p-2">
-                        <span className="text-[10px] font-bold px-1.5 rounded" style={{ background: rb.bg, color: rb.color }}>{rb.label}</span>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[11px] font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
+                            {s.ip_address || 'Unknown IP'}
+                          </span>
+                          {s.device && (
+                            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{s.device}</span>
+                          )}
+                        </div>
                       </td>
-                      <td className="p-2">
-                        {(() => {
-                          const [browser, os] = (s.device ?? '').split(' · ')
-                          return (
-                            <div className="flex flex-col gap-0.5">
-                              {browser && (
-                                <span className="text-[11px] font-medium" style={{ color: 'var(--text-primary)' }}>{browser}</span>
-                              )}
-                              {os && (
-                                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{os}</span>
-                              )}
-                            </div>
-                          )
-                        })()}
-                      </td>
-                      <td className="p-2 font-mono">{s.ip_address}</td>
                       <td className="p-2 font-mono text-(--text-muted)">{s.start_time ? new Date(s.start_time).toLocaleString() : '—'}</td>
                       <td className="p-2">
                         {s.self ? (
@@ -470,158 +474,6 @@ export default function AdminSecurity() {
             </div>
           )}
         </div>
-
-        <div className="flex flex-col gap-4 lg:w-[45%] shrink-0">
-          {/* Password Policy */}
-          <div className="dispatcher-surface p-4">
-            <h3 className="text-[13px] font-semibold m-0 mb-3">Password Policy</h3>
-            {settingsLoading ? (
-              <div className="text-[12px] text-(--text-muted) py-2">Loading…</div>
-            ) : (
-              <>
-                <label className="flex justify-between items-center text-[12px] mb-2">
-                  <span>Minimum length</span>
-                  <input
-                    type="number"
-                    className="dispatcher-input h-9 w-16"
-                    value={policy.minPasswordLength}
-                    min={8}
-                    max={32}
-                    onChange={(e) => setPolicy((p) => ({ ...p, minPasswordLength: Number(e.target.value) }))}
-                  />
-                </label>
-                <label className="flex justify-between items-center text-[12px] mb-2">
-                  <span>Failed attempts before lockout</span>
-                  <input
-                    type="number"
-                    className="dispatcher-input h-9 w-16"
-                    value={policy.maxFailedAttempts}
-                    min={3}
-                    max={10}
-                    onChange={(e) => setPolicy((p) => ({ ...p, maxFailedAttempts: Number(e.target.value) }))}
-                  />
-                </label>
-                <label className="flex items-center gap-2 text-[12px] mb-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={policy.complexityRequired}
-                    onChange={(e) => setPolicy((p) => ({ ...p, complexityRequired: e.target.checked }))}
-                  />
-                  Complexity required (uppercase, numbers, symbols)
-                </label>
-                <select
-                  className="dispatcher-input h-9 w-full text-[12px] mb-3"
-                  value={policy.passwordMaxAgeDays}
-                  onChange={(e) => setPolicy((p) => ({ ...p, passwordMaxAgeDays: Number(e.target.value) }))}
-                >
-                  {PASSWORD_MAX_AGE_OPTIONS.map((d) => (
-                    <option key={d} value={d}>{d} days maximum age</option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  className="dispatcher-btn-primary w-full text-[12px]"
-                  disabled={savingPolicy}
-                  onClick={handleSavePolicy}
-                >
-                  {savingPolicy ? 'Saving…' : 'Save Policy'}
-                </button>
-              </>
-            )}
-          </div>
-
-          {/* IP Allowlist */}
-          <div className="dispatcher-surface p-4">
-            <h3 className="text-[13px] font-semibold m-0">IP Allowlist</h3>
-            <p className="text-[12px] text-(--text-muted) m-0 mb-2">Restrict access to these network ranges only</p>
-            {settingsLoading ? (
-              <div className="text-[12px] text-(--text-muted) py-2">Loading…</div>
-            ) : (
-              <>
-                <label className="flex items-center gap-2 text-[12px] mb-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={ipAllowlistEnabled}
-                    onChange={(e) => handleToggleAllowlist(e.target.checked)}
-                  />
-                  Allowlist enforced: {ipAllowlistEnabled ? 'ON' : 'OFF'}
-                </label>
-                {ipRanges.map((ip) => (
-                  <div key={ip.range} className="flex justify-between items-center py-2 border-b border-(--border-subtle) text-[12px]">
-                    <span className="font-mono">{ip.range}</span>
-                    <span className="text-(--text-secondary)">{ip.label}</span>
-                    <button
-                      type="button"
-                      className="bg-transparent border-none cursor-pointer text-[14px] leading-none"
-                      style={{ color: 'var(--status-critical)' }}
-                      onClick={() => handleRemoveRange(ip.range)}
-                      disabled={savingIp}
-                    >×</button>
-                  </div>
-                ))}
-                {showAddRange ? (
-                  <div className="mt-3 flex flex-col gap-2">
-                    <input
-                      className="dispatcher-input h-9 text-[12px]"
-                      placeholder="CIDR range e.g. 197.243.0.0/16"
-                      value={newRange}
-                      onChange={(e) => setNewRange(e.target.value)}
-                    />
-                    <input
-                      className="dispatcher-input h-9 text-[12px]"
-                      placeholder="Label e.g. RNP Kigali HQ"
-                      value={newRangeLabel}
-                      onChange={(e) => setNewRangeLabel(e.target.value)}
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        className="dispatcher-btn-primary flex-1 text-[11px] h-8"
-                        onClick={handleAddRange}
-                        disabled={savingIp || !newRange.trim()}
-                      >
-                        {savingIp ? 'Saving…' : 'Add Range'}
-                      </button>
-                      <button
-                        type="button"
-                        className="dispatcher-btn-ghost text-[11px] h-8 px-3"
-                        onClick={() => { setShowAddRange(false); setNewRange(''); setNewRangeLabel('') }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    className="dispatcher-btn-ghost text-[11px] h-8 mt-2 w-full inline-flex items-center justify-center gap-1"
-                    onClick={() => setShowAddRange(true)}
-                  >
-                    <Plus size={12} /> Add IP Range
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-
-          {/* Encryption Status */}
-          <div className="dispatcher-surface p-4">
-            <h3 className="text-[13px] font-semibold m-0 mb-3">Encryption Status</h3>
-            {[
-              { label: 'Data at Rest', detail: 'AES-256 Encrypted · All databases' },
-              { label: 'Data in Transit', detail: 'TLS 1.3 · All API connections' },
-            ].map((e) => (
-              <div key={e.label} className="flex gap-2 items-start text-[12px] mb-2">
-                <Lock size={14} style={{ color: 'var(--status-low)' }} />
-                <div>
-                  <div className="font-medium">{e.label}</div>
-                  <div className="text-(--text-secondary)">{e.detail}</div>
-                </div>
-              </div>
-            ))}
-            <p className="font-mono text-[11px] text-(--text-muted) m-0">Last audit: May 1, 2026</p>
-          </div>
-        </div>
       </div>
 
       <ConfirmDangerModal
@@ -635,6 +487,15 @@ export default function AdminSecurity() {
         confirmLabel={revokeId === 'all' ? 'Revoke All' : 'Revoke Session'}
         onConfirm={handleConfirmRevoke}
         onCancel={() => !revoking && setRevokeId(null)}
+      />
+
+      <ConfirmDangerModal
+        open={unlockId !== null}
+        title="Unlock this account?"
+        message="The user will be able to log in again from the IP that triggered the lock — it will be added to their trusted IPs."
+        confirmLabel="Unlock Account"
+        onConfirm={handleConfirmUnlock}
+        onCancel={() => !unlocking && setUnlockId(null)}
       />
     </div>
   )

@@ -31,12 +31,17 @@ export default function FROnScene() {
   const assignment    = useFieldResponderStore((s) => s.assignment)
   const incidentId    = useFieldResponderStore((s) => s.incidentId)
   const otherDispatches = useFieldResponderStore((s) => s.assignment?.otherDispatches ?? EMPTY_DISPATCHES)
-  const showToast = useFieldResponderStore((s) => s.showToast)
+  // Lifted into the shared store (see fieldResponderStore.js) so this thread
+  // persists across Assignment → Navigation → OnScene instead of resetting to
+  // empty every time this component unmounts/remounts, and so messages sent
+  // before the responder even reached this screen (visible on FRAssignment)
+  // aren't lost.
+  const chatMessages = useFieldResponderStore((s) => s.dispatchMessages)
+  const addDispatchMessage = useFieldResponderStore((s) => s.addDispatchMessage)
   const [backupOpen, setBackupOpen] = useState(false)
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
   const [draft, setDraft] = useState('')
   const [elapsed, setElapsed] = useState(504)
-  const [chatMessages, setChatMessages] = useState([]) // real-time chat via WebSocket
   const dispatchId = assignment?.dispatch?.dispatch_id
   // Scoped by dispatch_id (this responder's own unit-assignment), not
   // incidentId — an incident-scoped topic would have shown every field
@@ -48,17 +53,17 @@ export default function FROnScene() {
     const unsub = subscribe(`/topic/dispatches/${dispatchId}/chat`, (msg) => {
       const now = new Date()
       const time = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-      setChatMessages((prev) => [...prev, {
+      addDispatchMessage({
         id: `ws-${Date.now()}-${Math.random()}`,
         type: 'text',
         from: msg.senderRole === 'FIELD_RESPONDER' ? 'officer' : 'dispatch',
         text: msg.text,
         senderName: msg.senderName,
         time: msg.timestamp ?? time,
-      }])
+      })
     })
     return unsub
-  }, [dispatchId])
+  }, [dispatchId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Audio comms state
   const [pttActive, setPttActive] = useState(false)

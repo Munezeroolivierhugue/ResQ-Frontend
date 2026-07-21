@@ -1,21 +1,31 @@
-const HINT_TONES = {
-  positive: 'dispatcher-metric-hint--positive',
-  neutral: 'dispatcher-metric-hint--neutral',
-  warning: 'dispatcher-metric-hint--warning',
-  critical: 'dispatcher-metric-hint--critical',
+// Same stat-tile design used on AdminDashboard/AdminStatCard: icon in a
+// tinted accent circle, big mono value, label below, colored hint text —
+// rolled out here so every portal that shares this component (Dispatcher,
+// Planner, Analyst, Ops Manager dashboards) matches the admin reference.
+const HINT_COLOR = {
+  positive: 'var(--status-low)',
+  neutral: 'var(--accent-dim)',
+  warning: 'var(--status-medium)',
+  critical: 'var(--status-critical)',
 }
 
 export default function MetricCard({ icon: Icon, label, value, hint, hintTone = 'neutral', className = '', children }) {
   return (
-    <div className={`dispatcher-metric-card ${className}`.trim()}>
+    <div className={`dispatcher-surface p-4 flex flex-col gap-3 ${className}`.trim()}>
       {Icon && (
-        <span className="dispatcher-metric-icon" aria-hidden>
-          <Icon size={16} />
-        </span>
+        <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: 'var(--accent-ghost)' }}>
+          <Icon size={17} style={{ color: 'var(--accent)' }} />
+        </div>
       )}
-      <div className="field-label mb-1">{label}</div>
-      <div className="dispatcher-metric-value">{value}</div>
-      {hint && <div className={HINT_TONES[hintTone] || HINT_TONES.neutral}>{hint}</div>}
+      <div className="flex flex-col gap-0.5">
+        <div className="font-mono text-[26px] font-bold leading-none text-(--text-primary)">{value}</div>
+        <div className="text-[12px] font-medium text-(--text-secondary)">{label}</div>
+        {hint && (
+          <div className="text-[11px] font-medium mt-0.5" style={{ color: HINT_COLOR[hintTone] || HINT_COLOR.neutral }}>
+            {hint}
+          </div>
+        )}
+      </div>
       {children}
     </div>
   )

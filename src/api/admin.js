@@ -103,3 +103,42 @@ export async function sendMfaReminderAll() {
   const { data } = await api.post('/api/admin/mfa-reminder')
   return data.data ?? data
 }
+
+function mapLockedUser(u) {
+  return {
+    user_id: u.userId,
+    full_name: u.fullName,
+    email: u.email,
+    role: u.role,
+    district_id: u.districtId,
+    district_name: u.districtName,
+    attempted_ip: u.attemptedIp,
+    locked_at: u.lockedAt,
+  }
+}
+
+export async function listLockedUsers() {
+  const { data } = await api.get('/api/admin/users/locked')
+  return (data.data ?? data).map(mapLockedUser)
+}
+
+export async function unlockUser(userId) {
+  const { data } = await api.post(`/api/admin/users/${userId}/unlock`)
+  return data.data ?? data
+}
+
+// District Commander equivalents — scoped server-side to the caller's own district.
+export async function listLockedUsersDc() {
+  const { data } = await api.get('/api/dc/users/locked')
+  return (data.data ?? data).map(mapLockedUser)
+}
+
+export async function unlockUserDc(userId) {
+  const { data } = await api.post(`/api/dc/users/${userId}/unlock`)
+  return data.data ?? data
+}
+
+export async function listDistrictUsersDc() {
+  const { data } = await api.get('/api/dc/users')
+  return data.data ?? data
+}

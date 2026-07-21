@@ -20,6 +20,7 @@ function transform(u) {
     current_vehicle_plate: u.currentVehiclePlate ?? null,
     current_vehicle_type: u.currentVehicleType ?? null,
     shift_type: u.shiftType ?? null,
+    photo_url: u.photoUrl ?? null,
   }
 }
 
@@ -74,6 +75,15 @@ export async function updateSelf(body) {
   }
   const { data } = await api.put('/api/users/me', payload)
   return transform(data.data ?? data)
+}
+
+export async function uploadProfilePhoto(file) {
+  const form = new FormData()
+  form.append('file', file)
+  const { data } = await api.post('/api/users/me/photo', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return (data.data ?? data).photoUrl
 }
 
 export async function inviteUser(body) {

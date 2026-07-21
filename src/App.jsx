@@ -38,7 +38,6 @@ import AdminInviteUser from './pages/admin/AdminInviteUser'
 import AdminUsers from './pages/admin/AdminUsers'
 import AdminUnits from './pages/admin/AdminUnits'
 import AdminAgencies from './pages/admin/AdminAgencies'
-import AdminSystemReport from './pages/admin/AdminSystemReport'
 import OpsManagerShell from './components/ops-manager/OpsManagerShell'
 import OpsManagerRoute from './components/layout/OpsManagerRoute'
 import OpsManagerDashboard from './pages/ops-manager/OpsManagerDashboard'
@@ -141,7 +140,7 @@ export default function App() {
             <Route path="users/invite" element={<AdminInviteUser />} />
             <Route path="units" element={<AdminUnits />} />
             <Route path="agencies" element={<AdminAgencies />} />
-            <Route path="system-report" element={<AdminSystemReport />} />
+            <Route path="system-report" element={<Navigate to="/admin/dashboard" replace />} />
             <Route path="help" element={<AdminHelp />} />
             <Route index element={<Navigate to="/admin/dashboard" replace />} />
           </Route>

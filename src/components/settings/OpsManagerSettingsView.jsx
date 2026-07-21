@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Sun,
@@ -18,9 +18,10 @@ import { useThemeStore } from "../../store/themeStore";
 import StatusBadge from "../dispatcher/StatusBadge";
 import { SettingsToggleRow, SettingsGroup } from "./SettingsToggle";
 import SettingsPasswordSection from "./SettingsPasswordSection";
+import SettingsTrustedIpsSection from "./SettingsTrustedIpsSection";
 import SettingsProfileSection from "./SettingsProfileSection";
 import SettingsNavLayout from "./SettingsNavLayout";
-import SettingsToast from "./SettingsToast";
+import { useToastStore } from "../../store/toastStore";
 const THEME_OPTIONS = [
   {
     id: "light",
@@ -47,26 +48,42 @@ const NAV = [
   { id: "security", label: "Security", icon: ShieldCheck },
 ];
 
+const OPS_TOGGLES_KEY = "resq-opsmanager-notification-prefs";
+const OPS_DEFAULT_TOGGLES = {
+  escalationCritical: true,
+  aiRecommendations: true,
+  dispatcherOverload: true,
+  mutualAid: true,
+  shiftHandover: true,
+  badgeSystem: true,
+};
+function loadOpsToggles() {
+  try {
+    const raw = localStorage.getItem(OPS_TOGGLES_KEY);
+    return raw ? { ...OPS_DEFAULT_TOGGLES, ...JSON.parse(raw) } : OPS_DEFAULT_TOGGLES;
+  } catch {
+    return OPS_DEFAULT_TOGGLES;
+  }
+}
+
 export default function OpsManagerSettingsView() {
   const { section: sectionParam } = useParams();
   const section = sectionParam || "profile";
   const navigate = useNavigate();
   const { theme, setTheme } = useThemeStore();
-  const [toast, setToast] = useState(false);
+  const pushToast = useToastStore((s) => s.pushToast);
   const [language, setLanguage] = useState("en");
   const [mfaEnabled, setMfaEnabled] = useState(false);
-  const [toggles, setToggles] = useState({
-    escalationCritical: true,
-    aiRecommendations: true,
-    dispatcherOverload: true,
-    mutualAid: true,
-    shiftHandover: true,
-    badgeSystem: true,
-  });
+  // Persisted to localStorage — was plain in-memory useState resetting to
+  // default on every reload.
+  const [toggles, setToggles] = useState(loadOpsToggles);
+
+  useEffect(() => {
+    localStorage.setItem(OPS_TOGGLES_KEY, JSON.stringify(toggles));
+  }, [toggles]);
 
   const flashToast = () => {
-    setToast(true);
-    setTimeout(() => setToast(false), 2500);
+    pushToast({ variant: "success", title: "Saved", message: "Settings updated" });
   };
 
   const setToggle = (key, val) => {
@@ -80,7 +97,6 @@ export default function OpsManagerSettingsView() {
       portalLabel="Configure your operations command preferences. Changes apply immediately on this terminal."
       basePath="/ops-manager/settings"
       navItems={NAV}
-      toast={<SettingsToast show={toast} />}
     >
       {section === "profile" && (
         <SettingsProfileSection
@@ -149,8 +165,11 @@ export default function OpsManagerSettingsView() {
           >
             Notification Settings
           </h2>
-          <p className="text-[13px] text-(--text-secondary) m-0 mb-4">
+          <p className="text-[13px] text-(--text-secondary) m-0 mb-1">
             Alerts for command oversight and escalations.
+          </p>
+          <p className="text-[11px] text-(--text-muted) italic m-0 mb-4">
+            Stored locally on this device — the actual notification chime is controlled by the speaker icon next to the bell, not these toggles.
           </p>
           <SettingsGroup title="Command Alerts">
             <SettingsToggleRow
@@ -262,6 +281,7 @@ export default function OpsManagerSettingsView() {
             Manage your account security.
           </p>
           <SettingsPasswordSection onSuccess={flashToast} />
+              <SettingsTrustedIpsSection onSuccess={flashToast} />
 
           <div
             className="mt-8 text-[11px] font-bold uppercase tracking-wider text-(--text-muted) mb-3"

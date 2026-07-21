@@ -22,6 +22,8 @@ function transform(v) {
     current_lng: v.currentLng,
     online: v.online,
     last_sync: v.lastSync,
+    assigned_responder_id: v.assignedResponderId ?? null,
+    assigned_responder_name: v.assignedResponderName ?? null,
   }
 }
 

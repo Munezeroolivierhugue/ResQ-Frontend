@@ -46,6 +46,7 @@ import { PLANNER_RECOMMENDATIONS, PLANNER_AI_INSIGHTS } from '../../data/mockPla
 import { getCurrentUser } from '../../utils/authSession'
 import { useNotificationsStore } from '../../store/notificationsStore'
 import { generateReport } from '../../api/reporting'
+import { useToastStore } from '../../store/toastStore'
 
 const WEEKLY_STATS = [
   ['Plans submitted', '7'],
@@ -78,15 +79,14 @@ export default function PlannerReports() {
   const [recFilter, setRecFilter] = useState('All')
   const [analysisLen, setAnalysisLen] = useState(0)
   const [saving, setSaving] = useState(false)
-  const [saveToast, setSaveToast] = useState(null)
   const assessmentRef = useRef(null)
   const notesRef = useRef(null)
   const addNotification = useNotificationsStore((s) => s.addNotification)
+  const pushToast = useToastStore((s) => s.pushToast)
 
   async function saveReport(isDraft) {
     if (saving) return
     setSaving(true)
-    setSaveToast(null)
     const currentUser = getCurrentUser()
     const now = new Date()
     const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
@@ -98,7 +98,7 @@ export default function PlannerReports() {
         period_end: now.toISOString(),
         content: assessmentRef.current?.value || notesRef.current?.value || '',
       })
-      setSaveToast(isDraft ? 'Draft saved.' : 'Report published.')
+      pushToast({ variant: 'success', title: 'Saved', message: isDraft ? 'Draft saved.' : 'Report published.' })
       if (!isDraft) {
         addNotification({
           id: 'notif-' + Math.random().toString(36).slice(2, 10),
@@ -111,7 +111,7 @@ export default function PlannerReports() {
         })
       }
     } catch {
-      setSaveToast('Failed to save. Please try again.')
+      pushToast({ variant: 'error', title: 'Save Failed', message: 'Failed to save. Please try again.' })
     } finally {
       setSaving(false)
     }
@@ -124,11 +124,6 @@ export default function PlannerReports() {
 
   return (
     <div className="portal-page flex flex-col gap-4 min-w-[1024px]">
-      {saveToast && (
-        <div className="fixed bottom-5 right-5 z-[9999] dispatcher-surface px-4 py-2.5 text-[13px] font-medium shadow-lg" style={{ borderLeft: '3px solid var(--accent)' }}>
-          {saveToast}
-        </div>
-      )}
       <PlannerPageHeader
         title="Reports & Recommendations"
         subtitle="Weekly analysis, tracking, and AI-detected insights."

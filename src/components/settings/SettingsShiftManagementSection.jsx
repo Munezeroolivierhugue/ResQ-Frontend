@@ -3,22 +3,30 @@ import { Link } from "react-router-dom";
 import { Clock, ClipboardList, ChevronRight } from "lucide-react";
 import { SettingsToggleRow } from "./SettingsToggle";
 import StatusBadge from "../dispatcher/StatusBadge";
+import { getMyProfile } from "../../api/users";
 
 const DISPATCHER_DEFAULTS = {
-  shiftStart: "08:00",
-  shiftEnd: "16:00",
   handoverReminder: "30",
   handoverDraft: true,
 };
 
 const OM_DEFAULTS = {
-  shiftStart: "08:00",
-  shiftEnd: "16:00",
   incomingReminder: "15",
   outgoingReminder: "45",
   draftHandover: true,
   draftReport: true,
   notifyDcOnSubmit: true,
+};
+
+// Shift hours are assigned by an Admin or District Commander (see the
+// "Shift Schedule" select in AdminUsers.jsx / DCUsers.jsx edit-user modals)
+// — a dispatcher/ops manager can no longer self-edit their own shift times
+// here, only view what was assigned to them.
+const SHIFT_LABELS = {
+  MORNING: "Morning · 07:00 – 15:00",
+  EVENING: "Evening · 15:00 – 23:00",
+  NIGHT: "Night · 23:00 – 07:00",
+  ROTATING: "Rotating / Not fixed",
 };
 
 function ShiftStatTile({ label, value, mono }) {
@@ -50,12 +58,15 @@ export default function SettingsShiftManagementSection({
   onSave,
 }) {
   const isOps = variant === "OPERATIONS_MANAGER";
-  const [shiftStart, setShiftStart] = useState(
-    isOps ? OM_DEFAULTS.shiftStart : DISPATCHER_DEFAULTS.shiftStart,
-  );
-  const [shiftEnd, setShiftEnd] = useState(
-    isOps ? OM_DEFAULTS.shiftEnd : DISPATCHER_DEFAULTS.shiftEnd,
-  );
+  const [shiftType, setShiftType] = useState(null);
+  useEffect(() => {
+    getMyProfile()
+      .then((u) => setShiftType(u.shift_type || null))
+      .catch(() => {});
+  }, []);
+  const shiftLabel = shiftType
+    ? (SHIFT_LABELS[shiftType] || shiftType)
+    : "Not yet assigned — contact your Admin or District Commander";
   const [handoverReminder, setHandoverReminder] = useState(
     DISPATCHER_DEFAULTS.handoverReminder,
   );
@@ -128,8 +139,8 @@ export default function SettingsShiftManagementSection({
         {isOps ? (
           <>
             <ShiftStatTile
-              label="Shift window"
-              value={`${shiftStart} – ${shiftEnd} · Today`}
+              label="Shift window (assigned)"
+              value={shiftLabel}
             />
             <ShiftStatTile
               label="Time on command"
@@ -142,8 +153,8 @@ export default function SettingsShiftManagementSection({
         ) : (
           <>
             <ShiftStatTile
-              label="Shift"
-              value={`${shiftStart} – ${shiftEnd} · Today`}
+              label="Shift (assigned)"
+              value={shiftLabel}
             />
             <ShiftStatTile label="Incidents handled today" value="14" />
             <ShiftStatTile
@@ -165,26 +176,9 @@ export default function SettingsShiftManagementSection({
         <span className="panel-title">Schedule</span>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-        <label className="settings-form-field dispatcher-field">
-          <span className="field-label">Shift start time</span>
-          <input
-            type="time"
-            className="dispatcher-input dispatcher-text-input w-full"
-            value={shiftStart}
-            onChange={(e) => setShiftStart(e.target.value)}
-          />
-        </label>
-        <label className="settings-form-field dispatcher-field">
-          <span className="field-label">Shift end time</span>
-          <input
-            type="time"
-            className="dispatcher-input dispatcher-text-input w-full"
-            value={shiftEnd}
-            onChange={(e) => setShiftEnd(e.target.value)}
-          />
-        </label>
-      </div>
+      <p className="text-[12px] text-(--text-muted) mb-4">
+        Shift hours are assigned by an Admin or District Commander and can&apos;t be changed here.
+      </p>
 
       {isOps ? (
         <>
@@ -253,8 +247,7 @@ export default function SettingsShiftManagementSection({
           >
             <StatusBadge label="NEXT HANDOVER" variant="active" />
             <span className="text-(--text-secondary)">
-              Incoming OM shift 16:00–00:00 · Outgoing briefing due by{" "}
-              {shiftEnd}
+              Outgoing briefing due before your assigned shift ends.
             </span>
           </div>
         </>

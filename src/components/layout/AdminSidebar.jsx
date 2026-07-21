@@ -11,7 +11,6 @@ import {
   LogOut,
   Siren,
   X,
-  FileBarChart,
   Truck,
   Building2,
 } from 'lucide-react'
@@ -20,7 +19,6 @@ import { useSidebarClasses } from '../../hooks/useSidebarClasses'
 import { logout, getRefreshToken } from '../../utils/authSession'
 import { logoutApi } from '../../api/auth'
 import { disconnect } from '../../lib/wsClient'
-import { listUsers } from '../../api/users'
 import { listSecurityEvents } from '../../api/admin'
 
 const USER_SETTINGS_PATHS = [
@@ -45,10 +43,9 @@ function isSettingsActive(item, pathname) {
 
 const SYSTEM = [
   { icon: LayoutDashboard, label: 'Dashboard',      href: '/admin/dashboard' },
-  { icon: Users,           label: 'User Management', href: '/admin/users',       badge: 'accent',   countKey: 'pendingInvites' },
+  { icon: Users,           label: 'Users', href: '/admin/users' },
   { icon: Truck,           label: 'Units',           href: '/admin/units' },
   { icon: Building2,       label: 'Agencies',        href: '/admin/agencies' },
-  { icon: FileBarChart,    label: 'System Report',   href: '/admin/system-report' },
   { icon: Plug,            label: 'Integrations',    href: '/admin/integrations' },
 ]
 
@@ -112,15 +109,9 @@ export default function AdminSidebar({ mobileOpen, onClose }) {
   const location = useLocation()
   const navigate = useNavigate()
   const sidebarClasses = useSidebarClasses(mobileOpen)
-  const [counts, setCounts] = useState({ pendingInvites: 0, securityAlerts: 0 })
+  const [counts, setCounts] = useState({ securityAlerts: 0 })
 
   useEffect(() => {
-    listUsers()
-      .then((users) => setCounts((c) => ({
-        ...c,
-        pendingInvites: users.filter((u) => u.status === 'PENDING' || u.status === 'INVITED').length,
-      })))
-      .catch(() => {})
     listSecurityEvents()
       .then((events) => setCounts((c) => ({
         ...c,

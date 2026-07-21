@@ -80,13 +80,19 @@ const ROLE_HREF = {
   },
 };
 
-export function resolveHref(type) {
+export function resolveHref(type, referenceId) {
   const role = getCurrentUser()?.role;
+  // FIELD_REPORT_SUBMITTED carries a real incidentId as referenceId — deep-link
+  // straight to that row on Pending Reports (it already supports scrolling to
+  // and highlighting a specific incident via route state, reused as-is).
+  if (type === "FIELD_REPORT_SUBMITTED" && referenceId && role === "DISPATCHER") {
+    return { pathname: "/dispatcher/pending-reports", state: { completedIncident: { incident_id: referenceId } } };
+  }
   return ROLE_HREF[role]?.[type] ?? null;
 }
 
-function getHref(type) {
-  return resolveHref(type);
+function getHref(type, referenceId) {
+  return resolveHref(type, referenceId);
 }
 
 function transform(n) {
@@ -98,7 +104,10 @@ function transform(n) {
     time: n.createdAt,
     read: n.read,
     priority: n.priority,
-    href: getHref(n.type),
+    href: getHref(n.type, n.referenceId),
+    referenceId: n.referenceId ?? null,
+    actorName: n.actorName ?? null,
+    actorPhotoUrl: n.actorPhotoUrl ?? null,
     details: null,
   };
 }

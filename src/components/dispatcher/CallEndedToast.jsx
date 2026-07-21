@@ -1,46 +1,22 @@
 import { useEffect } from 'react'
-import { CheckCircle } from 'lucide-react'
 import { useCallChannelStore } from '../../store/callChannelStore'
+import { useToastStore } from '../../store/toastStore'
 
-/** Auto-dismisses after 5s. Renders nothing when no ended call payload. */
+/**
+ * No longer renders its own bespoke toast markup — pushes into the shared
+ * toast stack (see toastStore.js / ToastStack.jsx) whenever a call-ended
+ * payload arrives, then clears it immediately (the shared store owns its
+ * own auto-dismiss timing).
+ */
 export default function CallEndedToast() {
   const { endedCallPayload, clearEndedPayload } = useCallChannelStore()
+  const pushToast = useToastStore((s) => s.pushToast)
 
   useEffect(() => {
     if (!endedCallPayload) return
-    const t = setTimeout(clearEndedPayload, 5000)
-    return () => clearTimeout(t)
-  }, [endedCallPayload, clearEndedPayload])
+    pushToast({ variant: 'success', title: 'Call Ended', message: 'Recording attached.' })
+    clearEndedPayload()
+  }, [endedCallPayload, clearEndedPayload, pushToast])
 
-  if (!endedCallPayload) return null
-
-  return (
-    <div
-      className="animate-fade-in-up"
-      style={{
-        position: 'fixed',
-        bottom: '2rem',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        zIndex: 300,
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '0.65rem',
-        padding: '0.75rem 1.25rem',
-        borderRadius: 10,
-        background: 'var(--status-low-bg)',
-        border: '1px solid var(--status-low)',
-        color: 'var(--status-low)',
-        fontSize: 13,
-        fontWeight: 600,
-        fontFamily: 'var(--font-body)',
-        boxShadow: 'var(--shadow-card)',
-        whiteSpace: 'nowrap',
-      }}
-      role="status"
-    >
-      <CheckCircle size={15} />
-      Call ended. Recording attached.
-    </div>
-  )
+  return null
 }

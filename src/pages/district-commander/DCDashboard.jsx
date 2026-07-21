@@ -20,7 +20,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { useThemeStore } from '../../store/themeStore'
-import MetricCard from '../../components/dispatcher/MetricCard'
+import AdminStatCard from '../../components/admin/AdminStatCard'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import DCPageHeader from '../../components/district-commander/DCPageHeader'
@@ -169,12 +169,12 @@ export default function DCDashboard() {
       )}
 
       <div className="portal-grid-kpi">
-        <MetricCard icon={AlertCircle} label="Total Incidents (This Month)" value={loading ? '—' : kpis.incidents} hintTone="warning" />
-        <MetricCard icon={Clock} label="Avg Response Time" value={loading ? '—' : kpis.responseTime} hint="Target: 12 min" hintTone="positive" />
-        <MetricCard icon={MapPin} label="Fleet Coverage" value={loading ? '—' : kpis.coverage} hintTone="positive" />
-        <MetricCard icon={CheckCircle} label="Resolution Rate" value={loading ? '—' : kpis.resolutionRate} hintTone="positive" />
-        <MetricCard icon={ChevronsUp} label="Escalations (This Month)" value={loading ? '—' : kpis.escalations} hintTone={kpis.escalations !== '0' ? 'warning' : 'neutral'} />
-        <MetricCard icon={Car} label="Units Operational" value={loading ? '—' : kpis.units} hintTone="neutral" />
+        <AdminStatCard icon={AlertCircle} label="Total Incidents (This Month)" value={loading ? '—' : kpis.incidents} />
+        <AdminStatCard icon={Clock} label="Avg Response Time" value={loading ? '—' : kpis.responseTime} sub="Target: 12 min" />
+        <AdminStatCard icon={MapPin} label="Fleet Coverage" value={loading ? '—' : kpis.coverage} />
+        <AdminStatCard icon={CheckCircle} label="Resolution Rate" value={loading ? '—' : kpis.resolutionRate} />
+        <AdminStatCard icon={ChevronsUp} label="Escalations (This Month)" value={loading ? '—' : kpis.escalations} />
+        <AdminStatCard icon={Car} label="Units Operational" value={loading ? '—' : kpis.units} />
       </div>
 
       <div className="portal-grid-2">
@@ -215,12 +215,12 @@ export default function DCDashboard() {
         </div>
         <table className="w-full min-w-[640px] text-left border-collapse text-[12px]">
           <thead>
-            <tr className="text-[10px] uppercase tracking-wide text-(--text-muted) border-b border-(--border-subtle)">
-              <th className="py-2 pr-3 font-semibold">Officer</th>
-              <th className="py-2 pr-3 font-semibold">Role</th>
-              <th className="py-2 pr-3 font-semibold">Shift Start</th>
-              <th className="py-2 pr-3 font-semibold">Status</th>
-              <th className="py-2 font-semibold">Notes</th>
+            <tr className="text-[12px] font-medium text-(--text-secondary) border-b border-(--border-subtle)">
+              <th className="py-2 pr-3 font-bold">Officer</th>
+              <th className="py-2 pr-3 font-bold text-center">Role</th>
+              <th className="py-2 pr-3 font-bold text-center">Shift Start</th>
+              <th className="py-2 pr-3 font-bold text-center">Status</th>
+              <th className="py-2 font-bold text-center">Notes</th>
             </tr>
           </thead>
           <tbody>
@@ -232,15 +232,15 @@ export default function DCDashboard() {
             )}
             {!loading && shifts.map((s) => (
               <tr key={s.shift_id} className="border-b border-(--border-subtle) last:border-0">
-                <td className="py-3 pr-3 text-(--text-primary) font-semibold">{s.user_name ?? '—'}</td>
-                <td className="py-3 pr-3 text-(--text-secondary)">{s.role_on_shift ?? '—'}</td>
-                <td className="py-3 pr-3 text-(--text-secondary)" style={{ fontFamily: 'var(--font-mono)' }}>
+                <td className="py-3 pr-3 font-medium text-[13px]">{s.user_name ?? '—'}</td>
+                <td className="py-3 pr-3 text-center">{s.role_on_shift ?? '—'}</td>
+                <td className="py-3 pr-3 text-center">
                   {s.shift_start ? new Date(s.shift_start).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
                 </td>
-                <td className="py-3 pr-3">
+                <td className="py-3 pr-3 text-center">
                   <StatusBadge label={s.status ?? 'ACTIVE'} variant={s.status === 'ACTIVE' ? 'resolved' : 'handover'} />
                 </td>
-                <td className="py-3 text-(--text-secondary) max-w-[320px] truncate" title={s.handover_notes}>
+                <td className="py-3 text-center max-w-[320px] truncate" title={s.handover_notes}>
                   {s.handover_notes}
                 </td>
               </tr>

@@ -135,7 +135,7 @@ export default function PlannerCoverage() {
             </div>
             <table className="w-full text-[12px] border-collapse min-w-[520px]">
               <thead>
-                <tr className="text-(--text-muted) text-left">
+                <tr className="text-(--text-secondary) font-bold text-left">
                   <th className="pb-2 font-medium">Zone</th>
                   <th className="pb-2 font-medium">Coverage</th>
                   <th className="pb-2 font-medium">Incidents (30d)</th>

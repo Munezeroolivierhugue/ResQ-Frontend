@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { MapPin, Play, Check, ChevronDown, Truck, Megaphone } from 'lucide-react'
 import { useFieldResponderStore } from '../../store/fieldResponderStore'
+import { useToastStore } from '../../store/toastStore'
 import { listVehicles } from '../../api/vehicles'
 import { getMyProfile } from '../../api/users'
 import { startShift } from '../../api/shifts'
@@ -27,7 +28,7 @@ export default function FRShiftStart() {
   const goAvailable   = useFieldResponderStore((s) => s.goAvailable)
   const setGpsActive  = useFieldResponderStore((s) => s.setGpsActive)
   const setVehicleId  = useFieldResponderStore((s) => s.setVehicleId)
-  const showToast     = useFieldResponderStore((s) => s.showToast)
+  const pushToast     = useToastStore((s) => s.pushToast)
 
   const user = getCurrentUser()
   const displayName = user?.full_name ?? user?.email ?? 'Field Responder'
@@ -106,7 +107,7 @@ export default function FRShiftStart() {
       if (vehicle) setVehicleId(vehicle)
       goAvailable()
     } catch {
-      showToast('Could not start shift — check your connection and try again.', 'critical')
+      pushToast({ variant: 'error', title: 'Shift Start Failed', message: 'Could not start shift — check your connection and try again.' })
     } finally {
       setStartingShift(false)
     }
@@ -199,11 +200,11 @@ export default function FRShiftStart() {
           <p className="fr-briefing-text">No advisories from your Ops Manager right now.</p>
         ) : (
           advisories.map((b) => (
-            <p key={b.broadcast_id} className="fr-briefing-text">
-              <strong>{b.priority}</strong> · {b.message}
-              <br />
+            <div key={b.broadcast_id} className="fr-briefing-text" style={{ marginBottom: '0.5rem' }}>
+              <div><strong>{b.priority}</strong></div>
+              <div>{(b.message ?? '').replace(/^INC-\d+:\s*/, '')}</div>
               <span className="text-(--text-muted)" style={{ fontSize: '11px' }}>{timeAgo(b.sent_at)}</span>
-            </p>
+            </div>
           ))
         )}
       </div>

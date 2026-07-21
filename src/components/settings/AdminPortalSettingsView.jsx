@@ -1,13 +1,14 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Sun, Moon, Palette, Check, ShieldCheck, Monitor, Bell, Languages, UserCircle } from 'lucide-react'
 import { useThemeStore } from '../../store/themeStore'
 import StatusBadge from '../dispatcher/StatusBadge'
 import SettingsPasswordSection from './SettingsPasswordSection'
+import SettingsTrustedIpsSection from './SettingsTrustedIpsSection'
 import SettingsProfileSection from './SettingsProfileSection'
 import SettingsNavLayout from './SettingsNavLayout'
-import SettingsToast from './SettingsToast'
 import { SettingsToggleRow, SettingsGroup } from './SettingsToggle'
+import { useToastStore } from '../../store/toastStore'
 
 const THEME_OPTIONS = [
   { id: 'light', label: 'Light mode', description: 'High-contrast command interface optimized for daylight operations centers.', icon: Sun },
@@ -22,30 +23,48 @@ const NAV = [
   { id: 'security', label: 'Security', icon: ShieldCheck },
 ]
 
+const NOTIFICATION_PREFS_KEY = 'resq-admin-notification-prefs'
+const DEFAULT_TOGGLES = {
+  newUserInvite: true,
+  inviteAccepted: true,
+  systemHealthCritical: true,
+  systemHealthWarning: true,
+  integrationDown: true,
+  integrationRestored: false,
+  securityLoginAnomaly: true,
+  securityMfaDisabled: true,
+  auditHighRisk: true,
+  auditBulkExport: false,
+}
+
+function loadStoredToggles() {
+  try {
+    const raw = localStorage.getItem(NOTIFICATION_PREFS_KEY)
+    return raw ? { ...DEFAULT_TOGGLES, ...JSON.parse(raw) } : DEFAULT_TOGGLES
+  } catch {
+    return DEFAULT_TOGGLES
+  }
+}
+
 export default function AdminPortalSettingsView() {
   const { section: sectionParam } = useParams()
   const section = sectionParam || 'profile'
   const { theme, setTheme } = useThemeStore()
-  const [toast, setToast] = useState(false)
+  const pushToast = useToastStore((s) => s.pushToast)
   const navigate = useNavigate()
   const [mfaEnabled, setMfaEnabled] = useState(false)
   const [language, setLanguage] = useState('en')
-  const [toggles, setToggles] = useState({
-    newUserInvite: true,
-    inviteAccepted: true,
-    systemHealthCritical: true,
-    systemHealthWarning: true,
-    integrationDown: true,
-    integrationRestored: false,
-    securityLoginAnomaly: true,
-    securityMfaDisabled: true,
-    auditHighRisk: true,
-    auditBulkExport: false,
-  })
+  // Persisted to localStorage (same "stored locally" pattern as the theme
+  // toggle above) — these were previously plain useState with no persistence
+  // at all, so every toggle silently reset back to its default on reload.
+  const [toggles, setToggles] = useState(loadStoredToggles)
+
+  useEffect(() => {
+    localStorage.setItem(NOTIFICATION_PREFS_KEY, JSON.stringify(toggles))
+  }, [toggles])
 
   const flashToast = () => {
-    setToast(true)
-    setTimeout(() => setToast(false), 2500)
+    pushToast({ variant: 'success', title: 'Saved', message: 'Settings updated' })
   }
 
   const setToggle = (key, val) => {
@@ -59,11 +78,11 @@ export default function AdminPortalSettingsView() {
       portalLabel="Configure your administration workspace preferences. Changes apply immediately on this terminal."
       basePath="/admin/settings"
       navItems={NAV}
-      toast={<SettingsToast show={toast} />}
     >
       {section === 'profile' && (
         <SettingsProfileSection
           onUserLoaded={(u) => setMfaEnabled(u.mfa_enabled)}
+          showShift={false}
         />
       )}
 
@@ -104,8 +123,11 @@ export default function AdminPortalSettingsView() {
           <h2 className="text-base font-bold m-0 mb-1" style={{ fontFamily: 'var(--font-display)' }}>
             Notification Settings
           </h2>
-          <p className="text-[13px] text-(--text-secondary) m-0 mb-4">
+          <p className="text-[13px] text-(--text-secondary) m-0 mb-1">
             Control which system events and alerts reach you as Super Admin.
+          </p>
+          <p className="text-[11px] text-(--text-muted) italic m-0 mb-4">
+            Stored locally on this device — these preferences aren't yet enforced by the backend, so every event above is still delivered regardless of these toggles.
           </p>
 
           <SettingsGroup title="User Provisioning">
@@ -223,6 +245,7 @@ export default function AdminPortalSettingsView() {
           <h2 className="text-base font-bold m-0 mb-1" style={{ fontFamily: 'var(--font-display)' }}>Security & Access</h2>
           <p className="text-[13px] text-(--text-secondary) m-0 mb-4">Manage your account security.</p>
           <SettingsPasswordSection onSuccess={flashToast} />
+              <SettingsTrustedIpsSection onSuccess={flashToast} />
 
           <div className="mt-8 text-[11px] font-bold uppercase tracking-wider text-(--text-muted) mb-3" style={{ fontFamily: 'var(--font-display)' }}>Active Sessions</div>
           {[

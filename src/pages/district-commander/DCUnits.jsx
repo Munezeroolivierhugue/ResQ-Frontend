@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { AlertTriangle } from 'lucide-react'
-import MetricCard from '../../components/dispatcher/MetricCard'
+import { AlertTriangle, Car, Gauge, ShieldAlert } from 'lucide-react'
+import AdminStatCard from '../../components/admin/AdminStatCard'
 import DCPageHeader from '../../components/district-commander/DCPageHeader'
 import { getDistrictCommanderDistrict } from '../../utils/districtCommanderSession'
 import { getPerformanceScoreStyle } from '../../data/mockDistrictCommanderData'
@@ -71,28 +71,23 @@ export default function DCUnits() {
       <DCPageHeader title="Unit Performance" eyebrow="District Commander" subtitle={district ? `All units assigned to ${district} District.` : 'All units in your district.'} />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <MetricCard label="Total Units" value={loading ? '—' : String(units.length)} />
-        <MetricCard label="Avg Performance Score" value={loading ? '—' : (avgScore != null ? `${avgScore}%` : '—')} />
-        <MetricCard
-          label="Units Needing Attention"
-          value={loading ? '—' : String(attention.length)}
-          hintTone={attention.length > 0 ? 'critical' : 'positive'}
-          className={attention.length > 0 ? 'border border-(--status-critical)' : ''}
-        />
+        <AdminStatCard icon={Car} label="Total Units" value={loading ? '—' : String(units.length)} />
+        <AdminStatCard icon={Gauge} label="Avg Performance Score" value={loading ? '—' : (avgScore != null ? `${avgScore}%` : '—')} />
+        <AdminStatCard icon={ShieldAlert} label="Units Needing Attention" value={loading ? '—' : String(attention.length)} />
       </div>
 
       <div className="dispatcher-surface table-scroll">
         <table className="w-full min-w-[960px] text-left border-collapse text-[12px]">
           <thead>
-            <tr className="text-[10px] uppercase tracking-wide text-(--text-muted) border-b border-(--border-subtle)">
-              <th className="py-2 px-3">Plate</th>
-              <th className="py-2 px-3">Type</th>
-              <th className="py-2 px-3">Agency</th>
-              <th className="py-2 px-3">Incidents</th>
-              <th className="py-2 px-3">Avg Response</th>
-              <th className="py-2 px-3">On-Time Rate</th>
-              <th className="py-2 px-3">Performance</th>
-              <th className="py-2 px-3">Status</th>
+            <tr className="text-[12px] font-medium text-(--text-secondary) border-b border-(--border-subtle)">
+              <th className="py-2 px-3 font-bold">Plate</th>
+              <th className="py-2 px-3 font-bold text-center">Type</th>
+              <th className="py-2 px-3 font-bold text-center">Agency</th>
+              <th className="py-2 px-3 font-bold text-center">Incidents</th>
+              <th className="py-2 px-3 font-bold text-center">Avg Response</th>
+              <th className="py-2 px-3 font-bold text-center">On-Time Rate</th>
+              <th className="py-2 px-3 font-bold text-center">Performance</th>
+              <th className="py-2 px-3 font-bold text-center">Status</th>
             </tr>
           </thead>
           <tbody>
@@ -108,14 +103,14 @@ export default function DCUnits() {
             {!loading && !error && units.map((u) => {
               const scoreStyle = u.score != null ? getPerformanceScoreStyle(u.score) : {}
               return (
-                <tr key={u.vehicle_id} className="border-b border-(--border-subtle)">
-                  <td className="py-3 px-3 font-mono font-bold text-(--accent)">{u.plate_number}</td>
-                  <td className="py-3 px-3">{u.vehicle_type}</td>
-                  <td className="py-3 px-3 text-(--text-secondary)">{u.agency_name ?? '—'}</td>
-                  <td className="py-3 px-3 font-mono">{u.perf?.incidents_resolved ?? '—'}</td>
-                  <td className="py-3 px-3 font-mono">{fmtTime(u.perf?.avg_response_time)}</td>
-                  <td className="py-3 px-3 font-mono">{fmtPct(u.perf?.on_time_rate)}</td>
-                  <td className="py-3 px-3">
+                <tr key={u.vehicle_id} className="border-b border-(--border-subtle) last:border-0">
+                  <td className="py-3 px-3 font-medium text-[13px]">{u.plate_number}</td>
+                  <td className="py-3 px-3 text-center">{u.vehicle_type}</td>
+                  <td className="py-3 px-3 text-center">{u.agency_name ?? '—'}</td>
+                  <td className="py-3 px-3 text-center">{u.perf?.incidents_resolved ?? '—'}</td>
+                  <td className="py-3 px-3 text-center">{fmtTime(u.perf?.avg_response_time)}</td>
+                  <td className="py-3 px-3 text-center">{fmtPct(u.perf?.on_time_rate)}</td>
+                  <td className="py-3 px-3 text-center">
                     {u.score != null ? (
                       <span className="inline-flex px-2 py-0.5 rounded text-[11px] font-bold font-mono" style={scoreStyle}>
                         {u.score}%
@@ -124,7 +119,7 @@ export default function DCUnits() {
                       <span className="text-(--text-muted) text-[11px]">—</span>
                     )}
                   </td>
-                  <td className="py-3 px-3 text-(--text-secondary) capitalize">{u.status}</td>
+                  <td className="py-3 px-3 text-center capitalize">{u.status}</td>
                 </tr>
               )
             })}

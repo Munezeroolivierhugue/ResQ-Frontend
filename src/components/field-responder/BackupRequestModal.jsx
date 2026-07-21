@@ -4,11 +4,12 @@ import BottomSheet, { BottomSheetClose } from './BottomSheet'
 import { FR_BACKUP_REASONS } from '../../data/mockFieldResponderData'
 import { requestBackup } from '../../api/backup-requests'
 import { useFieldResponderStore } from '../../store/fieldResponderStore'
+import { useToastStore } from '../../store/toastStore'
 
 const ICONS = { users: Users, shield: ShieldAlert, star: Star }
 
 export default function BackupRequestModal({ open, onClose }) {
-  const showToast = useFieldResponderStore((s) => s.showToast)
+  const pushToast = useToastStore((s) => s.pushToast)
   const incidentId = useFieldResponderStore((s) => s.incidentId)
   const vehicleId = useFieldResponderStore((s) => s.vehicleId)
   const [reason, setReason] = useState('')
@@ -26,12 +27,12 @@ export default function BackupRequestModal({ open, onClose }) {
         reason: reasonObj?.label || reason,
         notes: notes || null,
       })
-      showToast('Backup requested · Operations Manager notified', 'critical')
+      pushToast({ variant: 'error', title: 'Backup Requested', message: 'Operations Manager notified' })
       setReason('')
       setNotes('')
       onClose()
     } catch {
-      showToast('Could not send backup request — check your connection and try again.', 'critical')
+      pushToast({ variant: 'error', title: 'Backup Request Failed', message: 'Could not send backup request — check your connection and try again.' })
     } finally {
       setSubmitting(false)
     }

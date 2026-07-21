@@ -228,7 +228,7 @@ export default function MissedCalls() {
                   (col) => (
                     <th
                       key={col}
-                      className="px-4 py-2.5 text-left field-label border-b border-(--border) whitespace-nowrap"
+                      className="px-4 py-2.5 text-left text-[12px] font-bold text-(--text-secondary) border-b border-(--border) whitespace-nowrap"
                     >
                       {col}
                     </th>

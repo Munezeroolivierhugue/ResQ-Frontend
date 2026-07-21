@@ -17,6 +17,7 @@ import { listDistricts } from '../../api/districts'
 import { createDispatch } from '../../api/dispatches'
 import SearchableSelect from '../../components/ui/SearchableSelect'
 import { formatIncidentType } from '../../utils/incidentTypeLabels'
+import { useToastStore } from '../../store/toastStore'
 import 'leaflet/dist/leaflet.css'
 
 const SEV_COLOR    = { critical: '#E8354A', high: '#F07820', medium: '#D4A017', low: '#3DAA6A' }
@@ -302,7 +303,7 @@ export default function LiveDispatchMap() {
   // available vs. busy (radius/opacity) — it just never received busy units.
   const [allVehicles, setAllVehicles] = useState([])
   const [assignUnit, setAssignUnit] = useState(null)
-  const [assignToast, setAssignToast] = useState(null)
+  const pushToast = useToastStore((s) => s.pushToast)
 
   useEffect(() => {
     const t = setInterval(() => setLiveTime(new Date()), 30000)
@@ -337,8 +338,7 @@ export default function LiveDispatchMap() {
 
   const handleUnitAssigned = (unit, incident) => {
     setAssignUnit(null)
-    setAssignToast(`${unit.id} dispatched to ${incident.incident_ref}`)
-    setTimeout(() => setAssignToast(null), 4000)
+    pushToast({ variant: 'success', title: 'Unit Dispatched', message: `${unit.id} dispatched to ${incident.incident_ref}` })
     // Refresh so the unit's status/positions reflect the new dispatch
     listVehicles({ status: 'AVAILABLE' }).then(setVehicles).catch(() => {})
     listVehicles().then(setAllVehicles).catch(() => {})
@@ -512,15 +512,6 @@ export default function LiveDispatchMap() {
           onClose={() => setAssignUnit(null)}
           onAssigned={handleUnitAssigned}
         />
-      )}
-
-      {assignToast && (
-        <div
-          className="fixed bottom-6 right-6 z-[99999] px-4 py-2.5 rounded-lg text-[13px] font-semibold text-white"
-          style={{ background: 'var(--status-low, #3DAA6A)', boxShadow: '0 4px 12px rgba(0,0,0,0.3)', fontFamily: 'var(--font-display)' }}
-        >
-          {assignToast}
-        </div>
       )}
     </div>
   )

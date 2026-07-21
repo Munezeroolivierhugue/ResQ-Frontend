@@ -10,6 +10,7 @@ import {
   listMutualAidRequests,
   createMutualAidRequest,
 } from "../../api/mutualAid";
+import { useToastStore } from "../../store/toastStore";
 
 const DURATION_MINUTES = { "1h": 60, "2h": 120, "4h": 240, "Full shift": 480 };
 
@@ -86,11 +87,10 @@ function MutualAidPanel() {
   });
   const [submitted, setSubmitted] = useState(false);
   const [submitError, setSubmitError] = useState(null);
-  const [toast, setToast] = useState(null);
+  const pushToast = useToastStore((s) => s.pushToast);
 
-  const showToast = (msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3500);
+  const showToast = (msg, variant = "success") => {
+    pushToast({ variant, title: variant === "error" ? "Error" : "Mutual Aid", message: msg });
   };
 
   useEffect(() => {
@@ -126,14 +126,6 @@ function MutualAidPanel() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 relative">
-      {toast && (
-        <div
-          className="fixed top-20 right-6 z-50 max-w-sm px-4 py-3 rounded-lg border text-[13px] font-medium shadow-lg"
-          style={{ background: "var(--bg-surface)", borderColor: "var(--status-low)", color: "var(--status-low)" }}
-        >
-          {toast}
-        </div>
-      )}
       <div className="dispatcher-surface p-5">
         <SectionTitle title="Request Mutual Aid" />
         <p className="text-[12px] text-(--text-muted) m-0 mt-1">

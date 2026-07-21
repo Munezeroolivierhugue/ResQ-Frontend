@@ -6,6 +6,7 @@ import { Plus } from 'lucide-react'
 import { useThemeStore } from '../../store/themeStore'
 import MapInvalidateSize from '../../components/map/MapInvalidateSize'
 import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
+import FilterDropdown from '../../components/admin/FilterDropdown'
 import { getHotspots, getIncidentTimeDistribution } from '../../api/planning'
 import { listDistricts } from '../../api/districts'
 import { heatmapFill } from '../../data/mockPlannerData'
@@ -77,25 +78,18 @@ export default function PlannerHotspots() {
       />
 
       <div className="flex flex-wrap gap-2 items-center mb-2">
-        <select
-          className="dispatcher-input h-9 w-40 text-[12px]"
+        <FilterDropdown
+          label="All Districts"
           value={districtId}
-          onChange={(e) => setDistrictId(e.target.value)}
-        >
-          <option value="">All Districts</option>
-          {districts.map((d) => (
-            <option key={d.district_id} value={d.district_id}>{d.name}</option>
-          ))}
-        </select>
-        <select
-          className="dispatcher-input h-9 w-[150px] text-[12px]"
+          onChange={setDistrictId}
+          options={[{ value: '', label: 'All Districts' }, ...districts.map((d) => ({ value: d.district_id, label: d.name }))]}
+        />
+        <FilterDropdown
+          label="All Types"
           value={incidentType}
-          onChange={(e) => setIncidentType(e.target.value)}
-        >
-          {INCIDENT_TYPES.map((t) => (
-            <option key={t} value={t}>{t === 'All Types' ? t : t.replace(/_/g, ' ')}</option>
-          ))}
-        </select>
+          onChange={setIncidentType}
+          options={INCIDENT_TYPES.map((t) => ({ value: t, label: t === 'All Types' ? t : t.replace(/_/g, ' ') }))}
+        />
         <div className="flex flex-wrap gap-2 ml-auto">
           {PERIODS.map((p) => (
             <button

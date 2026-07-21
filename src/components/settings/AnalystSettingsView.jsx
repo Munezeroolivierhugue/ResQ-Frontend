@@ -1,12 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Sun, Moon, Palette, Bell, ShieldCheck, UserCircle, Languages, Check, Monitor } from 'lucide-react'
 import StatusBadge from '../dispatcher/StatusBadge'
 import { useThemeStore } from '../../store/themeStore'
 import SettingsNavLayout from './SettingsNavLayout'
-import SettingsToast from './SettingsToast'
 import SettingsProfileSection from './SettingsProfileSection'
+import { useToastStore } from '../../store/toastStore'
 import SettingsPasswordSection from './SettingsPasswordSection'
+import SettingsTrustedIpsSection from './SettingsTrustedIpsSection'
 import { SettingsToggleRow, SettingsGroup } from './SettingsToggle'
 
 const THEME_OPTIONS = [
@@ -22,24 +23,40 @@ const NAV = [
   { id: 'security', label: 'Security', icon: ShieldCheck },
 ]
 
+const ANALYST_TOGGLES_KEY = 'resq-analyst-notification-prefs'
+const ANALYST_DEFAULT_TOGGLES = {
+  anomalyAlerts: true,
+  dataQuality: true,
+  modelDrift: true,
+  reportDue: true,
+}
+function loadAnalystToggles() {
+  try {
+    const raw = localStorage.getItem(ANALYST_TOGGLES_KEY)
+    return raw ? { ...ANALYST_DEFAULT_TOGGLES, ...JSON.parse(raw) } : ANALYST_DEFAULT_TOGGLES
+  } catch {
+    return ANALYST_DEFAULT_TOGGLES
+  }
+}
+
 export default function AnalystSettingsView() {
   const { section: sectionParam } = useParams()
   const section = sectionParam || 'profile'
   const navigate = useNavigate()
   const { theme, setTheme } = useThemeStore()
-  const [toast, setToast] = useState(false)
+  const pushToast = useToastStore((s) => s.pushToast)
   const [language, setLanguage] = useState('en')
   const [mfaEnabled, setMfaEnabled] = useState(false)
-  const [toggles, setToggles] = useState({
-    anomalyAlerts: true,
-    dataQuality: true,
-    modelDrift: true,
-    reportDue: true,
-  })
+  // Persisted to localStorage — was plain in-memory useState resetting to
+  // default on every reload.
+  const [toggles, setToggles] = useState(loadAnalystToggles)
+
+  useEffect(() => {
+    localStorage.setItem(ANALYST_TOGGLES_KEY, JSON.stringify(toggles))
+  }, [toggles])
 
   const flashToast = () => {
-    setToast(true)
-    setTimeout(() => setToast(false), 2500)
+    pushToast({ variant: 'success', title: 'Saved', message: 'Settings updated' })
   }
 
   const setToggle = (key, val) => {
@@ -53,7 +70,6 @@ export default function AnalystSettingsView() {
       portalLabel="Configure your analyst workspace preferences."
       basePath="/analyst/settings"
       navItems={NAV}
-      toast={<SettingsToast show={toast} />}
     >
       {section === 'profile' && (
         <SettingsProfileSection
@@ -62,7 +78,11 @@ export default function AnalystSettingsView() {
       )}
       {section === 'appearance' && (
         <div className="settings-section-card dispatcher-surface p-5 w-full">
-          <h2 className="text-base font-bold m-0 mb-4">Appearance</h2>
+          <div className="flex items-center gap-2 mb-1">
+            <Palette size={16} color="var(--accent)" />
+            <span className="text-sm font-bold tracking-[0.04em]" style={{ fontFamily: 'var(--font-display)' }}>APPEARANCE</span>
+          </div>
+          <p className="text-[12px] text-(--text-muted) m-0 mb-4">Select your preferred interface theme for the RESQ portal.</p>
           <div className="settings-theme-grid">
             {THEME_OPTIONS.map((opt) => {
               const Icon = opt.icon
@@ -84,15 +104,23 @@ export default function AnalystSettingsView() {
               )
             })}
           </div>
+          <p className="settings-theme-status">Active theme: <strong>{theme.toUpperCase()}</strong> · Stored locally</p>
         </div>
       )}
       {section === 'notifications' && (
-        <SettingsGroup title="Intelligence alerts">
-          <SettingsToggleRow label="Anomaly detection alerts" on={toggles.anomalyAlerts} onChange={(v) => setToggle('anomalyAlerts', v)} />
-          <SettingsToggleRow label="Data quality degradation" on={toggles.dataQuality} onChange={(v) => setToggle('dataQuality', v)} />
-          <SettingsToggleRow label="AI model drift warnings" on={toggles.modelDrift} onChange={(v) => setToggle('modelDrift', v)} />
-          <SettingsToggleRow label="Report due reminders" on={toggles.reportDue} onChange={(v) => setToggle('reportDue', v)} />
-        </SettingsGroup>
+        <div className="settings-section-card dispatcher-surface p-5 w-full">
+          <h2 className="text-base font-bold m-0 mb-1" style={{ fontFamily: 'var(--font-display)' }}>Notification Settings</h2>
+          <p className="text-[13px] text-(--text-secondary) m-0 mb-1">Control which analyst alerts reach you.</p>
+          <p className="text-[11px] text-(--text-muted) italic m-0 mb-4">
+            Stored locally on this device — the actual notification chime is controlled by the speaker icon next to the bell, not these toggles.
+          </p>
+          <SettingsGroup title="Intelligence alerts">
+            <SettingsToggleRow label="Anomaly detection alerts" on={toggles.anomalyAlerts} onChange={(v) => setToggle('anomalyAlerts', v)} />
+            <SettingsToggleRow label="Data quality degradation" on={toggles.dataQuality} onChange={(v) => setToggle('dataQuality', v)} />
+            <SettingsToggleRow label="AI model drift warnings" on={toggles.modelDrift} onChange={(v) => setToggle('modelDrift', v)} />
+            <SettingsToggleRow label="Report due reminders" on={toggles.reportDue} onChange={(v) => setToggle('reportDue', v)} />
+          </SettingsGroup>
+        </div>
       )}
       {section === 'language' && (
         <div className="settings-section-card dispatcher-surface p-5 w-full">
@@ -120,6 +148,7 @@ export default function AnalystSettingsView() {
           <h2 className="text-base font-bold m-0 mb-1" style={{ fontFamily: 'var(--font-display)' }}>Security & Access</h2>
           <p className="text-[13px] text-(--text-secondary) m-0 mb-4">Manage your account security.</p>
           <SettingsPasswordSection onSuccess={flashToast} />
+              <SettingsTrustedIpsSection onSuccess={flashToast} />
 
           <div className="mt-8 text-[11px] font-bold uppercase tracking-wider text-(--text-muted) mb-3" style={{ fontFamily: 'var(--font-display)' }}>Active Sessions</div>
           {[

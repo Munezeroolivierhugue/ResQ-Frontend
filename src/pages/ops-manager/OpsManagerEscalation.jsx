@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { MapContainer, TileLayer, CircleMarker, Tooltip } from "react-leaflet";
-import { Building2, Megaphone, ChevronsUp, X } from "lucide-react";
+import { Building2, Megaphone, X } from "lucide-react";
 import { useThemeStore } from "../../store/themeStore";
 import RwandaBoundsEnforcer from "../../components/map/RwandaBoundsEnforcer";
 import {
@@ -10,14 +10,12 @@ import {
   RWANDA_MAX_ZOOM,
 } from "../../components/map/rwandaConstants";
 import StatusBadge from "../../components/dispatcher/StatusBadge";
-import VerticalTimeline from "../../components/dispatcher/VerticalTimeline";
 import {
   getEscalationDetail,
   OPS_AGENCIES,
 } from "../../data/mockOpsManagerData";
 import { createBroadcast } from "../../api/broadcasts";
 import { mockAgencyInvolvements } from "../../data/mockAgencyInvolvements";
-import { mockAuditLogs } from "../../data/mockAuditLogs";
 import { mockIncidents } from "../../data/mockIncidents";
 import { generateUuid } from "../../utils/formHelpers";
 import { getCurrentUser } from "../../utils/authSession";
@@ -26,7 +24,9 @@ import DispatchUnitsModal from "../../components/ops-manager/DispatchUnitsModal"
 import { getIncident } from "../../api/incidents";
 import { listDispatchesForIncident } from "../../api/dispatches";
 import { listVehicles } from "../../api/vehicles";
+import { getReportForIncident } from "../../api/fieldReports";
 import { formatIncidentType } from "../../utils/incidentTypeLabels";
+import { useToastStore } from "../../store/toastStore";
 import "leaflet/dist/leaflet.css";
 
 const NON_RNP_AGENCIES = OPS_AGENCIES.filter((a) => a.id !== "rnp");
@@ -42,15 +42,19 @@ export default function OpsManagerEscalation() {
   const { theme } = useThemeStore();
   const addNotification = useNotificationsStore((s) => s.addNotification);
   const detail = getEscalationDetail(incidentId);
-  const [elapsed, setElapsed] = useState(1542);
 
-  // The AI-reassessment/field-updates-timeline sections below are still
-  // built on mock detail data (getEscalationDetail always falls back to a
-  // generic sample incident for any ID it doesn't recognize, e.g. every
-  // real UUID this page is now actually linked with) — building those out
-  // for real (an actual AI reassessment engine, a real field-updates feed)
-  // is a bigger lift than this pass. The header identity, responding units,
-  // and map, however, now reflect the real incident/dispatches.
+  // Real field report for this incident, if one has been submitted yet —
+  // replaces a fabricated multi-event "field updates" timeline that never
+  // reflected anything an actual field responder wrote.
+  const [realReport, setRealReport] = useState(null);
+  const [reportChecked, setReportChecked] = useState(false);
+  useEffect(() => {
+    getReportForIncident(incidentId)
+      .then(setRealReport)
+      .catch(() => setRealReport(null))
+      .finally(() => setReportChecked(true));
+  }, [incidentId]);
+
   const [realIncident, setRealIncident] = useState(null);
   useEffect(() => {
     getIncident(incidentId).then(setRealIncident).catch(() => {});
@@ -60,6 +64,19 @@ export default function OpsManagerEscalation() {
   const incidentUuid = realIncident?.incident_id || incidentData?.incident_id || detail.id;
   const incidentRef = realIncident?.incident_ref || detail.id;
   const isClosed = realIncident?.status && TERMINAL_STATUSES.has(realIncident.status);
+
+  // Real elapsed time since the incident was actually called in — was a
+  // hardcoded useState(1542) ticking up from a fake starting point on every
+  // page load, regardless of how long the incident had actually been open.
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const startTime = realIncident?.call_time ? new Date(realIncident.call_time).getTime() : null;
+    if (!startTime || isClosed) return;
+    const tick = () => setElapsed(Math.max(0, Math.floor((Date.now() - startTime) / 1000)));
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [realIncident?.call_time, isClosed]);
 
   // Responding units were always the mock detail.units array regardless of
   // which real incident was open — every escalation showed the same fake
@@ -96,32 +113,16 @@ export default function OpsManagerEscalation() {
 
   // Dispatch modal state
   const [dispatchOpen, setDispatchOpen] = useState(false);
-  const [dispatchToast, setDispatchToast] = useState(null);
 
   // Notify agency state
   const [notifyOpen, setNotifyOpen] = useState(false);
   const [selectedAgency, setSelectedAgency] = useState(null);
 
-  // Escalate to DC state
-  const [dcEscalated, setDcEscalated] = useState(false);
-
-  // Local toast
-  const [toast, setToast] = useState(null);
-
-  useEffect(() => {
-    // Kept counting up forever even after the incident was actually closed
-    // by the dispatcher — this page had no idea the real incident's status
-    // had moved on, since it never checked it. Stop once we know it's done.
-    if (isClosed) return;
-    const t = setInterval(() => setElapsed((e) => e + 1), 1000);
-    return () => clearInterval(t);
-  }, [isClosed]);
-
-  useEffect(() => {
-    if (!toast) return undefined;
-    const t = setTimeout(() => setToast(null), 3500);
-    return () => clearTimeout(t);
-  }, [toast]);
+  const pushToast = useToastStore((s) => s.pushToast);
+  const setToast = (msg, variant = "success") => {
+    if (!msg) return;
+    pushToast({ variant, title: variant === "error" ? "Error" : "Escalation", message: msg });
+  };
 
   const formatElapsed = (s) => {
     const h = Math.floor(s / 3600);
@@ -143,7 +144,7 @@ export default function OpsManagerEscalation() {
         target_area: getCurrentUser()?.district_name ?? "ALL_UNITS",
       });
     } catch {
-      setToast("Could not send broadcast — check your connection and try again.");
+      setToast("Could not send broadcast — check your connection and try again.", "error");
       return;
     }
     setBroadcastMsg("");
@@ -154,7 +155,6 @@ export default function OpsManagerEscalation() {
 
   const handleNotifyAgency = () => {
     if (!selectedAgency) return;
-    const cu = getCurrentUser();
     mockAgencyInvolvements.push({
       involvement_id: generateUuid(),
       incident_id: incidentUuid,
@@ -177,49 +177,8 @@ export default function OpsManagerEscalation() {
     setToast(`${selectedAgency.name} notified`);
   };
 
-  const handleEscalateToBC = () => {
-    if (dcEscalated) return;
-    const cu = getCurrentUser();
-    const ts = new Date().toISOString();
-    mockAuditLogs.push({
-      log_id: generateUuid(),
-      user_id: cu?.user_id || "demo-user-uuid",
-      timestamp: ts,
-      action: `INCIDENT_ESCALATED_TO_DC: ${detail.id}`,
-      module: "OPERATIONS_MANAGER",
-      ip_address: null,
-      status: "SUCCESS",
-    });
-    addNotification({
-      id: `dc-${Date.now()}`,
-      type: "ESCALATION_TO_DC",
-      title: `Incident Escalated — ${detail.id}`,
-      desc: `${detail.type} escalated to District Commander by Ops Manager`,
-      time: "Just now",
-      read: false,
-      href: `/ops-manager/escalations/${detail.id}`,
-      target_role: "district_commander",
-      incident_id: incidentUuid,
-    });
-    setDcEscalated(true);
-    setToast("Escalated to District Commander");
-  };
-
   return (
     <div className="portal-page portal-split-60-40 min-h-full relative">
-      {toast && (
-        <div
-          className="fixed top-20 right-6 z-50 max-w-sm px-4 py-3 rounded-lg border text-[13px] font-medium shadow-lg"
-          style={{
-            background: "var(--bg-surface)",
-            borderColor: "var(--border)",
-            color: "var(--text-primary)",
-          }}
-        >
-          {toast}
-        </div>
-      )}
-
       <DispatchUnitsModal
         isOpen={dispatchOpen}
         incidentId={incidentUuid}
@@ -332,20 +291,6 @@ export default function OpsManagerEscalation() {
               )}
             </div>
           </div>
-          {!readOnly && (
-            <button
-              type="button"
-              className="dispatcher-btn-primary shrink-0 text-[11px]"
-              style={{
-                background: "var(--status-critical)",
-                color: "var(--text-on-accent)",
-              }}
-              onClick={handleEscalateToBC}
-              disabled={dcEscalated || isClosed}
-            >
-              {dcEscalated ? "ESCALATED ✓" : "ESCALATE TO DISTRICT COMMANDER"}
-            </button>
-          )}
         </div>
 
         <div
@@ -400,47 +345,45 @@ export default function OpsManagerEscalation() {
 
         <div className="dispatcher-surface p-4">
           <div className="font-bold text-[13px] mb-3">
-            Field Report — {detail.fieldReportUnit}
+            Field Report{realReport?.vehicle_plate ? ` — ${realReport.vehicle_plate}` : ""}
           </div>
-          <VerticalTimeline
-            events={detail.fieldUpdates.map((u, i) => ({
-              id: u.id,
-              time: u.time,
-              title: u.title,
-              description: u.description,
-              active: i === 0,
-            }))}
-          />
+          {!reportChecked && (
+            <p className="text-[12px] text-(--text-muted) m-0">Loading…</p>
+          )}
+          {reportChecked && !realReport && (
+            <p className="text-[12px] text-(--text-muted) m-0">No field report submitted yet.</p>
+          )}
+          {realReport && (
+            <div className="flex flex-col gap-2 text-[12px]">
+              <div className="flex justify-between">
+                <span className="text-(--text-secondary)">Scene status</span>
+                <span className="font-semibold">{realReport.scene_status ?? "—"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-(--text-secondary)">Persons involved</span>
+                <span className="font-semibold">{realReport.persons_involved ?? "—"}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-(--text-secondary)">Injuries</span>
+                <span className="font-semibold">{realReport.injuries ?? "—"}</span>
+              </div>
+              {realReport.description && (
+                <p className="text-(--text-secondary) m-0 pt-2 border-t border-(--border-subtle)">
+                  {realReport.description}
+                </p>
+              )}
+              {realReport.submitted_at && (
+                <span className="text-(--text-muted) text-[11px]">
+                  Submitted {new Date(realReport.submitted_at).toLocaleString()}
+                  {realReport.responder_name ? ` by ${realReport.responder_name}` : ""}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       <div className="flex flex-col gap-4 min-w-0">
-        <div className="dispatcher-surface p-4">
-          <div className="text-[10px] font-mono text-(--text-muted) uppercase tracking-wider mb-2">
-            AI REASSESSMENT — UPDATED {detail.reassessment.updated}
-          </div>
-          <StatusBadge
-            label={detail.reassessment.severity}
-            variant="critical"
-          />
-          <p className="text-[13px] text-(--text-secondary) mt-3 m-0">
-            <strong className="text-(--text-primary)">
-              Recommended additional units:
-            </strong>{" "}
-            {detail.reassessment.additionalUnits}
-          </p>
-          <p className="text-[13px] text-(--text-secondary) mt-2 m-0">
-            <strong className="text-(--text-primary)">
-              Predicted duration:
-            </strong>{" "}
-            {detail.reassessment.duration}
-          </p>
-          <p className="text-[13px] text-(--text-secondary) mt-2 m-0">
-            <strong className="text-(--text-primary)">Key risk:</strong>{" "}
-            {detail.reassessment.risk}
-          </p>
-        </div>
-
         {readOnly ? (
           <div
             className="p-3 rounded-lg text-[12px] text-center"
@@ -505,28 +448,6 @@ export default function OpsManagerEscalation() {
                 </button>
               </div>
             )}
-            <button
-              type="button"
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-[13px] border cursor-pointer"
-              style={{
-                border: dcEscalated
-                  ? "1px solid var(--status-low)"
-                  : "1px solid var(--status-critical)",
-                color: dcEscalated
-                  ? "var(--status-low)"
-                  : "var(--status-critical)",
-                background: dcEscalated
-                  ? "var(--status-low-bg)"
-                  : "var(--status-critical-bg)",
-              }}
-              onClick={handleEscalateToBC}
-              disabled={dcEscalated}
-            >
-              <ChevronsUp size={16} />{" "}
-              {dcEscalated
-                ? "Escalated to District Commander ✓"
-                : "Escalate to District Commander"}
-            </button>
           </div>
         )}
 

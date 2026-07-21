@@ -9,6 +9,7 @@ import { listIncidents } from '../../api/incidents'
 import { listBackupRequests, acknowledgeBackupRequest } from '../../api/backup-requests'
 import { getCurrentUser } from '../../utils/authSession'
 import { formatIncidentType } from '../../utils/incidentTypeLabels'
+import { useToastStore } from '../../store/toastStore'
 
 const TERMINAL_STATUSES = new Set(['RESOLVED', 'PENDING_REPORT', 'CLOSED'])
 
@@ -41,7 +42,7 @@ export default function OpsManagerEscalations() {
   const [backupRequests, setBackupRequests] = useState([])
   const [backupLoading, setBackupLoading] = useState(true)
   const [dispatchTarget, setDispatchTarget] = useState(null)
-  const [toast, setToast] = useState(null)
+  const pushToast = useToastStore((s) => s.pushToast)
   const districtId = getCurrentUser()?.district_id
 
   useEffect(() => {
@@ -72,9 +73,8 @@ export default function OpsManagerEscalations() {
       .finally(() => setBackupLoading(false))
   }, [districtId])
 
-  const showToast = (msg) => {
-    setToast(msg)
-    setTimeout(() => setToast(null), 3000)
+  const showToast = (msg, variant = 'success') => {
+    pushToast({ variant, title: variant === 'error' ? 'Error' : 'Escalations', message: msg })
   }
 
   const handleAcknowledge = async (req) => {
@@ -83,21 +83,12 @@ export default function OpsManagerEscalations() {
       setBackupRequests((prev) => prev.filter((r) => r.backup_id !== req.backup_id))
       showToast('Backup request acknowledged')
     } catch {
-      showToast('Could not acknowledge — try again')
+      showToast('Could not acknowledge — try again', 'error')
     }
   }
 
   return (
     <div className="portal-page relative">
-      {toast && (
-        <div
-          className="fixed top-20 right-6 z-[9999] max-w-sm px-4 py-3 rounded-lg border text-[13px] font-medium shadow-lg"
-          style={{ background: 'var(--bg-surface)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}
-        >
-          {toast}
-        </div>
-      )}
-
       <DispatchUnitsModal
         isOpen={!!dispatchTarget}
         incidentId={dispatchTarget?.incident_id}

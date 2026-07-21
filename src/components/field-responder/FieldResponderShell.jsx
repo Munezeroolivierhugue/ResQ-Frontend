@@ -1,7 +1,8 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import FieldResponderTopBar from './FieldResponderTopBar'
 import FieldResponderBottomNav from './FieldResponderBottomNav'
-import { useFieldResponderStore } from '../../store/fieldResponderStore'
+import AnnouncementPopup from '../layout/AnnouncementPopup'
+import ToastStack from '../layout/ToastStack'
 
 const TITLES = {
   '/field-responder/shift-start': 'Shift Status',
@@ -26,7 +27,6 @@ const FULLSCREEN_ROUTES = ['/field-responder/navigation']
 
 export default function FieldResponderShell() {
   const location = useLocation()
-  const toast = useFieldResponderStore((s) => s.toast)
   const path = location.pathname
   const isFullscreen = FULLSCREEN_ROUTES.some((p) => path.startsWith(p))
   const showTop = !isFullscreen
@@ -42,6 +42,10 @@ export default function FieldResponderShell() {
 
   return (
     <div className="fr-app field-responder-shell">
+      <div className="fixed top-4 right-4 z-[10001] flex flex-col gap-2 w-full max-w-sm">
+        <AnnouncementPopup />
+        <ToastStack />
+      </div>
       {showTop && <FieldResponderTopBar title={title} />}
       <main
         className={`fr-main field-responder-content${isFullscreen ? ' fr-main--fullscreen' : ''}${!showBottom ? ' fr-main--no-nav' : ''}`}
@@ -49,14 +53,6 @@ export default function FieldResponderShell() {
         <Outlet />
       </main>
       {showBottom && <FieldResponderBottomNav />}
-      {toast && (
-        <div
-          className={`fr-toast fr-toast--${toast.variant}`}
-          role="status"
-        >
-          {toast.message}
-        </div>
-      )}
     </div>
   )
 }

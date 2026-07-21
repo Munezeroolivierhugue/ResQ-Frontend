@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MapContainer, TileLayer, CircleMarker, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
-import { MapPin, Navigation, CloudRain } from 'lucide-react'
+import { MapPin, Navigation, CloudRain, MessageSquare } from 'lucide-react'
 import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
 import { RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../components/map/rwandaConstants'
 import FieldResponderProgressStrip from '../../components/field-responder/FieldResponderProgressStrip'
@@ -10,6 +10,8 @@ import { useFieldResponderStore } from '../../store/fieldResponderStore'
 import { formatIncidentType } from '../../utils/incidentTypeLabels'
 import { getVehicle } from '../../api/vehicles'
 import { getWeather } from '../../api/planning'
+import { subscribe, connect } from '../../lib/wsClient'
+import { getAccessToken } from '../../utils/authSession'
 import 'leaflet/dist/leaflet.css'
 
 const MAP_HEIGHT = '100vh'
@@ -89,10 +91,40 @@ export default function FRNavigation() {
   const markOnScene = useFieldResponderStore((s) => s.markOnScene)
   const assignment  = useFieldResponderStore((s) => s.assignment)
   const vehicleId   = useFieldResponderStore((s) => s.vehicleId)
+  const dispatchMessages   = useFieldResponderStore((s) => s.dispatchMessages)
+  const addDispatchMessage = useFieldResponderStore((s) => s.addDispatchMessage)
   const mapRef = useRef(null)
   const hasRealFixRef = useRef(false)
 
   const inc = assignment?.incident ?? null
+
+  // Same shared dispatcher<->responder chat thread as FRAssignment.jsx and
+  // FROnScene.jsx (via the store) — without a subscription here, a message
+  // sent by the dispatcher while the responder is en route (after accepting,
+  // before reaching the scene) would never be received at all, since this
+  // full-screen map view previously had no chat wiring whatsoever.
+  const navDispatchId = assignment?.dispatch?.dispatch_id
+  useEffect(() => {
+    if (!navDispatchId) return
+    const token = getAccessToken()
+    if (!token) return
+    connect(token)
+    const unsub = subscribe(`/topic/dispatches/${navDispatchId}/chat`, (msg) => {
+      const now = new Date()
+      const time = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+      addDispatchMessage({
+        id: `ws-${Date.now()}-${Math.random()}`,
+        type: 'text',
+        from: msg.senderRole === 'FIELD_RESPONDER' ? 'officer' : 'dispatch',
+        text: msg.text,
+        senderName: msg.senderName,
+        time: msg.timestamp ?? time,
+      })
+    })
+    return unsub
+  }, [navDispatchId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const latestDispatcherMessage = [...dispatchMessages].reverse().find((m) => m.from !== 'officer')
 
   // Real live weather for the incident's district — same OpenWeatherMap-backed
   // endpoint Operations Manager uses, so a responder knows before arriving if
@@ -252,6 +284,28 @@ export default function FRNavigation() {
       </div>
 
       <div className="fr-nav-top">
+        {latestDispatcherMessage && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '6px',
+              padding: '8px 12px',
+              marginBottom: '8px',
+              borderRadius: '8px',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border)',
+              color: 'var(--text-primary)',
+              fontSize: '12px',
+              fontWeight: 600,
+            }}
+          >
+            <MessageSquare size={16} className="text-(--accent)" style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
+            <span>
+              <span style={{ color: 'var(--accent)' }}>Dispatch:</span> {latestDispatcherMessage.text}
+            </span>
+          </div>
+        )}
         {weather?.hazard_level === 'HAZARDOUS' && !weather.stale && (
           <div
             style={{

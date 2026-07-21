@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Moon, LogOut, AlertCircle, Clock, CheckCircle2, Radio } from 'lucide-react'
 import { FR_OFFICER, FR_OUTSTANDING_REPORTS, FR_SHIFT_HISTORY } from '../../data/mockFieldResponderData'
 import { useFieldResponderStore } from '../../store/fieldResponderStore'
+import { useToastStore } from '../../store/toastStore'
 
 const STATS = [
   ['14', 'Incidents'],
@@ -24,7 +25,7 @@ const SHIFT_TIMELINE = [
 export default function FRShiftEnd() {
   const navigate = useNavigate()
   const endShift = useFieldResponderStore((s) => s.endShift)
-  const showToast = useFieldResponderStore((s) => s.showToast)
+  const pushToast = useToastStore((s) => s.pushToast)
   const hasActiveAssignment = useFieldResponderStore((s) => s.hasActiveAssignment)
   const assignmentStage = useFieldResponderStore((s) => s.assignmentStage)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -35,7 +36,7 @@ export default function FRShiftEnd() {
 
   const confirmEnd = () => {
     endShift()
-    showToast(`Shift ended · See you next time, ${FR_OFFICER.name.split(' ')[0]}`, 'success')
+    pushToast({ variant: 'success', title: 'Shift Ended', message: `See you next time, ${FR_OFFICER.name.split(' ')[0]}` })
     setConfirmOpen(false)
     navigate('/field-responder/shift-start')
   }
@@ -133,7 +134,7 @@ export default function FRShiftEnd() {
           disabled={reportBlocked}
           onClick={() => {
             if (assignmentBlocked) {
-              showToast('Cannot end shift with active assignment. Complete or transfer the current incident first.', 'critical')
+              pushToast({ variant: 'error', title: 'Cannot End Shift', message: 'Cannot end shift with active assignment. Complete or transfer the current incident first.' })
               return
             }
             setConfirmOpen(true)

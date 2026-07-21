@@ -4,10 +4,10 @@ import BottomSheet, { BottomSheetClose } from './BottomSheet'
 import { FR_FLAG_OPTIONS, FR_OFFICER } from '../../data/mockFieldResponderData'
 import { mockAuditLogs } from '../../data/mockAuditLogs'
 import { generateUuid } from '../../utils/formHelpers'
-import { useFieldResponderStore } from '../../store/fieldResponderStore'
+import { useToastStore } from '../../store/toastStore'
 
 export default function FlagIssueModal({ open, onClose }) {
-  const showToast = useFieldResponderStore((s) => s.showToast)
+  const pushToast = useToastStore((s) => s.pushToast)
   const [selected, setSelected] = useState('')
   const [notes, setNotes] = useState('')
 
@@ -22,7 +22,7 @@ export default function FlagIssueModal({ open, onClose }) {
       ip_address: null,
       status: 'SUCCESS',
     })
-    showToast('Flag submitted · Dispatcher notified', 'warning')
+    pushToast({ variant: 'warning', title: 'Flag Submitted', message: 'Dispatcher notified' })
     setSelected('')
     setNotes('')
     onClose()

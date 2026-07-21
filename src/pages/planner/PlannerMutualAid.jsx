@@ -3,6 +3,7 @@ import { Sparkles, Send, X, Truck } from 'lucide-react'
 import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import { listMutualAidRequests, recommendMutualAidSource, fulfillMutualAid, declineMutualAid } from '../../api/mutualAid'
+import { useToastStore } from '../../store/toastStore'
 
 function timeAgo(isoString) {
   const diffMin = Math.floor((Date.now() - new Date(isoString).getTime()) / 60000)
@@ -45,7 +46,7 @@ function RequestCard({ request, onResolved, showToast }) {
       showToast(`Unit sent for ${request.unit_type} request`)
       onResolved(request.request_id)
     } catch (err) {
-      showToast(err?.response?.data?.message ?? 'Could not send unit — please retry')
+      showToast(err?.response?.data?.message ?? 'Could not send unit — please retry', 'error')
     } finally {
       setActingVehicleId(null)
     }
@@ -58,7 +59,7 @@ function RequestCard({ request, onResolved, showToast }) {
       showToast('Request declined')
       onResolved(request.request_id)
     } catch {
-      showToast('Could not decline request — please retry')
+      showToast('Could not decline request — please retry', 'error')
     } finally {
       setSubmittingDecline(false)
     }
@@ -184,11 +185,10 @@ function RequestCard({ request, onResolved, showToast }) {
 export default function PlannerMutualAid() {
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
-  const [toast, setToast] = useState(null)
+  const pushToast = useToastStore((s) => s.pushToast)
 
-  function showToast(msg) {
-    setToast(msg)
-    setTimeout(() => setToast(null), 2500)
+  function showToast(msg, variant = 'success') {
+    pushToast({ variant, title: variant === 'error' ? 'Error' : 'Mutual Aid', message: msg })
   }
 
   useEffect(() => {
@@ -204,11 +204,6 @@ export default function PlannerMutualAid() {
 
   return (
     <div className="portal-page flex flex-col gap-5">
-      {toast && (
-        <div className="fixed bottom-5 right-5 z-[9999] dispatcher-surface px-4 py-2.5 text-[13px] font-medium shadow-lg" style={{ borderLeft: '3px solid var(--accent)' }}>
-          {toast}
-        </div>
-      )}
       <PlannerPageHeader
         title="Mutual Aid Requests"
         eyebrow="Emergency Planner"

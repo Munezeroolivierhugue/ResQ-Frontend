@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, X, Download, FileCheck } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X, Download, FileCheck, Search } from 'lucide-react'
 import { buildPdfHtml, openPdfWindow } from '../../utils/pdfExport'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
 import DCPageHeader from '../../components/district-commander/DCPageHeader'
+import FilterDropdown from '../../components/admin/FilterDropdown'
 import { listActiveShifts } from '../../api/shifts'
 import { listIncidents } from '../../api/incidents'
 import { getCurrentUser } from '../../utils/authSession'
@@ -155,63 +156,49 @@ export default function DCShiftReports() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-end gap-3 mb-4">
-        <label className="dispatcher-field flex-1 min-w-[12rem] max-w-sm mb-0">
-          <span className="field-label">Search</span>
+      <div className="flex flex-nowrap items-center gap-2 mb-4">
+        <div className="relative w-56 shrink-0">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-(--text-muted)" />
           <input
-            className="dispatcher-input dispatcher-text-input"
-            style={{ height: '40px' }}
-            placeholder="Officer name..."
+            type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search officer name…"
+            className="dispatcher-input h-8 w-full rounded-full pl-8 pr-3 text-[11px]"
+            style={{ borderRadius: 9999 }}
           />
-        </label>
-        <label className="dispatcher-field mb-0">
-          <span className="field-label">Status</span>
-          <select
-            className="dispatcher-input dispatcher-select"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>{s === 'All' ? 'All statuses' : s}</option>
-            ))}
-          </select>
-        </label>
-        <label className="dispatcher-field mb-0">
-          <span className="field-label">Role</span>
-          <select
-            className="dispatcher-input dispatcher-select"
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-          >
-            {roleOptions.map((r) => (
-              <option key={r} value={r}>{r === 'All' ? 'All roles' : r}</option>
-            ))}
-          </select>
-        </label>
-        <label className="dispatcher-field mb-0">
-          <span className="field-label">From</span>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
           <input
             type="date"
-            className="dispatcher-input dispatcher-text-input"
-            style={{ height: '40px' }}
+            style={{ width: 132 }}
+            className="dispatcher-input h-8 rounded-full px-3 text-[11px] shrink-0"
             value={dateFrom}
             max={dateTo || undefined}
             onChange={(e) => handleDateFromChange(e.target.value)}
           />
-        </label>
-        <label className="dispatcher-field mb-0">
-          <span className="field-label">To</span>
           <input
             type="date"
-            className="dispatcher-input dispatcher-text-input"
-            style={{ height: '40px' }}
+            style={{ width: 132 }}
+            className="dispatcher-input h-8 rounded-full px-3 text-[11px] shrink-0"
             value={dateTo}
             min={dateFrom || undefined}
             onChange={(e) => handleDateToChange(e.target.value)}
           />
-        </label>
+          <FilterDropdown
+            label="All Statuses"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={STATUS_OPTIONS.map((s) => ({ value: s, label: s === 'All' ? 'All statuses' : s }))}
+          />
+          <FilterDropdown
+            label="All Roles"
+            value={roleFilter}
+            onChange={setRoleFilter}
+            options={roleOptions.map((r) => ({ value: r, label: r === 'All' ? 'All roles' : r }))}
+            align="right"
+          />
+        </div>
       </div>
 
       {dateError && (
@@ -221,12 +208,12 @@ export default function DCShiftReports() {
       <div className="dispatcher-surface table-scroll">
         <table className="w-full min-w-[820px] text-left border-collapse text-[12px]">
           <thead>
-            <tr className="text-[10px] uppercase tracking-wide text-(--text-muted) border-b border-(--border-subtle)">
-              <th className="py-2 px-3 font-semibold">Officer</th>
-              <th className="py-2 px-3 font-semibold">Role</th>
-              <th className="py-2 px-3 font-semibold">Shift Start</th>
-              <th className="py-2 px-3 font-semibold">Status</th>
-              <th className="py-2 px-3 font-semibold">Action</th>
+            <tr className="text-[12px] font-medium text-(--text-secondary) border-b border-(--border-subtle)">
+              <th className="py-2 px-3 font-bold">Officer</th>
+              <th className="py-2 px-3 font-bold text-center">Role</th>
+              <th className="py-2 px-3 font-bold text-center">Shift Start</th>
+              <th className="py-2 px-3 font-bold text-center">Status</th>
+              <th className="py-2 px-3 font-bold text-center">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -242,13 +229,13 @@ export default function DCShiftReports() {
                 className="border-b border-(--border-subtle) last:border-0 cursor-pointer hover:bg-(--bg-elevated)/50"
                 onClick={() => setSelectedId(s.shift_id)}
               >
-                <td className="py-3 px-3 font-semibold text-(--text-primary)">{s.user_name ?? '—'}</td>
-                <td className="py-3 px-3 text-(--text-secondary)">{s.role_on_shift ?? '—'}</td>
-                <td className="py-3 px-3 font-mono text-(--text-secondary)">{fmtDateTime(s.shift_start)}</td>
-                <td className="py-3 px-3">
+                <td className="py-3 px-3 font-medium text-[13px]">{s.user_name ?? '—'}</td>
+                <td className="py-3 px-3 text-center">{s.role_on_shift ?? '—'}</td>
+                <td className="py-3 px-3 text-center">{fmtDateTime(s.shift_start)}</td>
+                <td className="py-3 px-3 text-center">
                   <StatusBadge label={s.status ?? '—'} variant={s.status === 'ACTIVE' ? 'resolved' : 'handover'} />
                 </td>
-                <td className="py-3 px-3">
+                <td className="py-3 px-3 text-center">
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setSelectedId(s.shift_id) }}

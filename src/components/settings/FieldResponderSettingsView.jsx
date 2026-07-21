@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import {
   Sun,
@@ -18,8 +18,9 @@ import { useThemeStore } from '../../store/themeStore'
 import StatusBadge from '../dispatcher/StatusBadge'
 import { SettingsToggleRow, SettingsGroup } from './SettingsToggle'
 import SettingsPasswordSection from './SettingsPasswordSection'
+import SettingsTrustedIpsSection from './SettingsTrustedIpsSection'
 import SettingsProfileSection from './SettingsProfileSection'
-import SettingsToast from './SettingsToast'
+import { useToastStore } from '../../store/toastStore'
 import { FR_OFFICER } from '../../data/mockFieldResponderData'
 import { useFieldResponderStore } from '../../store/fieldResponderStore'
 
@@ -47,6 +48,26 @@ export const FR_SETTINGS_NAV = [
   { id: 'security', label: 'Security', icon: ShieldCheck },
 ]
 
+const FR_TOGGLES_KEY = 'resq-fieldresponder-notification-prefs'
+const FR_DEFAULT_TOGGLES = {
+  newAssignment: true,
+  dispatcherMessages: true,
+  backupConfirm: true,
+  routeUpdates: true,
+  shiftEndReminder: true,
+  badgeSystem: true,
+  highPriorityOnly: false,
+  vibrationAlerts: true,
+}
+function loadFrToggles() {
+  try {
+    const raw = localStorage.getItem(FR_TOGGLES_KEY)
+    return raw ? { ...FR_DEFAULT_TOGGLES, ...JSON.parse(raw) } : FR_DEFAULT_TOGGLES
+  } catch {
+    return FR_DEFAULT_TOGGLES
+  }
+}
+
 export default function FieldResponderSettingsView() {
   const { section: sectionParam } = useParams()
   const navigate = useNavigate()
@@ -54,23 +75,19 @@ export default function FieldResponderSettingsView() {
   const { theme, setTheme } = useThemeStore()
   const gpsActive = useFieldResponderStore((s) => s.gpsActive)
   const setGpsActive = useFieldResponderStore((s) => s.setGpsActive)
-  const [toast, setToast] = useState(false)
+  const pushToast = useToastStore((s) => s.pushToast)
   const [language, setLanguage] = useState('en')
   const [mfaEnabled, setMfaEnabled] = useState(false)
-  const [toggles, setToggles] = useState({
-    newAssignment: true,
-    dispatcherMessages: true,
-    backupConfirm: true,
-    routeUpdates: true,
-    shiftEndReminder: true,
-    badgeSystem: true,
-    highPriorityOnly: false,
-    vibrationAlerts: true,
-  })
+  // Persisted to localStorage — was plain in-memory useState with no
+  // persistence at all, resetting to default on every reload.
+  const [toggles, setToggles] = useState(loadFrToggles)
+
+  useEffect(() => {
+    localStorage.setItem(FR_TOGGLES_KEY, JSON.stringify(toggles))
+  }, [toggles])
 
   const flashToast = () => {
-    setToast(true)
-    setTimeout(() => setToast(false), 2500)
+    pushToast({ variant: 'success', title: 'Saved', message: 'Settings updated' })
   }
 
   const setToggle = (key, val) => {
@@ -87,7 +104,6 @@ export default function FieldResponderSettingsView() {
         Back to Profile
       </Link>
       <h2 className="fr-settings-heading">{sectionLabel}</h2>
-      <SettingsToast show={toast} />
 
       {section === 'profile' && (
         <SettingsProfileSection
@@ -153,8 +169,11 @@ export default function FieldResponderSettingsView() {
           <h2 className="text-base font-bold m-0 mb-1" style={{ fontFamily: 'var(--font-display)' }}>
             Notification Settings
           </h2>
-          <p className="text-[13px] text-(--text-secondary) m-0 mb-4">
+          <p className="text-[13px] text-(--text-secondary) m-0 mb-1">
             Alerts for assignments and dispatcher communications.
+          </p>
+          <p className="text-[11px] text-(--text-muted) italic m-0 mb-4">
+            Stored locally on this device — the actual notification chime is controlled by the speaker icon next to the bell, not these toggles.
           </p>
           <SettingsGroup title="Assignments">
             <SettingsToggleRow
@@ -296,6 +315,7 @@ export default function FieldResponderSettingsView() {
           </h2>
           <p className="text-[13px] text-(--text-secondary) m-0 mb-4">Manage your account security.</p>
           <SettingsPasswordSection onSuccess={flashToast} />
+              <SettingsTrustedIpsSection onSuccess={flashToast} />
 
           <div
             className="mt-8 text-[11px] font-bold uppercase tracking-wider text-(--text-muted) mb-3"

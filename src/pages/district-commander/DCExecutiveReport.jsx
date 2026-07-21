@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Download, Send, Check } from 'lucide-react'
+import { Download, Send, Check, Siren, Clock, CheckCircle2, Car, MapPin } from 'lucide-react'
 import { buildPdfHtml, openPdfWindow, sectionHtml } from '../../utils/pdfExport'
 
 function exportPDF({ periodLabel, periodStart, periodEnd, districtName, draftReport, assessment, recommendations, generatedBy }) {
@@ -32,7 +32,7 @@ function exportPDF({ periodLabel, periodStart, periodEnd, districtName, draftRep
     generatedRole: 'District Commander',
   }))
 }
-import MetricCard from '../../components/dispatcher/MetricCard'
+import AdminStatCard from '../../components/admin/AdminStatCard'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import DCPageHeader from '../../components/district-commander/DCPageHeader'
 import { listReports, generateReport, submitReport } from '../../api/reporting'
@@ -40,6 +40,7 @@ import { listIncidents } from '../../api/incidents'
 import { listVehicles } from '../../api/vehicles'
 import { getCurrentUser } from '../../utils/authSession'
 import { getDistrictCommanderDistrict } from '../../utils/districtCommanderSession'
+import { useToastStore } from '../../store/toastStore'
 
 function fmtRespTime(minutes) {
   if (minutes == null) return '—'
@@ -78,7 +79,7 @@ export default function DCExecutiveReport() {
   const [draftReport, setDraftReport] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
-  const [toast, setToast] = useState(null)
+  const pushToast = useToastStore((s) => s.pushToast)
 
   // Real incident data for the current period, used to build the incident
   // type breakdown and significant events sections below — no mock rows.
@@ -86,9 +87,8 @@ export default function DCExecutiveReport() {
   const [incidentsLoading, setIncidentsLoading] = useState(true)
   const [coverageRatio, setCoverageRatio] = useState(null)
 
-  function showToast(msg) {
-    setToast(msg)
-    setTimeout(() => setToast(null), 2500)
+  function showToast(msg, variant = 'success') {
+    pushToast({ variant, title: variant === 'error' ? 'Error' : 'Executive Report', message: msg })
   }
 
   useEffect(() => {
@@ -183,7 +183,7 @@ export default function DCExecutiveReport() {
       showToast('Report submitted to the Analyst')
       listReports('EXECUTIVE', districtId).then(setArchive).catch(() => {})
     } catch {
-      showToast('Submission failed — please try again')
+      showToast('Submission failed — please try again', 'error')
     } finally {
       setSubmitting(false)
     }
@@ -193,12 +193,6 @@ export default function DCExecutiveReport() {
 
   return (
     <div className="portal-page">
-      {toast && (
-        <div className="fixed bottom-5 right-5 z-[9999] dispatcher-surface px-4 py-2.5 text-[13px] font-medium shadow-lg" style={{ borderLeft: '3px solid var(--accent)' }}>
-          {toast}
-        </div>
-      )}
-
       <DCPageHeader title="Executive Report" subtitle="Monthly performance report submitted to the Analyst." />
 
       <div className="flex gap-2 mb-6 border-b border-(--border) pb-2">
@@ -279,11 +273,11 @@ export default function DCExecutiveReport() {
               {incidentsLoading ? 'Loading live district data…' : 'Live metrics from this period’s real incidents — updates automatically, no action needed.'}
             </p>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <MetricCard label="Incidents" value={incidentsLoading ? '—' : String(liveMetrics.total)} hintTone="warning" />
-              <MetricCard label="Avg Response" value={incidentsLoading ? '—' : fmtRespTime(liveMetrics.avgResponse)} hintTone="positive" />
-              <MetricCard label="Resolution Rate" value={incidentsLoading || liveMetrics.resolutionRate == null ? '—' : `${Math.round(liveMetrics.resolutionRate * 100)}%`} hintTone="positive" />
-              <MetricCard label="Unit Availability" value={coverageRatio != null ? `${coverageRatio}%` : '—'} hintTone="positive" />
-              <MetricCard label="District" value={districtName ?? '—'} hintTone="neutral" />
+              <AdminStatCard icon={Siren} label="Incidents" value={incidentsLoading ? '—' : String(liveMetrics.total)} />
+              <AdminStatCard icon={Clock} label="Avg Response" value={incidentsLoading ? '—' : fmtRespTime(liveMetrics.avgResponse)} />
+              <AdminStatCard icon={CheckCircle2} label="Resolution Rate" value={incidentsLoading || liveMetrics.resolutionRate == null ? '—' : `${Math.round(liveMetrics.resolutionRate * 100)}%`} />
+              <AdminStatCard icon={Car} label="Unit Availability" value={coverageRatio != null ? `${coverageRatio}%` : '—'} />
+              <AdminStatCard icon={MapPin} label="District" value={districtName ?? '—'} />
             </div>
           </section>
 
@@ -291,11 +285,11 @@ export default function DCExecutiveReport() {
             <h2 className="text-[13px] font-bold m-0 mb-3">Incident Analysis</h2>
             <table className="w-full min-w-[520px] text-[12px] border-collapse">
               <thead>
-                <tr className="text-[10px] uppercase text-(--text-muted) border-b border-(--border-subtle)">
-                  <th className="text-left py-2 pr-3">Type</th>
-                  <th className="text-left py-2 pr-3">Count</th>
-                  <th className="text-left py-2 pr-3">Avg Response</th>
-                  <th className="text-left py-2">Resolution Rate</th>
+                <tr className="text-[12px] font-medium text-(--text-secondary) border-b border-(--border-subtle)">
+                  <th className="text-left py-2 pr-3 font-bold">Type</th>
+                  <th className="text-center py-2 pr-3 font-bold">Count</th>
+                  <th className="text-center py-2 pr-3 font-bold">Avg Response</th>
+                  <th className="text-center py-2 font-bold">Resolution Rate</th>
                 </tr>
               </thead>
               <tbody>
@@ -306,11 +300,11 @@ export default function DCExecutiveReport() {
                   <tr><td colSpan={4} className="py-4 text-center text-(--text-muted)">No incidents recorded this period.</td></tr>
                 )}
                 {!incidentsLoading && incidentTypeBreakdown.map((row) => (
-                  <tr key={row.type} className="border-b border-(--border-subtle)">
-                    <td className="py-2 pr-3">{row.type}</td>
-                    <td className="py-2 pr-3 font-mono">{row.count}</td>
-                    <td className="py-2 pr-3 font-mono">{row.avgResponse}</td>
-                    <td className="py-2 font-mono">{row.resolution}</td>
+                  <tr key={row.type} className="border-b border-(--border-subtle) last:border-0">
+                    <td className="py-2 pr-3 font-medium text-[13px]">{row.type}</td>
+                    <td className="py-2 pr-3 text-center">{row.count}</td>
+                    <td className="py-2 pr-3 text-center">{row.avgResponse}</td>
+                    <td className="py-2 text-center">{row.resolution}</td>
                   </tr>
                 ))}
               </tbody>
@@ -328,7 +322,7 @@ export default function DCExecutiveReport() {
                 {significantEvents.map((ev, idx) => (
                   <li key={idx} className="dispatcher-timeline-item border-l-2 border-(--accent) pl-3">
                     <div className="text-[11px] font-mono text-(--accent)">{ev.date}</div>
-                    <div className="text-[12px] text-(--text-secondary) mt-0.5">{ev.text}</div>
+                    <div className="text-[12px] text-(--text-primary) mt-0.5" style={{ fontFamily: 'var(--font-body)' }}>{ev.text}</div>
                   </li>
                 ))}
               </ul>
@@ -336,8 +330,8 @@ export default function DCExecutiveReport() {
           </section>
 
           <section className="dispatcher-surface p-4">
-            <label className="dispatcher-field">
-              <span className="field-label">Your strategic assessment (required)</span>
+            <label className="dispatcher-field ">
+              <span className="field-label " style={{ fontSize: '12px', color: 'var(--text-primary)', fontFamily: 'var(--font-body)' }}>Your strategic assessment (required)</span>
               <textarea
                 className="dispatcher-input dispatcher-textarea"
                 style={{ minHeight: '150px' }}
@@ -352,7 +346,7 @@ export default function DCExecutiveReport() {
 
           <section className="dispatcher-surface p-4">
             <label className="dispatcher-field">
-              <span className="field-label">Recommendations</span>
+              <span className="field-label" style={{ fontSize: '12px', color: 'var(--text-primary)', fontFamily: 'var(--font-body)' }}>Recommendations</span>
               <textarea
                 className="dispatcher-input dispatcher-textarea"
                 style={{ minHeight: '100px' }}
@@ -387,11 +381,11 @@ export default function DCExecutiveReport() {
         <div className="dispatcher-surface table-scroll">
           <table className="w-full min-w-[480px] text-[12px] border-collapse">
             <thead>
-              <tr className="text-[10px] uppercase text-(--text-muted) border-b border-(--border-subtle)">
-                <th className="text-left py-2 px-3">Period</th>
-                <th className="text-left py-2 px-3">Submitted</th>
-                <th className="text-left py-2 px-3">Status</th>
-                <th className="text-left py-2 px-3">Action</th>
+              <tr className="text-[12px] font-medium text-(--text-secondary) border-b border-(--border-subtle)">
+                <th className="text-left py-2 px-3 font-bold">Period</th>
+                <th className="text-center py-2 px-3 font-bold">Submitted</th>
+                <th className="text-center py-2 px-3 font-bold">Status</th>
+                <th className="text-center py-2 px-3 font-bold">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -402,15 +396,15 @@ export default function DCExecutiveReport() {
                 <tr><td colSpan={4} className="py-6 text-center text-[13px] text-(--text-muted)">No executive reports submitted yet.</td></tr>
               )}
               {!archiveLoading && archive.map((row) => (
-                <tr key={row.report_id} className="border-b border-(--border-subtle)">
-                  <td className="py-3 px-3 font-semibold">
+                <tr key={row.report_id} className="border-b border-(--border-subtle) last:border-0">
+                  <td className="py-3 px-3 font-medium text-[13px]">
                     {row.period_start ? `${row.period_start} – ${row.period_end ?? ''}` : '—'}
                   </td>
-                  <td className="py-3 px-3 text-(--text-secondary)">{fmtDate(row.submitted_at ?? row.generated_at)}</td>
-                  <td className="py-3 px-3">
+                  <td className="py-3 px-3 text-center">{fmtDate(row.submitted_at ?? row.generated_at)}</td>
+                  <td className="py-3 px-3 text-center">
                     <StatusBadge label={row.status ?? 'SUBMITTED'} variant="resolved" />
                   </td>
-                  <td className="py-3 px-3">
+                  <td className="py-3 px-3 text-center">
                     <button
                       type="button"
                       className="dispatcher-btn-ghost text-[11px]"

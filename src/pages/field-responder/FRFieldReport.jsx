@@ -6,6 +6,7 @@ import {
   FR_AGENCY_OPTIONS,
 } from '../../data/mockFieldResponderData'
 import { useFieldResponderStore } from '../../store/fieldResponderStore'
+import { useToastStore } from '../../store/toastStore'
 import { uploadAttachment } from '../../api/fieldReports'
 import { canFileFieldReports } from '../../utils/authSession'
 
@@ -38,7 +39,7 @@ function YesNoToggle({ value, onChange, label }) {
 export default function FRFieldReport() {
   const navigate = useNavigate()
   const submitReport = useFieldResponderStore((s) => s.submitReport)
-  const showToast = useFieldResponderStore((s) => s.showToast)
+  const pushToast = useToastStore((s) => s.pushToast)
   const assignmentIncident = useFieldResponderStore((s) => s.assignment?.incident)
 
   // Default to the dispatched incident's own type when known, rather than a
@@ -89,15 +90,15 @@ export default function FRFieldReport() {
         try {
           await uploadAttachment(saved.report_id, photoFile)
         } catch {
-          showToast('Report submitted, but the photo failed to upload.', 'critical')
+          pushToast({ variant: 'error', title: 'Photo Upload Failed', message: 'Report submitted, but the photo failed to upload.' })
           navigate('/field-responder/shift-start')
           return
         }
       }
-      showToast('Report submitted · Status: Available', 'success')
+      pushToast({ variant: 'success', title: 'Report Submitted', message: 'Status: Available' })
       navigate('/field-responder/shift-start')
     } catch {
-      showToast('Could not submit report — check your connection and try again.', 'critical')
+      pushToast({ variant: 'error', title: 'Submission Failed', message: 'Could not submit report — check your connection and try again.' })
     } finally {
       setSubmitting(false)
     }

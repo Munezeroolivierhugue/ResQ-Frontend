@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   Sun, Moon, Palette, Check, Bell, Map, Send, Clock, Languages,
@@ -8,10 +8,11 @@ import { useThemeStore } from '../../store/themeStore'
 import StatusBadge from '../dispatcher/StatusBadge'
 import { SettingsToggleRow, SettingsGroup } from './SettingsToggle'
 import SettingsPasswordSection from './SettingsPasswordSection'
+import SettingsTrustedIpsSection from './SettingsTrustedIpsSection'
 import SettingsProfileSection from './SettingsProfileSection'
 import SettingsNavLayout from './SettingsNavLayout'
-import SettingsToast from './SettingsToast'
 import SettingsShiftManagementSection from './SettingsShiftManagementSection'
+import { useToastStore } from '../../store/toastStore'
 
 const THEME_OPTIONS = [
   { id: 'light', label: 'Light mode', description: 'High-contrast command interface optimized for daylight operations centers.', icon: Sun },
@@ -39,31 +40,49 @@ const OVERRIDE_REASONS = [
   'Priority re-assessment',
 ]
 
+const DISPATCHER_TOGGLES_KEY = 'resq-dispatcher-notification-prefs'
+const DISPATCHER_DEFAULT_TOGGLES = {
+  soundCritical: true,
+  soundAi: true,
+  soundNew: false,
+  popupCritical: true,
+  popupAi: true,
+  popupUnit: false,
+  popupShift: true,
+  badgeSystem: true,
+  badgePerf: true,
+  trafficOverlay: true,
+  coverageRings: false,
+  aiAutoOpen: true,
+  dispatchFab: true,
+  handoverDraft: true,
+  muteAll: false,
+}
+function loadDispatcherToggles() {
+  try {
+    const raw = localStorage.getItem(DISPATCHER_TOGGLES_KEY)
+    return raw ? { ...DISPATCHER_DEFAULT_TOGGLES, ...JSON.parse(raw) } : DISPATCHER_DEFAULT_TOGGLES
+  } catch {
+    return DISPATCHER_DEFAULT_TOGGLES
+  }
+}
+
 export default function DispatcherSettingsView() {
   const { section: sectionParam } = useParams()
   const navigate = useNavigate()
   const section = sectionParam || 'profile'
   const { theme, setTheme } = useThemeStore()
-  const [toast, setToast] = useState(false)
+  const pushToast = useToastStore((s) => s.pushToast)
   const [mfaEnabled, setMfaEnabled] = useState(false)
 
-  const [toggles, setToggles] = useState({
-    soundCritical: true,
-    soundAi: true,
-    soundNew: false,
-    popupCritical: true,
-    popupAi: true,
-    popupUnit: false,
-    popupShift: true,
-    badgeSystem: true,
-    badgePerf: true,
-    trafficOverlay: true,
-    coverageRings: false,
-    aiAutoOpen: true,
-    dispatchFab: true,
-    handoverDraft: true,
-    muteAll: false,
-  })
+  // Persisted to localStorage (same fix already applied to Admin's settings
+  // this session) — these were plain useState with zero persistence, so
+  // every toggle silently reset back to default on reload.
+  const [toggles, setToggles] = useState(loadDispatcherToggles)
+
+  useEffect(() => {
+    localStorage.setItem(DISPATCHER_TOGGLES_KEY, JSON.stringify(toggles))
+  }, [toggles])
 
   const [mapDistrict, setMapDistrict] = useState('all')
   const [mapZoom, setMapZoom] = useState(12)
@@ -75,8 +94,7 @@ export default function DispatcherSettingsView() {
   const [toneMed, setToneMed] = useState('beep')
   const [overrideReasons, setOverrideReasons] = useState([])
   const flashToast = () => {
-    setToast(true)
-    setTimeout(() => setToast(false), 2500)
+    pushToast({ variant: 'success', title: 'Saved', message: 'Settings updated' })
   }
 
   const setToggle = (key, val) => {
@@ -99,7 +117,6 @@ export default function DispatcherSettingsView() {
       portalLabel="Configure your dispatcher workspace preferences. Changes apply immediately on this terminal."
       basePath="/dispatcher/settings"
       navItems={NAV}
-      toast={<SettingsToast show={toast} />}
     >
           {section === 'profile' && (
             <SettingsProfileSection
@@ -142,7 +159,10 @@ export default function DispatcherSettingsView() {
           {section === 'notifications' && (
             <div className="settings-section-card dispatcher-surface p-5 w-full">
               <h2 className="text-base font-bold m-0 mb-1" style={{ fontFamily: 'var(--font-display)' }}>Notification Settings</h2>
-              <p className="text-[13px] text-(--text-secondary) m-0 mb-4">Control how and when you are alerted.</p>
+              <p className="text-[13px] text-(--text-secondary) m-0 mb-1">Control how and when you are alerted.</p>
+              <p className="text-[11px] text-(--text-muted) italic m-0 mb-4">
+                Stored locally on this device — the actual notification chime is controlled by the speaker icon next to the bell, not these toggles.
+              </p>
               <SettingsGroup title="Alert Sounds">
                 <SettingsToggleRow label="Critical incidents (LEVEL 3+)" description="Play alarm sound for critical incidents" on={toggles.soundCritical} onChange={(v) => setToggle('soundCritical', v)} />
                 <SettingsToggleRow label="AI recommendation ready" description="Play chime when AI dispatch recommendation is ready" on={toggles.soundAi} onChange={(v) => setToggle('soundAi', v)} />
@@ -287,6 +307,7 @@ export default function DispatcherSettingsView() {
               <h2 className="text-base font-bold m-0 mb-1" style={{ fontFamily: 'var(--font-display)' }}>Security & Access</h2>
               <p className="text-[13px] text-(--text-secondary) m-0 mb-4">Manage your account security.</p>
               <SettingsPasswordSection onSuccess={flashToast} />
+              <SettingsTrustedIpsSection onSuccess={flashToast} />
 
               <div className="mt-8 text-[11px] font-bold uppercase tracking-wider text-(--text-muted) mb-3" style={{ fontFamily: 'var(--font-display)' }}>Active Sessions</div>
               <p className="text-[13px] font-medium mb-3">Devices with active sessions</p>

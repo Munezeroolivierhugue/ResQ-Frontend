@@ -21,7 +21,7 @@ import {
   ReferenceLine,
 } from 'recharts'
 import AnalystPageHeader from '../../components/analyst/AnalystPageHeader'
-import SettingsToast from '../../components/settings/SettingsToast'
+import { useToastStore } from '../../store/toastStore'
 import { getCurrentUser } from '../../utils/authSession'
 import { listReports, generateReport, submitReport } from '../../api/reporting'
 import { listIncidents } from '../../api/incidents'
@@ -60,7 +60,7 @@ export default function AnalystReports() {
   const [districts, setDistricts] = useState([])
   const [scopeDistrictId, setScopeDistrictId] = useState('') // '' = All Rwanda
   const [targetMinutes, setTargetMinutes] = useState(8)
-  const [toast, setToast] = useState('')
+  const pushToast = useToastStore((s) => s.pushToast)
   const [generating, setGenerating] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [preview, setPreview] = useState(null) // real generated report + computed breakdown/trend
@@ -83,9 +83,8 @@ export default function AnalystReports() {
     setDateTo(todayISO())
   }
 
-  function showToast(msg) {
-    setToast(msg)
-    setTimeout(() => setToast(''), 3000)
+  function showToast(msg, variant = 'info') {
+    pushToast({ variant, title: variant === 'error' ? 'Error' : 'Reports', message: msg })
   }
 
   async function handleGenerate() {
@@ -139,9 +138,9 @@ export default function AnalystReports() {
         : null
 
       setPreview({ report, districtBreakdown, trend, withinTargetPct, incidentCount: inWindow.length })
-      showToast('Report generated from real incident data.')
+      showToast('Report generated from real incident data.', 'success')
     } catch {
-      showToast('Failed to generate report — please try again.')
+      showToast('Failed to generate report — please try again.', 'error')
     } finally {
       setGenerating(false)
     }
@@ -154,9 +153,9 @@ export default function AnalystReports() {
       const submitted = await submitReport(preview.report.report_id)
       setPreview((p) => ({ ...p, report: submitted }))
       refreshLibrary()
-      showToast('Report submitted to the library.')
+      showToast('Report submitted to the library.', 'success')
     } catch {
-      showToast('Failed to submit report — please try again.')
+      showToast('Failed to submit report — please try again.', 'error')
     } finally {
       setSubmitting(false)
     }
@@ -198,7 +197,7 @@ export default function AnalystReports() {
     a.download = `${reportName.replace(/\s+/g, '_')}_${range.replace(/\s+/g, '_')}.csv`
     a.click()
     URL.revokeObjectURL(url)
-    showToast('CSV exported successfully.')
+    showToast('CSV exported successfully.', 'success')
   }
 
   function exportPDF() {
@@ -335,7 +334,6 @@ export default function AnalystReports() {
 
   return (
     <div className="flex flex-col min-w-[1024px] -mx-0">
-      {toast && <SettingsToast show={!!toast} message={toast} />}
       <div className="portal-page pb-0">
         <AnalystPageHeader
           title="Custom Report Builder"
@@ -473,7 +471,7 @@ export default function AnalystReports() {
                   <p className="text-[12px] text-(--text-muted) m-0">No incidents with a recorded response time in this period.</p>
                 ) : chartType === 'table' ? (
                   <table className="w-full text-[12px] border-collapse">
-                    <thead><tr className="text-(--text-muted) text-left"><th className="p-2">Day</th><th className="p-2">Avg Response</th></tr></thead>
+                    <thead><tr className="text-(--text-secondary) font-bold text-left"><th className="p-2">Day</th><th className="p-2">Avg Response</th></tr></thead>
                     <tbody>{trend.map((t) => <tr key={t.day} className="border-t border-(--border-subtle)"><td className="p-2">{t.day}</td><td className="p-2 font-mono">{t.avg}m</td></tr>)}</tbody>
                   </table>
                 ) : (
@@ -504,7 +502,7 @@ export default function AnalystReports() {
               <div className="dispatcher-surface overflow-x-auto mb-6">
                 <table className="w-full text-[12px] border-collapse min-w-[420px]">
                   <thead>
-                    <tr className="border-b border-(--border) text-(--text-muted)">
+                    <tr className="border-b border-(--border) text-(--text-secondary) font-bold">
                       <th className="text-left p-3">District</th>
                       <th className="text-left p-3">Avg Response</th>
                       <th className="text-left p-3">Incident Count</th>

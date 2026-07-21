@@ -225,7 +225,7 @@ export default function PendingReports() {
                 {['Incident', 'Type', 'District / Sector', 'Severity', 'Call Time', 'Elapsed', 'Unit', 'Action'].map((col) => (
                   <th
                     key={col}
-                    className="px-3.5 py-2.5 text-left field-label border-b border-(--border) whitespace-nowrap"
+                    className="px-3.5 py-2.5 text-left text-[12px] font-bold text-(--text-secondary) border-b border-(--border) whitespace-nowrap"
                   >
                     {col}
                   </th>

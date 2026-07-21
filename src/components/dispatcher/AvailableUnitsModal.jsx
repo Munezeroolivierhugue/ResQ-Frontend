@@ -4,6 +4,8 @@ import MutualAidRequestModal from './MutualAidRequestModal'
 import RequestAdditionalUnitModal from './RequestAdditionalUnitModal'
 import { useNotificationsStore } from '../../store/notificationsStore'
 import { listVehicles } from '../../api/vehicles'
+import { createMutualAidRequest } from '../../api/mutualAid'
+import { getCurrentUser } from '../../utils/authSession'
 
 function unitIcon(vehicleType) {
   const t = (vehicleType ?? '').toUpperCase()
@@ -17,6 +19,8 @@ export default function AvailableUnitsModal({ isOpen, onClose, onSelectUnit }) {
   const [isMutualAidModalOpen, setIsMutualAidModalOpen] = useState(false)
   const [isAdditionalUnitModalOpen, setIsAdditionalUnitModalOpen] = useState(false)
   const [units, setUnits] = useState([])
+  const [mutualAidSubmitting, setMutualAidSubmitting] = useState(false)
+  const [mutualAidError, setMutualAidError] = useState(null)
   const addNotification = useNotificationsStore((state) => state.addNotification)
 
   useEffect(() => {
@@ -28,17 +32,37 @@ export default function AvailableUnitsModal({ isOpen, onClose, onSelectUnit }) {
 
   if (!isOpen && !isMutualAidModalOpen && !isAdditionalUnitModalOpen) return null
 
-  const handleAskMutualAid = (payload) => {
-    if (addNotification) {
-      addNotification({
-        id: `ma-esc-${Date.now()}`,
-        type: 'mutual_aid_escalation',
-        title: `ESCALATION: Mutual Aid requested`,
-        time: 'Just now',
-        read: false,
-        href: '#ops-manager-escalation',
-        details: payload
+  const handleAskMutualAid = async (payload) => {
+    const districtId = getCurrentUser()?.district_id
+    setMutualAidSubmitting(true)
+    setMutualAidError(null)
+    try {
+      // Real persisted request, routed to the Emergency Planner to pick a
+      // donor district — previously this only ever fired a local,
+      // in-memory notification and never reached the backend at all.
+      await createMutualAidRequest({
+        requesting_district_id: districtId,
+        unit_type: payload.unitType,
+        quantity: payload.quantity,
+        duration: payload.duration,
+        reason: payload.reason,
       })
+      if (addNotification) {
+        addNotification({
+          id: `ma-esc-${Date.now()}`,
+          type: 'mutual_aid_escalation',
+          title: 'Mutual Aid Requested',
+          time: 'Just now',
+          read: false,
+          href: '#ops-manager-escalation',
+          details: payload,
+        })
+      }
+      setIsMutualAidModalOpen(false)
+    } catch {
+      setMutualAidError('Could not submit mutual aid request — please try again.')
+    } finally {
+      setMutualAidSubmitting(false)
     }
   }
 
@@ -134,10 +158,12 @@ export default function AvailableUnitsModal({ isOpen, onClose, onSelectUnit }) {
         </div>
       )}
 
-      <MutualAidRequestModal 
-        isOpen={isMutualAidModalOpen} 
-        onClose={() => setIsMutualAidModalOpen(false)} 
+      <MutualAidRequestModal
+        isOpen={isMutualAidModalOpen}
+        onClose={() => setIsMutualAidModalOpen(false)}
         onAsk={handleAskMutualAid}
+        submitting={mutualAidSubmitting}
+        error={mutualAidError}
       />
 
       <RequestAdditionalUnitModal

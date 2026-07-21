@@ -82,13 +82,22 @@ export const useFieldResponderStore = create(
       messages: [...mockUnifiedComms],
       reportSubmitted: false,
       outstandingReports: [],
-      toast: null,
       sessionUserId: null,    // whose account this persisted state belongs to — see checkSessionOwner()
+      // Chat messages tied to the CURRENT assignment's dispatch (dispatcher <-> responder).
+      // Previously this lived only as local component state inside FROnScene.jsx, so any
+      // message the dispatcher sent while the responder was still on the Assignment/
+      // Navigation screens (i.e. before reaching FROnScene, and in particular before
+      // accepting) was never received by anything subscribed, and the thread reset to
+      // empty every time the responder navigated away and back. Lifting it into the store
+      // makes it a single shared, persistent thread across Assignment → Navigation → OnScene.
+      dispatchMessages: [],
 
       setVehicleId: (vehicleId) => set({ vehicleId }),
       setIncidentId: (incidentId) => set({ incidentId }),
       setAssignment: (assignment) => set({ assignment }),
       setGpsActive: (gpsActive) => set({ gpsActive }),
+      addDispatchMessage: (msg) => set((s) => ({ dispatchMessages: [...s.dispatchMessages, msg] })),
+      clearDispatchMessages: () => set({ dispatchMessages: [] }),
 
       goAvailable: async () => {
         const { vehicleId } = get()
@@ -233,6 +242,7 @@ export const useFieldResponderStore = create(
           dutyStatus: 'available',
           hasActiveAssignment: false,
           assignment: null,
+          dispatchMessages: [],
         })
         // markOnScene() froze the GPS interval so the pin would hold at the
         // incident until it fully closed — resume live tracking now that
@@ -253,12 +263,25 @@ export const useFieldResponderStore = create(
           hasActiveAssignment: false,
           incidentId: null,
           assignment: null,
+          dispatchMessages: [],
         })
         if (get().gpsActive) startGpsInterval()
       },
       endShift: () => {
+        const { vehicleId } = get()
         stopGpsInterval()
-        set({ dutyStatus: 'offline', gpsActive: false, hasActiveAssignment: false, assignmentStage: 'dispatched', assignment: null })
+        set({ dutyStatus: 'offline', gpsActive: false, hasActiveAssignment: false, assignmentStage: 'dispatched', assignment: null, dispatchMessages: [] })
+        // Previously this only reset local UI state — the vehicle's backend
+        // `status` was never touched, so it stayed "AVAILABLE" (whatever it
+        // last was) forever after the responder went off duty. Auto/AI
+        // assignment (AiRecommendationController.recommend()) selects
+        // candidates strictly from vehicles with status == AVAILABLE, so a
+        // responder who had ended their shift — i.e. explicitly NOT
+        // available — could still be auto-assigned a new incident. Marking
+        // the vehicle OUT_OF_SERVICE here is what actually excludes it.
+        if (vehicleId && vehicleId !== MOCK_VEHICLE_ID) {
+          updateVehicleStatus(vehicleId, 'out_of_service').catch(() => {})
+        }
       },
       submitReport: async (form) => {
         const { vehicleId, incidentId } = get()
@@ -299,6 +322,7 @@ export const useFieldResponderStore = create(
           hasActiveAssignment: false,
           incidentId: null,
           assignment: null,
+          dispatchMessages: [],
         })
         // markOnScene() froze the GPS interval so the pin would hold at the
         // incident until it fully closed — resume live tracking now that
@@ -326,11 +350,6 @@ export const useFieldResponderStore = create(
           ],
         }))
       },
-      showToast: (message, variant = 'success') => {
-        set({ toast: { message, variant } })
-        const ms = variant === 'critical' ? 4000 : 3000
-        setTimeout(() => set({ toast: null }), ms)
-      },
       stageIndex: () => STAGES.indexOf(get().assignmentStage),
       // This store persists vehicleId/incidentId/hasActiveAssignment to a
       // single global localStorage key with no per-user scoping — nothing
@@ -350,9 +369,9 @@ export const useFieldResponderStore = create(
           assignmentStage: 'dispatched',
           hasActiveAssignment: false,
           messages: [...mockUnifiedComms],
+          dispatchMessages: [],
           reportSubmitted: false,
           outstandingReports: [],
-          toast: null,
           sessionUserId: user?.user_id ?? null,
         })
       },

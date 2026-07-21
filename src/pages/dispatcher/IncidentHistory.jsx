@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
-import { ChevronRight, ChevronLeft, Download, Search, FileCheck } from 'lucide-react'
+import { Download, Search, FileCheck, ClipboardList, Timer, ShieldCheck, ListFilter } from 'lucide-react'
 import ViewClosureModal from '../../components/dispatcher/ViewClosureModal'
+import AdminStatCard from '../../components/admin/AdminStatCard'
+import FilterDropdown from '../../components/admin/FilterDropdown'
+import AdminPagination from '../../components/admin/AdminPagination'
 import { listIncidents } from '../../api/incidents'
 import { listDispatchesForIncident } from '../../api/dispatches'
 import { listDistricts } from '../../api/districts'
@@ -82,16 +85,6 @@ function exportCsv(rows) {
 }
 
 const severityColor = { critical: '#E8354A', high: '#F07820', medium: '#D4A017', low: '#3DAA6A' }
-
-function KpiCard({ label, value, sub }) {
-  return (
-    <div className="flex-1 min-w-40 bg-(--bg-surface) border border-(--border) rounded-xl p-5">
-      <div className="text-[12px] text-(--text-secondary) mb-1.5">{label}</div>
-      <div className="text-[28px] font-bold leading-none" style={{ fontFamily: 'var(--font-display)' }}>{value}</div>
-      {sub && <div className="text-[11px] text-(--text-muted) mt-1">{sub}</div>}
-    </div>
-  )
-}
 
 function fmtMinutes(m) {
   if (m == null) return 'N/A'
@@ -217,58 +210,52 @@ export default function IncidentHistory() {
         </div>
       </div>
 
-      <div className="flex gap-3 mb-5">
-        <KpiCard label="Total Closed" value={loading ? '…' : totalCount} />
-        <KpiCard label="Avg Response Time" value={loading ? '…' : (avgResponse != null ? `${avgResponse}m` : 'N/A')} sub={`Target: ${slaTargetMinutes} min`} />
-        <KpiCard label="Within SLA (Service Level Agreement)" value={loading ? '…' : (slaPct != null ? `${slaPct}%` : 'N/A')} sub={`Response arrived ≤ ${slaTargetMinutes} min after the call`} />
-        <KpiCard label="Incidents Shown" value={loading ? '…' : filtered.length} sub="Filtered results" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        <AdminStatCard icon={ClipboardList} label="Total Closed" value={loading ? '…' : String(totalCount)} />
+        <AdminStatCard icon={Timer} label="Avg Response Time" value={loading ? '…' : (avgResponse != null ? `${avgResponse}m` : 'N/A')} sub={`Target: ${slaTargetMinutes} min`} />
+        <AdminStatCard icon={ShieldCheck} label="Within SLA" value={loading ? '…' : (slaPct != null ? `${slaPct}%` : 'N/A')} sub={`Response arrived ≤ ${slaTargetMinutes} min after the call`} />
+        <AdminStatCard icon={ListFilter} label="Incidents Shown" value={loading ? '…' : String(filtered.length)} sub="Filtered results" />
       </div>
 
-      <div className="bg-(--bg-surface) border border-(--border) rounded-xl px-4 py-3 mb-4">
-        <div className="flex gap-2.5 flex-wrap items-center">
-          <div className="relative flex-1 min-w-50">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-(--text-muted)" />
-            <input
-              className="h-10 w-full bg-(--bg-input) border border-(--border) rounded-full pl-8 pr-3 text-[13px] text-(--text-primary) outline-none focus:border-(--accent) placeholder:text-(--text-muted)"
-              placeholder="Search incidents..." value={search}
-              onChange={e => { setSearch(e.target.value); setPage(1) }}
-              style={{ fontFamily: 'var(--font-body)' }}
-            />
-          </div>
-          <select
-            className="h-10 w-40 bg-(--bg-input) border border-(--border) rounded-lg px-3 text-[13px] text-(--text-primary) outline-none appearance-none cursor-pointer"
-            style={{ fontFamily: 'var(--font-body)' }}
-            value={range}
-            onChange={e => { setRange(e.target.value); setPage(1) }}
-          >
-            {RANGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          <select
-            className="h-10 w-32 bg-(--bg-input) border border-(--border) rounded-lg px-3 text-[13px] text-(--text-primary) outline-none appearance-none cursor-pointer"
-            style={{ fontFamily: 'var(--font-body)' }}
-            value={typeFilter}
-            onChange={e => { setTypeFilter(e.target.value); setPage(1) }}
-          >
-            {typeOptions.map(o => <option key={o} value={o}>{o === 'All' ? 'All Types' : formatIncidentType(o)}</option>)}
-          </select>
-          <select
-            className="h-10 w-36 bg-(--bg-input) border border-(--border) rounded-lg px-3 text-[13px] text-(--text-primary) outline-none appearance-none cursor-pointer"
-            style={{ fontFamily: 'var(--font-body)' }}
-            value={districtFilter}
-            onChange={e => setDistrictFilter(e.target.value)}
-          >
-            <option value="All">All Districts</option>
-            {districts.map(d => <option key={d.district_id} value={d.district_id}>{d.name}</option>)}
-          </select>
+      <div className="flex flex-nowrap items-center gap-2 mb-4">
+        <div className="relative w-56 shrink-0">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-(--text-muted)" />
+          <input
+            type="text"
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1) }}
+            placeholder="Search incidents…"
+            className="dispatcher-input h-8 w-full rounded-full pl-8 pr-3 text-[11px]"
+            style={{ borderRadius: 9999 }}
+          />
         </div>
+        <FilterDropdown
+          label="All Time"
+          value={range}
+          onChange={(v) => { setRange(v); setPage(1) }}
+          options={RANGE_OPTIONS}
+        />
+        <FilterDropdown
+          label="All Types"
+          value={typeFilter}
+          onChange={(v) => { setTypeFilter(v); setPage(1) }}
+          options={typeOptions.map(o => ({ value: o, label: o === 'All' ? 'All Types' : formatIncidentType(o) }))}
+        />
+        <FilterDropdown
+          label="All Districts"
+          value={districtFilter}
+          onChange={(v) => setDistrictFilter(v)}
+          options={[{ value: 'All', label: 'All Districts' }, ...districts.map(d => ({ value: d.district_id, label: d.name }))]}
+        />
       </div>
 
-      <div className="bg-(--bg-surface) border border-(--border) rounded-xl table-scroll">
-        <table className="w-full border-collapse min-w-[720px]">
+      <div className="dispatcher-surface table-scroll">
+        <table className="w-full min-w-[960px] text-left border-collapse text-[12px]">
           <thead>
-            <tr className="bg-(--bg-base)">
-              {['ID', 'Severity', 'Type', 'District / Sector', 'Reported', 'Response Time', 'Resolution Time', 'Units', 'SLA', 'Action'].map(col => (
-                <th key={col} className="px-3.5 py-2.5 text-left field-label border-b border-(--border) whitespace-nowrap">{col}</th>
+            <tr className="text-[12px] font-medium text-(--text-secondary) border-b border-(--border-subtle)">
+              <th className="py-2 px-3 font-bold whitespace-nowrap">ID</th>
+              {['Severity', 'Type', 'District / Sector', 'Reported', 'Response Time', 'Resolution Time', 'Units', 'SLA', 'Action'].map(col => (
+                <th key={col} className="py-2 px-3 font-bold text-center whitespace-nowrap">{col}</th>
               ))}
             </tr>
           </thead>
@@ -286,28 +273,28 @@ export default function IncidentHistory() {
                 ? `${inc.district}${inc.sector ? ' / ' + inc.sector : ''}`
                 : (inc.address ?? '—')
               return (
-                <tr key={inc.incident_id + idx} className="border-b border-(--border-subtle) cursor-pointer hover:bg-(--bg-elevated) transition-colors">
-                  <td className="px-3.5 h-12">
-                    <span className="text-[12px] font-semibold text-(--accent)" style={{ fontFamily: 'var(--font-mono)' }}>{inc.incident_ref}</span>
+                <tr key={inc.incident_id + idx} className="border-b border-(--border-subtle) last:border-0 dispatcher-table-row">
+                  <td className="py-3 px-3">
+                    <span className="font-mono text-[12px] font-semibold text-(--accent)">{inc.incident_ref}</span>
                   </td>
-                  <td className="px-3.5">
+                  <td className="py-3 px-3 text-center">
                     <span className="inline-flex items-center px-2.25 py-0.5 rounded text-[10px] font-bold uppercase tracking-[0.07em] border"
-                      style={{ background: c + '25', color: c, borderColor: c + '40', fontFamily: 'var(--font-body)' }}>
+                      style={{ background: c + '25', color: c, borderColor: c + '40' }}>
                       {sev.toUpperCase()}
                     </span>
                   </td>
-                  <td className="px-3.5 text-[13px]">{formatIncidentType(inc.incident_type)}</td>
-                  <td className="px-3.5 text-[12px] text-(--text-secondary)">{location}</td>
-                  <td className="px-3.5 text-[12px] text-(--text-secondary)" style={{ fontFamily: 'var(--font-mono)' }}>
+                  <td className="py-3 px-3 text-center">{formatIncidentType(inc.incident_type)}</td>
+                  <td className="py-3 px-3 text-center">{location}</td>
+                  <td className="py-3 px-3 text-center">
                     {inc.call_time ? new Date(inc.call_time).toLocaleString() : '—'}
                   </td>
-                  <td className="px-3.5">
-                    <span className="text-[12px] font-semibold" style={{ fontFamily: 'var(--font-mono)', color: respMins != null ? (withinSla ? 'var(--status-low)' : 'var(--status-critical)') : 'var(--text-muted)' }}>
+                  <td className="py-3 px-3 text-center">
+                    <span style={{ color: respMins != null ? (withinSla ? 'var(--status-low)' : 'var(--status-critical)') : 'var(--text-muted)' }}>
                       {fmtMinutes(respMins)}
                     </span>
                   </td>
-                  <td className="px-3.5 text-[12px] text-(--text-secondary)" style={{ fontFamily: 'var(--font-mono)' }}>{fmtMinutes(inc.resolution_time_minutes)}</td>
-                  <td className="px-3.5 text-[12px] text-(--status-info)" style={{ fontFamily: 'var(--font-mono)' }}>
+                  <td className="py-3 px-3 text-center">{fmtMinutes(inc.resolution_time_minutes)}</td>
+                  <td className="py-3 px-3 text-center">
                     {(unitsByIncident[inc.incident_id] ?? []).length === 0 ? '—' : (
                       (unitsByIncident[inc.incident_id] ?? []).map((u, i) => (
                         <span key={u.plate + i}>
@@ -316,7 +303,7 @@ export default function IncidentHistory() {
                           {u.isBackup && (
                             <span
                               className="ml-1 text-[9px] font-bold uppercase tracking-wide px-1 py-0.5 rounded"
-                              style={{ background: 'var(--status-medium-bg)', color: 'var(--status-medium)', fontFamily: 'var(--font-body)' }}
+                              style={{ background: 'var(--status-medium-bg)', color: 'var(--status-medium)' }}
                             >
                               Backup
                             </span>
@@ -325,13 +312,12 @@ export default function IncidentHistory() {
                       ))
                     )}
                   </td>
-                  <td className="px-3.5">
+                  <td className="py-3 px-3 text-center">
                     {respMins != null ? (
                       <span className="inline-flex items-center px-2.25 py-0.5 rounded text-[10px] font-bold uppercase tracking-[0.07em]"
                         style={{
                           background: withinSla ? 'var(--status-low-bg)' : 'var(--status-critical-bg)',
                           color: withinSla ? 'var(--status-low)' : 'var(--status-critical)',
-                          fontFamily: 'var(--font-body)',
                         }}>
                         {withinSla ? '✓ MET' : '✗ MISSED'}
                       </span>
@@ -339,7 +325,7 @@ export default function IncidentHistory() {
                       <span className="text-[10px] text-(--text-muted)">N/A</span>
                     )}
                   </td>
-                  <td className="px-3.5">
+                  <td className="py-3 px-3 text-center">
                     <button
                       type="button"
                       onClick={() => setViewClosureIncident(inc)}
@@ -355,30 +341,9 @@ export default function IncidentHistory() {
             })}
           </tbody>
         </table>
-
-        <div className="flex items-center justify-between px-4 py-3 border-t border-(--border)">
-          <span className="text-[12px] text-(--text-muted)">
-            Showing {Math.min((page - 1) * perPage + 1, filtered.length)}–{Math.min(page * perPage, filtered.length)} of {filtered.length}
-          </span>
-          <div className="flex gap-1">
-            <button className="p-1.75 rounded-md bg-transparent border-none cursor-pointer text-(--text-secondary) hover:bg-(--bg-elevated) transition-colors disabled:opacity-40"
-              onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
-              <ChevronLeft size={16} />
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-              <button key={p} onClick={() => setPage(p)}
-                className="w-8 h-8 rounded-md border-none cursor-pointer text-[12px] font-semibold transition-colors"
-                style={{ background: page === p ? 'var(--accent)' : 'transparent', color: page === p ? 'var(--text-on-accent)' : 'var(--text-secondary)' }}>
-                {p}
-              </button>
-            ))}
-            <button className="p-1.75 rounded-md bg-transparent border-none cursor-pointer text-(--text-secondary) hover:bg-(--bg-elevated) transition-colors disabled:opacity-40"
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
-              <ChevronRight size={16} />
-            </button>
-          </div>
-        </div>
       </div>
+
+      <AdminPagination page={page} totalPages={totalPages} totalCount={filtered.length} pageSize={perPage} onPageChange={setPage} />
 
       <ViewClosureModal
         incident={viewClosureIncident}

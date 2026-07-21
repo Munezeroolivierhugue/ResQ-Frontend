@@ -24,6 +24,7 @@ import { listVehicles } from "../../api/vehicles";
 import { listIncidents } from "../../api/incidents";
 import { getCurrentUser } from "../../utils/authSession";
 import { formatIncidentType } from "../../utils/incidentTypeLabels";
+import { useToastStore } from "../../store/toastStore";
 
 const TERMINAL_STATUSES = new Set(["RESOLVED", "PENDING_REPORT", "CLOSED"]);
 
@@ -38,7 +39,7 @@ function timeAgo(isoString) {
 function BackupRequestsPanel({ vehicles, incidents }) {
   const [requests, setRequests] = useState([]);
   const [dispatchTarget, setDispatchTarget] = useState(null);
-  const [dispatchToast, setDispatchToast] = useState(null);
+  const pushToast = useToastStore((s) => s.pushToast);
 
   useEffect(() => {
     listBackupRequests()
@@ -46,9 +47,8 @@ function BackupRequestsPanel({ vehicles, incidents }) {
       .catch(() => {});
   }, []);
 
-  const showToast = (msg) => {
-    setDispatchToast(msg);
-    setTimeout(() => setDispatchToast(null), 3000);
+  const showToast = (msg, variant = "success") => {
+    pushToast({ variant, title: variant === "error" ? "Error" : "Backup Requests", message: msg });
   };
 
   const handleAcknowledge = async (backup) => {
@@ -57,7 +57,7 @@ function BackupRequestsPanel({ vehicles, incidents }) {
       setRequests((prev) => prev.filter((r) => r.backup_id !== backup.backup_id));
       showToast("Backup request acknowledged");
     } catch {
-      showToast("Could not acknowledge — try again");
+      showToast("Could not acknowledge — try again", "error");
     }
   };
 
@@ -73,18 +73,6 @@ function BackupRequestsPanel({ vehicles, incidents }) {
 
   return (
     <div className="dispatcher-surface overflow-hidden relative">
-      {dispatchToast && (
-        <div
-          className="absolute top-2 right-2 z-10 text-[12px] px-3 py-1.5 rounded-lg font-semibold"
-          style={{
-            background: "var(--status-low-bg)",
-            color: "var(--status-low)",
-            border: "1px solid var(--status-low)",
-          }}
-        >
-          {dispatchToast}
-        </div>
-      )}
       <DispatchUnitsModal
         isOpen={!!dispatchTarget}
         incidentId={dispatchTarget?.backup?.incident_id}

@@ -2,10 +2,25 @@ import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { listVehicles } from '../../api/vehicles'
 import { createDispatch } from '../../api/dispatches'
+import { getIncident } from '../../api/incidents'
+import { haversineMeters } from '../../utils/geo'
+
+// Same distance-over-assumed-speed math the dispatch brain and mutual-aid
+// ETA calculations already use elsewhere in the app.
+const SPEED_KMH = 40
+
+function etaMinutesFor(vehicle, incidentLat, incidentLng) {
+  const lat = vehicle.current_lat ?? vehicle.station_lat
+  const lng = vehicle.current_lng ?? vehicle.station_lng
+  if (lat == null || lng == null || incidentLat == null || incidentLng == null) return null
+  const distanceKm = haversineMeters(lat, lng, incidentLat, incidentLng) / 1000
+  return Math.round((distanceKm / SPEED_KMH) * 60)
+}
 
 export default function DispatchUnitsModal({ isOpen, incidentId, incidentRef, districtId, onClose, onConfirm }) {
   const [selected, setSelected] = useState([])
   const [available, setAvailable] = useState([])
+  const [incidentPos, setIncidentPos] = useState(null)
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
@@ -15,11 +30,17 @@ export default function DispatchUnitsModal({ isOpen, incidentId, incidentRef, di
     // Defer to a microtask so this doesn't count as a synchronous setState
     // call from within the effect body itself (react-hooks/set-state-in-effect).
     Promise.resolve().then(() => { setLoading(true); setError(null) })
-    listVehicles({ status: 'AVAILABLE', ...(districtId ? { districtId } : {}) })
-      .then(setAvailable)
-      .catch(() => setAvailable([]))
+    Promise.allSettled([
+      listVehicles({ status: 'AVAILABLE', ...(districtId ? { districtId } : {}) }),
+      incidentId ? getIncident(incidentId) : Promise.resolve(null),
+    ])
+      .then(([vehiclesRes, incidentRes]) => {
+        setAvailable(vehiclesRes.status === 'fulfilled' ? vehiclesRes.value : [])
+        const inc = incidentRes.status === 'fulfilled' ? incidentRes.value : null
+        setIncidentPos(inc?.lat != null && inc?.lng != null ? { lat: inc.lat, lng: inc.lng } : null)
+      })
       .finally(() => setLoading(false))
-  }, [isOpen, districtId])
+  }, [isOpen, districtId, incidentId])
 
   if (!isOpen) return null
 
@@ -34,14 +55,21 @@ export default function DispatchUnitsModal({ isOpen, incidentId, incidentRef, di
     setError(null)
     try {
       const results = await Promise.allSettled(
-        selected.map((vehicleId) => createDispatch({
-          incidentId,
-          vehicleId,
-          responderId: null,
-          aiRecommended: false,
-          overridden: true,
-          overrideReason: 'backup_request',
-        }))
+        selected.map((vehicleId) => {
+          const vehicle = available.find((v) => v.vehicle_id === vehicleId)
+          const etaMinutes = vehicle && incidentPos
+            ? etaMinutesFor(vehicle, incidentPos.lat, incidentPos.lng)
+            : null
+          return createDispatch({
+            incidentId,
+            vehicleId,
+            responderId: null,
+            aiRecommended: false,
+            overridden: true,
+            overrideReason: 'backup_request',
+            etaMinutes,
+          })
+        })
       )
       const failures = results.filter((r) => r.status === 'rejected')
       if (failures.length > 0) {

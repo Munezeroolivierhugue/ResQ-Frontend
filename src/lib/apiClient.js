@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { getAccessToken, getRefreshToken, setSession, clearSession } from '../utils/authSession'
 import { getClientIp } from '../utils/clientIp'
+import { useToastStore } from '../store/toastStore'
 
 // In dev the Vite proxy forwards /api/* → backend, so we use '' (same-origin).
 // In production set VITE_API_URL to the backend's full URL.
@@ -88,23 +89,16 @@ api.interceptors.response.use(
   },
 )
 
-// Minimal toast helper (reads CSS variables, no new dependencies)
+// Routes into the shared toast stack (see store/toastStore.js /
+// components/layout/ToastStack.jsx) instead of hand-rolling a DOM node —
+// this module runs outside React, so it reaches the store via getState()
+// rather than the useToastStore() hook.
 function showToast(message, type = 'info') {
-  const existing = document.getElementById('resq-api-toast')
-  if (existing) existing.remove()
-
-  const el = document.createElement('div')
-  el.id = 'resq-api-toast'
-  el.textContent = message
-  el.style.cssText = `
-    position: fixed; bottom: 24px; right: 24px; z-index: 9999;
-    background: ${type === 'error' ? 'var(--danger, #ef4444)' : 'var(--accent, #3b82f6)'};
-    color: #fff; padding: 10px 16px; border-radius: 8px;
-    font-size: 13px; font-weight: 500; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    animation: fadeIn 0.2s ease;
-  `
-  document.body.appendChild(el)
-  setTimeout(() => el.remove(), 4000)
+  useToastStore.getState().pushToast({
+    variant: type === 'error' ? 'error' : 'info',
+    title: type === 'error' ? 'Error' : 'Notice',
+    message,
+  })
 }
 
 export default api

@@ -46,12 +46,12 @@ export default function OpsManagerClosedIncidents() {
       <div className="dispatcher-surface table-scroll mt-5">
         <table className="w-full text-left text-[13px] border-collapse min-w-[700px]">
           <thead>
-            <tr className="border-b border-(--border) text-[11px] uppercase tracking-wider text-(--text-muted)" style={{ fontFamily: 'var(--font-display)' }}>
+            <tr className="border-b border-(--border) text-[12px] font-bold text-(--text-secondary)">
               <th className="p-3">Incident</th>
-              <th className="p-3">Type</th>
-              <th className="p-3">Severity</th>
-              <th className="p-3">Closed</th>
-              <th className="p-3"></th>
+              <th className="p-3 text-center">Type</th>
+              <th className="p-3 text-center">Severity</th>
+              <th className="p-3 text-center">Closed</th>
+              <th className="p-3 text-center"></th>
             </tr>
           </thead>
           <tbody>
@@ -62,13 +62,13 @@ export default function OpsManagerClosedIncidents() {
             ) : pageIncidents.map((inc) => (
               <tr key={inc.incident_id} className="border-b border-(--border-subtle) hover:bg-(--bg-elevated) cursor-pointer"
                 onClick={() => navigate('/ops-manager/incident-closure', { state: { incident: inc } })}>
-                <td className="p-3 font-mono font-semibold text-(--accent)">{inc.incident_ref}</td>
-                <td className="p-3">{formatIncidentType(inc.incident_type)}</td>
-                <td className="p-3"><SeverityBadge severity={inc.severity} /></td>
-                <td className="p-3 text-(--text-secondary)" style={{ fontFamily: 'var(--font-mono)' }}>
+                <td className="p-3 font-mono font-medium">{inc.incident_ref}</td>
+                <td className="p-3 text-center">{formatIncidentType(inc.incident_type)}</td>
+                <td className="p-3 text-center"><SeverityBadge severity={inc.severity} /></td>
+                <td className="p-3 text-center" style={{ fontFamily: 'var(--font-mono)' }}>
                   {inc.closure_time ? new Date(inc.closure_time).toLocaleString() : '—'}
                 </td>
-                <td className="p-3 text-(--accent) text-[12px] font-semibold inline-flex items-center gap-1">
+                <td className="p-3 text-(--accent) text-[12px] font-semibold text-center inline-flex items-center gap-1 justify-center">
                   <FileCheck size={14} /> Review
                 </td>
               </tr>

@@ -1,13 +1,22 @@
 import { useState, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Download, ShieldAlert } from "lucide-react";
+import { ShieldAlert, Search } from "lucide-react";
 import StatusBadge from "../../components/dispatcher/StatusBadge";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
-import { adminRoleBadge } from "../../data/mockAdminData";
+import FilterDropdown from "../../components/admin/FilterDropdown";
 import { listAuditLogs, listSecurityEvents } from "../../api/admin";
 
-const PAGE_SIZE = 50;
-const STATUS_FILTERS = ["All", "SUCCESS", "DENIED", "ERROR"];
+const PAGE_SIZE = 10;
+
+const ROLE_LABELS = {
+  DISPATCHER: "Dispatcher",
+  FIELD_RESPONDER: "Field Responder",
+  OPERATIONS_MANAGER: "Operations Manager",
+  DISTRICT_COMMANDER: "District Commander",
+  EMERGENCY_PLANNER: "Emergency Planner",
+  ANALYST: "Analyst",
+  SUPER_ADMIN: "Super Admin",
+};
 
 function auditVariant(status) {
   if (status === "SUCCESS") return "resolved";
@@ -37,7 +46,7 @@ export default function AdminAudit() {
 
   const [dateFrom, setDateFrom] = useState(defaultFrom);
   const [dateTo, setDateTo] = useState(defaultTo);
-  const [statusFilter, setStatusFilter] = useState("All");
+  const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("All");
   const [moduleFilter, setModuleFilter] = useState("All");
   const [auditRows, setAuditRows] = useState([]);
@@ -82,8 +91,13 @@ export default function AdminAudit() {
   const filteredRows = useMemo(() => {
     const fromDate = parseDate(dateFrom);
     const toDate = dateTo ? new Date(dateTo + "T23:59:59") : null;
+    const q = search.trim().toLowerCase();
     return auditRows.filter((r) => {
-      if (statusFilter !== "All" && r.status !== statusFilter) return false;
+      if (q &&
+        !(r.user ?? "").toLowerCase().includes(q) &&
+        !(r.action ?? "").toLowerCase().includes(q) &&
+        !(r.module ?? "").toLowerCase().includes(q)
+      ) return false;
       if (roleFilter !== "All" && r.role !== roleFilter) return false;
       if (moduleFilter !== "All" && r.module !== moduleFilter) return false;
       if (fromDate || toDate) {
@@ -95,42 +109,16 @@ export default function AdminAudit() {
       }
       return true;
     });
-  }, [statusFilter, roleFilter, moduleFilter, dateFrom, dateTo, auditRows]);
+  }, [roleFilter, moduleFilter, dateFrom, dateTo, search, auditRows]);
 
   // Reset to page 1 whenever filters change
-  useEffect(() => { setPage(1); }, [statusFilter, roleFilter, moduleFilter, dateFrom, dateTo]);
+  useEffect(() => { Promise.resolve().then(() => setPage(1)); }, [roleFilter, moduleFilter, dateFrom, dateTo, search]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const displayedRows = filteredRows.slice(
     (page - 1) * PAGE_SIZE,
     page * PAGE_SIZE,
   );
-
-  function handleClear() {
-    const n = new Date();
-    const f = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-01`;
-    const t = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
-    setDateFrom(f);
-    setDateTo(t);
-    setStatusFilter("All");
-    setRoleFilter("All");
-    setModuleFilter("All");
-  }
-
-  function handleExport() {
-    const header = ["Timestamp", "User", "Role", "Action", "Module", "IP Address", "Status"];
-    const rows = filteredRows.map((r) =>
-      [r.timestamp, r.user, r.role, r.action, r.module, r.ip_address, r.status].join(","),
-    );
-    const csv = [header.join(","), ...rows].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "audit-trail.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  }
 
   return (
     <div className="portal-page flex flex-col gap-4 min-w-[1024px]">
@@ -139,85 +127,62 @@ export default function AdminAudit() {
         subtitle="Complete timestamped record of every system action."
         eyebrow="Super Admin Portal"
         badge="Compliance"
-        actions={
-          <button
-            type="button"
-            onClick={handleExport}
-            className="dispatcher-btn-ghost inline-flex items-center gap-2"
-          >
-            <Download size={14} />
-            Export CSV
-          </button>
-        }
       />
 
-      <div className="flex flex-wrap gap-2 items-end">
-        <input
-          type="date"
-          className="dispatcher-input h-9 w-36"
-          value={dateFrom}
-          onChange={(e) => setDateFrom(e.target.value)}
-        />
-        <input
-          type="date"
-          className="dispatcher-input h-9 w-36"
-          value={dateTo}
-          onChange={(e) => setDateTo(e.target.value)}
-        />
-        <select
-          className="dispatcher-input h-9 w-40 text-[12px]"
-          value={roleFilter}
-          onChange={(e) => setRoleFilter(e.target.value)}
-        >
-          <option value="All">All roles</option>
-          {uniqueRoles.map((r) => <option key={r} value={r}>{r}</option>)}
-        </select>
-        <select
-          className="dispatcher-input h-9 w-40 text-[12px]"
-          value={moduleFilter}
-          onChange={(e) => setModuleFilter(e.target.value)}
-        >
-          <option value="All">All modules</option>
-          {uniqueModules.map((m) => <option key={m} value={m}>{m}</option>)}
-        </select>
-        <div className="flex gap-1">
-          {STATUS_FILTERS.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setStatusFilter(s)}
-              className="text-[10px] font-semibold px-2 py-1 rounded-full border transition-colors"
-              style={{
-                borderColor: statusFilter === s ? "var(--accent)" : "var(--border)",
-                background: statusFilter === s ? "var(--accent-ghost)" : "transparent",
-                color: statusFilter === s ? "var(--accent)" : "var(--text-secondary)",
-              }}
-            >
-              {s}
-            </button>
-          ))}
+      <div className="flex flex-nowrap items-center gap-2">
+        <div className="relative w-56 shrink-0">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-(--text-muted)" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by user, action, or module…"
+            className="dispatcher-input h-8 w-full rounded-full pl-8 pr-3 text-[11px]"
+            style={{ borderRadius: 9999 }}
+          />
         </div>
-        <button
-          type="button"
-          onClick={handleClear}
-          className="text-[12px] text-(--accent) bg-transparent border-none cursor-pointer"
-        >
-          Clear
-        </button>
+        <div className="ml-auto flex flex-nowrap items-center gap-2">
+          <input
+            type="date"
+            style={{ width: 132, borderRadius: 9999 }}
+            className="dispatcher-input h-8 rounded-full px-3 text-[11px] shrink-0"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+          />
+          <input
+            type="date"
+            style={{ width: 132, borderRadius: 9999 }}
+            className="dispatcher-input h-8 rounded-full px-3 text-[11px] shrink-0"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+          />
+          <FilterDropdown
+            label="All Roles"
+            value={roleFilter}
+            onChange={setRoleFilter}
+            options={[{ value: "All", label: "All roles" }, ...uniqueRoles.map((r) => ({ value: r, label: ROLE_LABELS[r] ?? r }))]}
+          />
+          <FilterDropdown
+            label="All Modules"
+            value={moduleFilter}
+            onChange={setModuleFilter}
+            options={[{ value: "All", label: "All modules" }, ...uniqueModules.map((m) => ({ value: m, label: m }))]}
+          />
+        </div>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-4">
+      <div className="flex flex-col lg:flex-row gap-4 items-start">
         <div className="dispatcher-surface overflow-x-auto flex-1 min-w-0">
           <table className="w-full text-[12px] min-w-[800px]">
             <thead>
-              <tr className="text-(--text-muted) border-b border-(--border)">
-                <th className="text-left p-3">Timestamp</th>
-                <th className="text-left p-3">User</th>
-                <th className="p-3">Role</th>
-                <th className="text-left p-3">Action</th>
-                <th className="p-3">Module</th>
-                <th className="p-3">IP Address</th>
-                <th className="p-3">Status</th>
+              <tr className="text-[12px] font-medium text-(--text-secondary) border-b border-(--border)">
+                <th className="text-left p-3 font-bold">Timestamp</th>
+                <th className="text-left p-3 font-bold">User</th>
+                <th className="p-3 font-bold">Role</th>
+                <th className="text-left p-3 font-bold">Action</th>
+                <th className="p-3 font-bold">Module</th>
+                <th className="p-3 font-bold">IP Address</th>
+                <th className="p-3 font-bold">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -245,25 +210,15 @@ export default function AdminAudit() {
               )}
               {!auditLoading && !auditError &&
                 displayedRows.map((row, i) => {
-                  const rb = adminRoleBadge(
-                    (row.role ?? "").toLowerCase().includes("dispatcher")
-                      ? "dispatcher"
-                      : "OPERATIONS_MANAGER",
-                  );
                   return (
                     <tr
                       key={i}
                       className="border-b border-(--border-subtle)"
                       style={{ background: rowBg(row.status) }}
                     >
-                      <td className="p-3 font-mono text-(--text-muted)">{row.timestamp}</td>
+                      <td className="p-3 font-mono font-bold text-(--accent)">{row.timestamp}</td>
                       <td className="p-3 font-medium">{row.user}</td>
-                      <td className="p-3">
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded"
-                          style={{ background: rb.bg, color: rb.color }}>
-                          {row.role}
-                        </span>
-                      </td>
+                      <td className="p-3 text-center">{ROLE_LABELS[row.role] ?? row.role}</td>
                       <td className="p-3">{row.action}</td>
                       <td className="p-3">
                         <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-(--bg-elevated)">

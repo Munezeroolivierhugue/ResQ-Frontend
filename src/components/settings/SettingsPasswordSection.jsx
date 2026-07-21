@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { Mail, RefreshCw, ShieldCheck, Lock, Check } from 'lucide-react'
 import { PasswordStrength } from '../auth/AuthShared'
+import { getCurrentUser } from '../../utils/authSession'
 
 const OTP_LEN = 6
 
@@ -8,8 +9,6 @@ const OTP_LEN = 6
 function isMockOtpValid(code) {
   return /^\d{6}$/.test(code)
 }
-
-export const DISPATCHER_ACCOUNT_EMAIL = 'jb.nkurunziza@resq.rw'
 
 function maskEmail(email) {
   const [local, domain] = email.split('@')
@@ -19,6 +18,7 @@ function maskEmail(email) {
 }
 
 export default function SettingsPasswordSection({ onSuccess }) {
+  const accountEmail = getCurrentUser()?.email || 'your registered email'
   const [step, setStep] = useState('idle')
   const [sending, setSending] = useState(false)
   const [digits, setDigits] = useState(Array(OTP_LEN).fill(''))
@@ -119,7 +119,7 @@ export default function SettingsPasswordSection({ onSuccess }) {
           </div>
           <p className="text-[13px] text-(--text-secondary) m-0 mb-3">
             Registered email:{' '}
-            <strong className="text-(--text-primary)">{DISPATCHER_ACCOUNT_EMAIL}</strong>
+            <strong className="text-(--text-primary)">{accountEmail}</strong>
           </p>
           <button
             type="button"
@@ -136,7 +136,7 @@ export default function SettingsPasswordSection({ onSuccess }) {
       {step === 'otp_pending' && (
         <div className="settings-form-field">
           <p className="text-[13px] text-(--text-secondary) m-0 mb-3 leading-relaxed">
-            A 6-digit code was sent to <strong>{maskEmail(DISPATCHER_ACCOUNT_EMAIL)}</strong>.
+            A 6-digit code was sent to <strong>{maskEmail(accountEmail)}</strong>.
             Enter it below to unlock password change.
           </p>
           <form onSubmit={handleVerifyOtp}>
@@ -192,6 +192,10 @@ export default function SettingsPasswordSection({ onSuccess }) {
           <p className="text-[12px] m-0 mb-3 flex items-center gap-1.5" style={{ color: 'var(--status-low)' }}>
             <Check size={14} />
             Email verified — set your new password below.
+          </p>
+          <p className="text-[11px] text-(--text-muted) m-0 mb-3">
+            Not yet implemented: there is no backend endpoint for self-service password change yet.
+            Submitting here will not actually update your login password.
           </p>
           <div className="grid grid-cols-1 gap-3 mb-2">
             <input

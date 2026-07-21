@@ -31,6 +31,13 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
+      // Profile photos are served the same way (FileStorageService static
+      // files under /uploads/profile-photos, URL without the "uploads"
+      // segment) — same missing-proxy-rule bug as /reports above.
+      '/profile-photos': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
     },
   },
 })

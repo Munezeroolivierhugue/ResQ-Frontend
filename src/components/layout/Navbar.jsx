@@ -6,6 +6,9 @@ import { logoutApi } from '../../api/auth'
 import { disconnect } from '../../lib/wsClient'
 import NotificationsDropdown from '../dispatcher/NotificationsDropdown'
 import { useNotificationsStore } from '../../store/notificationsStore'
+import AnnouncementPopup from './AnnouncementPopup'
+import ToastStack from './ToastStack'
+import { getMyProfile } from '../../api/users'
 
 export default function Navbar({
   user = { name: 'User', role: '' },
@@ -20,11 +23,20 @@ export default function Navbar({
   const subscribeToWs = useNotificationsStore((s) => s.subscribeToWs)
   const isSuperAdmin = avatarVariant === 'superAdmin'
 
+  const [photoUrl, setPhotoUrl] = useState(null)
+
   useEffect(() => {
     fetchNotifications()
     const unsub = subscribeToWs()
     return () => { if (typeof unsub === 'function') unsub() }
   }, [])
+
+  // Same profile photo shown on the Settings > Profile page — fetched here
+  // so the header avatar reflects it everywhere, not just on that one page.
+  useEffect(() => {
+    getMyProfile().then((u) => setPhotoUrl(u.photo_url || null)).catch(() => {})
+  }, [])
+
   const initials = isSuperAdmin
     ? 'SA'
     : user.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
@@ -41,6 +53,10 @@ export default function Navbar({
 
   return (
     <header className="h-15 border-b border-(--border) flex items-center px-5 gap-4 sticky top-0 z-[9999] shrink-0 bg-surface">
+      <div className="fixed top-4 right-4 z-[10001] flex flex-col gap-2 w-full max-w-sm">
+        <AnnouncementPopup />
+        <ToastStack />
+      </div>
 
       <button className="navbar-menu-btn p-1.75 rounded-md bg-transparent border-none cursor-pointer flex items-center justify-center text-(--text-secondary) hover:bg-(--bg-elevated) hover:text-(--text-primary) transition-colors" onClick={onMenuClick} aria-label="Open menu">
         <Menu size={20} />
@@ -87,7 +103,7 @@ export default function Navbar({
             className="flex items-center gap-2 px-2 py-1 bg-transparent border-none cursor-pointer rounded-lg hover:bg-(--bg-elevated) transition-colors"
           >
             <div
-              className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-[13px] tracking-[0.04em] shrink-0"
+              className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-[13px] tracking-[0.04em] shrink-0 overflow-hidden"
               style={{
                 fontFamily: 'var(--font-display)',
                 background: isSuperAdmin ? 'var(--status-critical-bg)' : 'var(--accent-ghost)',
@@ -95,7 +111,11 @@ export default function Navbar({
                 color: isSuperAdmin ? 'var(--status-critical)' : 'var(--accent)',
               }}
             >
-              {initials}
+              {photoUrl ? (
+                <img src={photoUrl} alt={user.name} className="w-full h-full object-cover" />
+              ) : (
+                initials
+              )}
             </div>
             <div className="navbar-user-text text-left">
               <div className="text-[13px] font-semibold text-(--text-primary) leading-tight">{user.name}</div>

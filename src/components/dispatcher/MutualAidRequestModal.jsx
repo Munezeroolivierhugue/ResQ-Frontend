@@ -1,44 +1,35 @@
 import { useState } from 'react'
-import { X, Radio, AlertTriangle, Send } from 'lucide-react'
+import { X, Radio, AlertTriangle } from 'lucide-react'
 
-export default function MutualAidRequestModal({ isOpen, onClose, onAsk }) {
-  const [radius, setRadius] = useState(10)
-  const [resources, setResources] = useState({
-    ambulance: 0,
-    fireTruck: 0,
-    police: 0,
-    heavyRescue: 0
-  })
-  const [priority, setPriority] = useState('standard')
+const UNIT_TYPES = [
+  { value: 'AMBULANCE', label: 'Ambulance (ALS/BLS)' },
+  { value: 'FIRE_TRUCK', label: 'Fire Engine' },
+  { value: 'POLICE_CAR', label: 'Police Unit' },
+  { value: 'DISASTER_UNIT', label: 'Heavy Rescue' },
+]
+
+// Matches the real CreateMutualAidRequest contract (api/mutualAid.js) —
+// this modal previously collected a fictional multi-resource counter +
+// "radius"/"priority" the backend has no field for at all, and never called
+// the real API in the first place (see AvailableUnitsModal.jsx's
+// handleAskMutualAid, which only fired a local notification).
+export default function MutualAidRequestModal({ isOpen, onClose, onAsk, submitting, error }) {
+  const [unitType, setUnitType] = useState('AMBULANCE')
+  const [quantity, setQuantity] = useState(1)
+  const [duration, setDuration] = useState(4)
+  const [reason, setReason] = useState('')
 
   if (!isOpen) return null
 
-  const handleIncrement = (type) => setResources((prev) => ({ ...prev, [type]: prev[type] + 1 }))
-  const handleDecrement = (type) => setResources((prev) => ({ ...prev, [type]: Math.max(0, prev[type] - 1) }))
-
   const handleAsk = () => {
-    const payload = {
-      radius,
-      resources,
-      priority,
-      timestamp: new Date().toISOString(),
-    }
-    onAsk(payload)
-    onClose()
-  }
-
-  const resourceLabels = {
-    ambulance: 'Ambulance (ALS/BLS)',
-    fireTruck: 'Fire Engine',
-    police: 'Police Unit',
-    heavyRescue: 'Heavy Rescue'
+    if (!reason.trim()) return
+    onAsk({ unitType, quantity, duration, reason: reason.trim() })
   }
 
   return (
     <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-(--bg-surface) border border-(--border) rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        
-        {/* Header */}
+
         <div className="px-5 py-4 border-b border-(--border-subtle) flex items-center justify-between shrink-0 bg-(--bg-elevated)">
           <div className="flex items-center gap-3 text-(--status-warning)">
             <AlertTriangle size={20} />
@@ -55,93 +46,70 @@ export default function MutualAidRequestModal({ isOpen, onClose, onAsk }) {
           </button>
         </div>
 
-        {/* Body */}
-        <div className="p-5 flex-1 overflow-y-auto space-y-6">
-          
-          {/* Priority */}
+        <div className="p-5 flex-1 overflow-y-auto space-y-5">
           <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-(--text-secondary) mb-2">Priority Level</label>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className={`flex-1 py-2 rounded-lg border text-[12px] font-bold uppercase cursor-pointer transition-colors ${priority === 'standard' ? 'bg-(--accent) border-(--accent) text-black' : 'bg-transparent border-(--border) text-(--text-primary) hover:border-(--accent)'}`}
-                onClick={() => setPriority('standard')}
-              >
-                Standard
-              </button>
-              <button
-                type="button"
-                className={`flex-1 py-2 rounded-lg border text-[12px] font-bold uppercase cursor-pointer transition-colors ${priority === 'expedited' ? 'bg-(--status-critical) border-(--status-critical) text-white' : 'bg-transparent border-(--border) text-(--text-primary) hover:border-(--status-critical)'}`}
-                onClick={() => setPriority('expedited')}
-              >
-                Expedited
-              </button>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-(--text-secondary) mb-2">Unit Type</label>
+            <select
+              className="dispatcher-input dispatcher-select w-full"
+              value={unitType}
+              onChange={(e) => setUnitType(e.target.value)}
+            >
+              {UNIT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </div>
+
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-(--text-secondary) mb-2">Quantity</label>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                className="dispatcher-input dispatcher-text-input w-full"
+                value={quantity}
+                onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+              />
+            </div>
+            <div className="flex-1">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-(--text-secondary) mb-2">Duration (hrs)</label>
+              <input
+                type="number"
+                min={1}
+                max={48}
+                className="dispatcher-input dispatcher-text-input w-full"
+                value={duration}
+                onChange={(e) => setDuration(Math.max(1, parseInt(e.target.value, 10) || 1))}
+              />
             </div>
           </div>
 
-          {/* Broadcast Radius */}
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-(--text-secondary)">Broadcast Radius</label>
-              <span className="text-[12px] font-bold text-(--accent)">{radius} km</span>
-            </div>
-            <input
-              type="range"
-              min="5"
-              max="100"
-              step="5"
-              value={radius}
-              onChange={(e) => setRadius(parseInt(e.target.value, 10))}
-              className="w-full accent-(--accent) cursor-pointer"
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-(--text-secondary) mb-2">
+              Reason <span className="text-(--status-critical)">*</span>
+            </label>
+            <textarea
+              className="dispatcher-input dispatcher-textarea w-full"
+              rows={3}
+              placeholder="Why is mutual aid needed? This is what the Emergency Planner and receiving district will see."
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
             />
-            <div className="flex justify-between text-[10px] text-(--text-muted) mt-1 font-mono">
-              <span>5 km</span>
-              <span>100 km</span>
-            </div>
           </div>
-
-          {/* Resources Needed */}
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-(--text-secondary) mb-3">Resources Needed</label>
-            <div className="space-y-2">
-              {Object.keys(resources).map((key) => (
-                <div key={key} className="flex items-center justify-between p-3 rounded-lg border border-(--border-subtle) bg-(--bg-input)">
-                  <span className="text-[13px] font-medium text-(--text-primary)">{resourceLabels[key]}</span>
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      className="w-7 h-7 rounded-md border border-(--border) bg-(--bg-surface) text-(--text-primary) flex items-center justify-center cursor-pointer hover:border-(--accent) hover:text-(--accent) transition-colors disabled:opacity-50"
-                      onClick={() => handleDecrement(key)}
-                      disabled={resources[key] === 0}
-                    >
-                      -
-                    </button>
-                    <span className="text-[14px] font-bold w-4 text-center" style={{ fontFamily: 'var(--font-mono)' }}>{resources[key]}</span>
-                    <button
-                      type="button"
-                      className="w-7 h-7 rounded-md border border-(--border) bg-(--bg-surface) text-(--text-primary) flex items-center justify-center cursor-pointer hover:border-(--accent) hover:text-(--accent) transition-colors"
-                      onClick={() => handleIncrement(key)}
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          
         </div>
 
-        {/* Footer */}
         <div className="p-4 border-t border-(--border-subtle) bg-(--bg-elevated) shrink-0">
+          {error && (
+            <p className="text-[12px] m-0 mb-3" style={{ color: 'var(--status-critical)' }}>{error}</p>
+          )}
           <button
             type="button"
-            className="w-full py-3 rounded-xl border-none flex items-center justify-center gap-2 cursor-pointer transition-transform active:scale-[0.98] font-bold uppercase tracking-wider text-[12px]"
+            className="w-full py-3 rounded-xl border-none flex items-center justify-center gap-2 cursor-pointer transition-transform active:scale-[0.98] font-bold uppercase tracking-wider text-[12px] disabled:opacity-50"
             style={{ background: 'var(--status-critical)', color: '#fff', fontFamily: 'var(--font-display)' }}
             onClick={handleAsk}
+            disabled={!reason.trim() || submitting}
           >
             <Radio size={16} />
-            Ask for Mutual Aid
+            {submitting ? 'Sending…' : 'Ask for Mutual Aid'}
           </button>
         </div>
 

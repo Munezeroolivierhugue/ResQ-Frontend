@@ -6,6 +6,7 @@ import {
   resolveHref,
 } from '../api/notifications'
 import { connect, subscribe } from '../lib/wsClient'
+import { playNotificationSound } from '../utils/notificationSound'
 
 export const useNotificationsStore = create((set, get) => ({
   items: [],
@@ -23,13 +24,18 @@ export const useNotificationsStore = create((set, get) => ({
   },
 
   markAllRead: async () => {
-    // Optimistic update
-    set((s) => ({ items: s.items.map((n) => ({ ...n, read: true })) }))
+    // Mark-all-read is a "clear the centre" action here: once every real
+    // notification is acknowledged, they're cleared from view rather than
+    // sitting around read — matches the "we remain with no notification"
+    // requirement. Clear optimistically; re-fetch on failure so the list
+    // doesn't lie about server state.
+    const previous = get().items
+    set({ items: [] })
     try {
       await markAllNotificationsRead()
     } catch {
-      // Revert not strictly needed — just log
       console.error('[notificationsStore] markAllRead API failed')
+      set({ items: previous })
     }
   },
 
@@ -58,6 +64,7 @@ export const useNotificationsStore = create((set, get) => ({
     connect(token)
 
     const unsub = subscribe('/user/queue/notifications', (payload) => {
+      const referenceId = payload.referenceId ?? payload.incidentId ?? null
       get().addNotification({
         id: payload.notificationId ?? `ws-${Date.now()}`,
         type: payload.type,
@@ -66,9 +73,16 @@ export const useNotificationsStore = create((set, get) => ({
         time: payload.createdAt ?? new Date().toISOString(),
         read: false,
         priority: payload.priority ?? 'normal',
-        href: resolveHref(payload.type),
+        href: resolveHref(payload.type, referenceId),
+        referenceId,
+        actorName: payload.actorName ?? payload.responderName ?? null,
+        actorPhotoUrl: payload.actorPhotoUrl ?? null,
         details: null,
       })
+      // Only for live, newly-arriving pushes — never on the initial
+      // fetchNotifications() load, which would replay a sound for every
+      // pre-existing unread notification on page load.
+      playNotificationSound()
     })
     return unsub
   },

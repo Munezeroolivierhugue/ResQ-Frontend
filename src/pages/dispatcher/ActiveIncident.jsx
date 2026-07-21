@@ -14,6 +14,7 @@ import {
   Play,
   Square,
   CheckCircle,
+  MoreHorizontal,
 } from 'lucide-react'
 import FieldLabel from '../../components/ui/FieldLabel'
 import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
@@ -207,6 +208,11 @@ export default function ActiveIncident() {
   const [fieldReport, setFieldReport] = useState(null)
   const [fieldReportPhotos, setFieldReportPhotos] = useState([])
   const [, setElapsedTick] = useState(0)
+  // Legend was a permanently-visible overlay covering part of the map at
+  // all times — now a toggle so it's out of the way by default, and once
+  // opened it's plain React state, so it stays open through any amount of
+  // zooming/panning instead of resetting.
+  const [legendOpen, setLegendOpen] = useState(false)
   const addNotification = useNotificationsStore((state) => state.addNotification)
 
   const navTeam = navState?.dispatchedTeam ?? (navState?.dispatchedUnit ? [navState.dispatchedUnit] : [])
@@ -811,22 +817,32 @@ export default function ActiveIncident() {
             ))}
           </MapContainer>
 
-          <div className="absolute top-3 left-3 z-[1000] p-3 rounded-lg border border-(--border) bg-(--bg-surface) max-w-[220px]">
-            <FieldLabel className="mb-2">Map legend</FieldLabel>
-            {mapLegend.map((l) => (
-              <div key={l.label} className="flex items-center gap-2 text-[10px] text-(--text-secondary) mb-1">
-                <span
-                  className="w-2.5 h-2.5 rounded-full shrink-0 border border-white"
-                  style={{
-                    background: l.ring ? 'transparent' : l.color,
-                    borderColor: l.color,
-                    borderStyle: l.dashed ? 'dashed' : 'solid',
-                  }}
-                />
-                {l.label}
-              </div>
-            ))}
-          </div>
+          <button
+            type="button"
+            className="absolute top-3 left-3 z-[1000] w-8 h-8 rounded-lg border border-(--border) bg-(--bg-surface) flex items-center justify-center cursor-pointer"
+            onClick={() => setLegendOpen((v) => !v)}
+            aria-label="Toggle map legend"
+          >
+            <MoreHorizontal size={16} className="text-(--text-secondary)" />
+          </button>
+          {legendOpen && (
+            <div className="absolute top-[52px] left-3 z-[1000] p-3 rounded-lg border border-(--border) bg-(--bg-surface) max-w-[220px]">
+              <FieldLabel className="mb-2">Map legend</FieldLabel>
+              {mapLegend.map((l) => (
+                <div key={l.label} className="flex items-center gap-2 text-[10px] text-(--text-secondary) mb-1">
+                  <span
+                    className="w-2.5 h-2.5 rounded-full shrink-0 border border-white"
+                    style={{
+                      background: l.ring ? 'transparent' : l.color,
+                      borderColor: l.color,
+                      borderStyle: l.dashed ? 'dashed' : 'solid',
+                    }}
+                  />
+                  {l.label}
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="absolute top-3 right-3 z-[1000] flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-(--border) bg-(--bg-surface)">
             <Radio size={12} className="text-(--accent)" />

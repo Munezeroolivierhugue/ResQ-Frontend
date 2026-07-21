@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { inviteUser, listUsers } from "../../api/users";
 import { listAgencies } from "../../api/agencies";
@@ -226,6 +226,16 @@ export default function AdminInviteUser() {
       .catch(() => setUnits([]))
       .finally(() => setUnitsLoading(false));
   }, [form.role, form.agency_id]);
+
+  // Only offer units actually assignable to this new Field Responder: same
+  // district (if one's picked) and not already held by another responder.
+  const availableUnits = useMemo(
+    () => units.filter((u) =>
+      (!form.district_id || !u.district_id || u.district_id === form.district_id) &&
+      !u.assigned_responder_id
+    ),
+    [units, form.district_id]
+  );
 
   const showDistrictField = roleRequiresDistrict(form.role);
   const showUnitField = roleRequiresUnit(form.role);
@@ -552,16 +562,16 @@ export default function AdminInviteUser() {
                       className="aiu-input aiu-input--icon aiu-select"
                       value={form.vehicle_id}
                       onChange={(e) => set("vehicle_id", e.target.value)}
-                      disabled={unitsLoading || units.length === 0}
+                      disabled={unitsLoading || availableUnits.length === 0}
                     >
                       <option value="">
                         {unitsLoading
                           ? "Loading units…"
-                          : units.length === 0
-                          ? "No units available for this agency"
-                          : "Select unit…"}
+                          : availableUnits.length === 0
+                          ? "No unassigned units in this agency/district — invite without one, assign later"
+                          : "Select unit… (optional)"}
                       </option>
-                      {units.map((u) => (
+                      {availableUnits.map((u) => (
                         <option key={u.vehicle_id} value={u.vehicle_id}>
                           {u.plate_number} — {u.vehicle_type}{u.station_name ? ` (${u.station_name})` : ""}
                         </option>
@@ -569,7 +579,7 @@ export default function AdminInviteUser() {
                     </select>
                   </div>
                   <p className="aiu-field-hint">
-                    Units listed are from the selected agency. Manage units under{" "}
+                    Only unassigned units in this district are listed. It's fine to leave this blank — assign a unit later under{" "}
                     <Link to="/admin/units" className="text-(--accent) no-underline hover:underline">Admin → Units</Link>.
                   </p>
                 </label>

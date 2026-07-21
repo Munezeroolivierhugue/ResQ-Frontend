@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Phone, Flag, Check, Loader } from 'lucide-react'
+import { Phone, Flag, Check, Loader, MessageSquare } from 'lucide-react'
 import SeverityBanner from '../../components/field-responder/SeverityBanner'
 import FieldResponderProgressStrip from '../../components/field-responder/FieldResponderProgressStrip'
 import FlagIssueModal from '../../components/field-responder/FlagIssueModal'
@@ -27,8 +27,38 @@ export default function FRAssignment() {
   const pollForAssignment = useFieldResponderStore((s) => s.pollForAssignment)
   const acceptAssignment  = useFieldResponderStore((s) => s.acceptAssignment)
   const vehicleId       = useFieldResponderStore((s) => s.vehicleId)
+  const dispatchMessages  = useFieldResponderStore((s) => s.dispatchMessages)
+  const addDispatchMessage = useFieldResponderStore((s) => s.addDispatchMessage)
   const [flagOpen, setFlagOpen] = useState(false)
   const [polling, setPolling]   = useState(false)
+
+  // Dispatcher messages — the dispatcher can send a message to this unit any
+  // time after dispatching, including before the responder taps Accept. That
+  // used to be invisible here entirely (only FROnScene subscribed to the chat
+  // topic, and only kept it in local state), so anything sent while the
+  // responder was still deciding whether to accept was silently lost. Same
+  // topic/shared store as FRNavigation.jsx and FROnScene.jsx — one persistent
+  // thread across the whole assignment lifecycle.
+  const dispatchId = assignment?.dispatch?.dispatch_id
+  useEffect(() => {
+    if (!dispatchId) return
+    const token = getAccessToken()
+    if (!token) return
+    connect(token)
+    const unsub = subscribe(`/topic/dispatches/${dispatchId}/chat`, (msg) => {
+      const now = new Date()
+      const time = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+      addDispatchMessage({
+        id: `ws-${Date.now()}-${Math.random()}`,
+        type: 'text',
+        from: msg.senderRole === 'FIELD_RESPONDER' ? 'officer' : 'dispatch',
+        text: msg.text,
+        senderName: msg.senderName,
+        time: msg.timestamp ?? time,
+      })
+    })
+    return unsub
+  }, [dispatchId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // WebSocket: subscribe to /user/queue/assignments for instant dispatch notification
   useEffect(() => {
@@ -202,6 +232,26 @@ export default function FRAssignment() {
               </span>
             </div>
           ))}
+        </div>
+      )}
+
+      {dispatchMessages.length > 0 && (
+        <div className="dispatcher-surface fr-card fr-card--tight">
+          <div className="fr-card-header">
+            <MessageSquare size={14} className="text-(--accent)" />
+            <span className="font-semibold text-[13px]">Messages from dispatcher</span>
+          </div>
+          <div className="fr-divider" />
+          <div className="flex flex-col gap-2 p-1">
+            {dispatchMessages.map((m) => (
+              <div key={m.id} className="fr-info-row" style={{ alignItems: 'flex-start' }}>
+                <span className="text-(--text-secondary)" style={{ whiteSpace: 'nowrap' }}>
+                  {m.from === 'officer' ? 'You' : (m.senderName || 'Dispatch')} · {m.time}
+                </span>
+                <span style={{ textAlign: 'right' }}>{m.text}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

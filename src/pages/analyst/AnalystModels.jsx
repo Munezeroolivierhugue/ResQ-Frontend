@@ -103,7 +103,7 @@ export default function AnalystModels() {
         </div>
         <table className="w-full text-[12px] min-w-[640px]">
           <thead>
-            <tr className="text-(--text-muted) border-b border-(--border)">
+            <tr className="text-(--text-secondary) font-bold border-b border-(--border)">
               <th className="text-left p-3">Override Reason</th>
               <th className="p-3 text-center">Count</th>
               <th className="p-3 text-center">Avg Response (overridden)</th>
@@ -141,7 +141,7 @@ export default function AnalystModels() {
         </div>
         <table className="w-full text-[12px] min-w-[640px]">
           <thead>
-            <tr className="text-(--text-muted) border-b border-(--border)">
+            <tr className="text-(--text-secondary) font-bold border-b border-(--border)">
               <th className="text-left p-3">Model</th>
               <th className="text-left p-3">Retraining</th>
               <th className="text-left p-3">Drift Tracking</th>

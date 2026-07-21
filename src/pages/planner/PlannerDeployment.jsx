@@ -9,6 +9,7 @@ import { getCurrentUser } from '../../utils/authSession'
 import { listPlans, createPlan, updatePlanStatus, createInstruction, listInstructions, getDistrictCoverage } from '../../api/planning'
 import { listDistricts } from '../../api/districts'
 import { listVehicles } from '../../api/vehicles'
+import { useToastStore } from '../../store/toastStore'
 
 const EMPTY_INSTRUCTION = { vehicle_id: '', from_location: '', to_location: '', move_time: '' }
 const PLAN_FILTERS = ['All', 'Draft', 'Submitted', 'Approved', 'Implemented']
@@ -69,12 +70,11 @@ export default function PlannerDeployment() {
   const [plansLoading, setPlansLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
-  const [toast, setToast] = useState(null)
   const [openPlanId, setOpenPlanId] = useState(null)
+  const pushToast = useToastStore((s) => s.pushToast)
 
-  function showToast(msg) {
-    setToast(msg)
-    setTimeout(() => setToast(null), 2500)
+  function showToast(msg, variant = 'success') {
+    pushToast({ variant, title: variant === 'error' ? 'Error' : 'Deployment', message: msg })
   }
 
   useEffect(() => {
@@ -168,11 +168,6 @@ export default function PlannerDeployment() {
 
   return (
     <div className="portal-page flex flex-col gap-4 min-w-[1024px]">
-      {toast && (
-        <div className="fixed bottom-5 right-5 z-[9999] dispatcher-surface px-4 py-2.5 text-[13px] font-medium shadow-lg" style={{ borderLeft: '3px solid var(--accent)' }}>
-          {toast}
-        </div>
-      )}
       <PlannerPageHeader
         title="Deployment Planning"
         subtitle="Create and manage real unit positioning plans."

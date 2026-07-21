@@ -117,7 +117,7 @@ export default function DCCreateUser() {
           {/* District (read-only) */}
           <div className="dispatcher-field">
             <span className="field-label">District (auto-assigned)</span>
-            <div className="dispatcher-input text-[12px] flex items-center h-9 cursor-not-allowed opacity-60">
+            <div className="dispatcher-input text-[12px] flex items-center h-9 px-3 cursor-not-allowed opacity-60">
               {districtName}
             </div>
           </div>
@@ -127,7 +127,7 @@ export default function DCCreateUser() {
             <label className="field-label" htmlFor="dc-role">Role *</label>
             <select
               id="dc-role"
-              className="dispatcher-input text-[13px] h-9"
+              className="dispatcher-input text-[13px] h-9 px-3"
               value={form.role}
               onChange={e => set('role', e.target.value)}
             >
@@ -143,7 +143,7 @@ export default function DCCreateUser() {
             <label className="field-label" htmlFor="dc-name">Full Name *</label>
             <input
               id="dc-name"
-              className="dispatcher-input text-[13px] h-9"
+              className="dispatcher-input text-[13px] h-9 px-3"
               placeholder="e.g. Jean Paul Habimana"
               value={form.fullName}
               onChange={e => set('fullName', e.target.value)}
@@ -157,7 +157,7 @@ export default function DCCreateUser() {
             <input
               id="dc-email"
               type="email"
-              className="dispatcher-input text-[13px] h-9"
+              className="dispatcher-input text-[13px] h-9 px-3"
               placeholder="e.g. j.habimana@rnp.gov.rw"
               value={form.email}
               onChange={e => set('email', e.target.value)}
@@ -171,7 +171,7 @@ export default function DCCreateUser() {
             <input
               id="dc-phone"
               type="tel"
-              className="dispatcher-input text-[13px] h-9"
+              className="dispatcher-input text-[13px] h-9 px-3"
               placeholder="+250 788 000 000"
               value={form.phone}
               onChange={e => set('phone', e.target.value)}

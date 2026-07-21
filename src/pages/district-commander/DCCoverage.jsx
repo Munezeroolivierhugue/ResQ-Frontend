@@ -54,7 +54,7 @@ export default function DCCoverage() {
 
   const [vehicles, setVehicles] = useState([])
   const [incidents, setIncidents] = useState([])
-  const [slaTarget, setSlaTarget] = useState(12)
+  const [slaTarget, setSlaTarget] = useState(8)
   const [loading, setLoading] = useState(true)
 
   // Real map filters — which vehicle categories and statuses to show.
@@ -119,12 +119,24 @@ export default function DCCoverage() {
 
   const statusGroup = (status) => (status === 'available' ? 'available' : status === 'dispatched' ? 'dispatched' : 'other')
 
-  const withPosition = vehicles.filter((v) => {
-    if (v.current_lat == null || v.current_lng == null) return false
-    if (hiddenCategories.has(categoryOf(v.vehicle_type))) return false
-    if (hiddenStatuses.has(statusGroup(v.status))) return false
-    return true
-  })
+  // Dispatched/en-route units rarely have a live GPS ping in this system
+  // (no hardware sends one), so requiring current_lat/lng meant a genuinely
+  // dispatched unit vanished from the map entirely — falling back to its
+  // home station position (same pattern FRNavigation.jsx already uses) so
+  // it still shows up, just labeled honestly as a last-known position.
+  const withPosition = vehicles
+    .map((v) => ({
+      ...v,
+      map_lat: v.current_lat ?? v.station_lat,
+      map_lng: v.current_lng ?? v.station_lng,
+      is_live_gps: v.current_lat != null && v.current_lng != null,
+    }))
+    .filter((v) => {
+      if (v.map_lat == null || v.map_lng == null) return false
+      if (hiddenCategories.has(categoryOf(v.vehicle_type))) return false
+      if (hiddenStatuses.has(statusGroup(v.status))) return false
+      return true
+    })
 
   // Real per-category fleet availability, replacing the old hardcoded
   // "sectors" (fake names/shapes/coverage percentages with no connection
@@ -273,7 +285,7 @@ export default function DCCoverage() {
               {withPosition.map((v) => (
                 <Marker
                   key={v.vehicle_id}
-                  position={[v.current_lat, v.current_lng]}
+                  position={[v.map_lat, v.map_lng]}
                   icon={vehicleIcon(v.status)}
                 >
                   <Popup>
@@ -281,6 +293,9 @@ export default function DCCoverage() {
                       <div className="font-bold">{v.plate_number}</div>
                       <div>{v.vehicle_type} · {v.agency_name ?? '—'}</div>
                       <div className="capitalize">{v.status}</div>
+                      {!v.is_live_gps && (
+                        <div className="text-(--text-muted)">Last known position (station) — no live GPS ping.</div>
+                      )}
                     </div>
                   </Popup>
                 </Marker>
@@ -308,8 +323,12 @@ export default function DCCoverage() {
                 <span className="font-mono font-bold">{loading ? '…' : (overall != null ? `${overall}%` : 'N/A')}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-(--text-secondary)">Units with GPS position</span>
+                <span className="text-(--text-secondary)">Units shown on map</span>
                 <span className="font-mono font-bold">{loading ? '…' : withPosition.length}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-(--text-secondary)">— with live GPS</span>
+                <span className="font-mono font-bold">{loading ? '…' : withPosition.filter((v) => v.is_live_gps).length}</span>
               </div>
             </div>
           </div>
