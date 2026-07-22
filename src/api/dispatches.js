@@ -42,6 +42,22 @@ export async function createDispatch(body) {
   return transform(data.data ?? data)
 }
 
+// Full persisted chat history for a dispatch, oldest first. Previously chat was
+// pure live-WS-only (nothing persisted server-side), so a message sent before the
+// reader subscribed — most notably the dispatcher's message sent at dispatch time,
+// before the responder ever opens the assignment screen — was permanently invisible.
+export async function getDispatchMessages(dispatchId) {
+  const { data } = await api.get(`/api/dispatches/${dispatchId}/messages`)
+  return (data.data ?? data).map((m) => ({
+    message_id: m.messageId,
+    dispatch_id: m.dispatchId,
+    sender_id: m.senderId,
+    sender_name: m.senderName,
+    text: m.message,
+    sent_at: m.sentAt,
+  }))
+}
+
 export async function findNearestUnit(lat, lng) {
   const { data } = await api.get('/api/dispatch/immediate/nearest', { params: { lat, lng } })
   const u = data.data ?? data

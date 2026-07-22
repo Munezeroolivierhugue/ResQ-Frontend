@@ -10,6 +10,9 @@ import SettingsPasswordSection from './SettingsPasswordSection'
 import SettingsTrustedIpsSection from './SettingsTrustedIpsSection'
 import { SettingsToggleRow, SettingsGroup } from './SettingsToggle'
 import { PLANNER_DISTRICT } from '../../data/mockPlannerData'
+import { getMyStats } from '../../api/fieldResponderStats'
+
+const SHIFT_LABELS = { MORNING: 'Morning', EVENING: 'Evening', NIGHT: 'Night', ROTATING: 'Rotating' }
 
 const THEME_OPTIONS = [
   { id: 'light', label: 'Light mode', description: 'High-contrast planning interface for daylight analysis.', icon: Sun },
@@ -48,6 +51,12 @@ export default function PlannerSettingsView() {
   const pushToast = useToastStore((s) => s.pushToast)
   const [language, setLanguage] = useState('en')
   const [mfaEnabled, setMfaEnabled] = useState(false)
+  const [shiftType, setShiftType] = useState(null)
+  const [incidentsToday, setIncidentsToday] = useState(null)
+
+  useEffect(() => {
+    getMyStats().then((s) => setIncidentsToday(s.incidents_today)).catch(() => {})
+  }, [])
   // Persisted to localStorage — was plain in-memory useState resetting to
   // default on every reload.
   const [toggles, setToggles] = useState(loadPlannerToggles)
@@ -74,11 +83,14 @@ export default function PlannerSettingsView() {
     >
       {section === 'profile' && (
         <SettingsProfileSection
-          onUserLoaded={(u) => setMfaEnabled(u.mfa_enabled)}
+          onUserLoaded={(u) => {
+            setMfaEnabled(u.mfa_enabled)
+            setShiftType(u.shift_type)
+          }}
           shiftStats={[
             { label: 'District scope', value: PLANNER_DISTRICT },
-            { label: 'Plans this week', value: '—' },
-            { label: 'Model accuracy', value: '—' },
+            { label: 'Shift', value: SHIFT_LABELS[shiftType] || '—' },
+            { label: 'Incidents handled today', value: incidentsToday ?? '—' },
           ]}
         />
       )}

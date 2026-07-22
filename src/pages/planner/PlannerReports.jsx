@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Brain, TrendingUp, AlertCircle, Cpu, X, Download } from 'lucide-react'
 import { buildPdfHtml, openPdfWindow, sectionHtml } from '../../utils/pdfExport'
 
@@ -28,12 +28,9 @@ function exportPlannerPDF({ analysis, notes, generatedBy, stats }) {
       { label: 'Period', value: weekLabel },
     ],
     kpis: [
-      { label: 'Plans Submitted', value: stats?.plansSubmitted ?? '7' },
-      { label: 'Plans Approved', value: stats?.plansApproved ?? '5 (71%)' },
-      { label: 'Hotspots Identified', value: stats?.hotspots ?? '4' },
-      { label: 'Simulations Run', value: stats?.simulations ?? '3' },
-      { label: 'Avg Model Accuracy', value: stats?.accuracy ?? '88%' },
-      { label: 'Coverage Change', value: stats?.coverageChange ?? '—' },
+      { label: 'Plans Submitted', value: stats?.plansSubmitted ?? 'N/A' },
+      { label: 'Plans Approved', value: stats?.plansApproved ?? 'N/A' },
+      { label: 'Active AI Patterns', value: stats?.hotspots ?? 'N/A' },
     ],
     sections,
     generatedBy: generatedBy ?? 'Emergency Planner',
@@ -42,25 +39,28 @@ function exportPlannerPDF({ analysis, notes, generatedBy, stats }) {
 }
 import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
-import { PLANNER_RECOMMENDATIONS, PLANNER_AI_INSIGHTS } from '../../data/mockPlannerData'
+// NOTE: PLANNER_RECOMMENDATIONS (the Implemented/Pending/Rejected tracker) has
+// no backing table/endpoint anywhere in ReportingController — there's no real
+// data source to wire it to, so it stays a clearly-labeled mock pending a real
+// recommendation-tracking feature on the backend (see final report).
+import { PLANNER_RECOMMENDATIONS } from '../../data/mockPlannerData'
 import { getCurrentUser } from '../../utils/authSession'
 import { useNotificationsStore } from '../../store/notificationsStore'
-import { generateReport } from '../../api/reporting'
+import { generateReport, submitReport, listReports, listPatterns } from '../../api/reporting'
 import { useToastStore } from '../../store/toastStore'
-
-const WEEKLY_STATS = [
-  ['Plans submitted', '7'],
-  ['Plans approved', '5 (71%)'],
-  ['Hotspots identified', '4'],
-  ['Coverage change', '−2% (↓)'],
-  ['Simulations run', '3'],
-  ['Avg model accuracy', '88%'],
-]
 
 const INSIGHT_ICONS = {
   trend: TrendingUp,
   alert: AlertCircle,
   cpu: Cpu,
+}
+
+// Real pattern severities (from the ai-engine's /ai/patterns response) map to
+// an insight "type" label/icon the same way the rest of this page colors things.
+function insightMeta(severity) {
+  const s = (severity ?? '').toLowerCase()
+  if (s === 'critical' || s === 'high') return { type: 'COVERAGE CONCERN', icon: 'alert' }
+  return { type: 'EMERGING TREND', icon: 'trend' }
 }
 
 function recBorder(status) {
@@ -79,10 +79,39 @@ export default function PlannerReports() {
   const [recFilter, setRecFilter] = useState('All')
   const [analysisLen, setAnalysisLen] = useState(0)
   const [saving, setSaving] = useState(false)
+  const [weeklyStats, setWeeklyStats] = useState(null)
+  const [aiInsights, setAiInsights] = useState([])
+  const [insightsModelVersion, setInsightsModelVersion] = useState('')
   const assessmentRef = useRef(null)
   const notesRef = useRef(null)
   const addNotification = useNotificationsStore((s) => s.addNotification)
   const pushToast = useToastStore((s) => s.pushToast)
+
+  useEffect(() => {
+    const currentUser = getCurrentUser()
+    const now = new Date()
+    const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    listReports('PLANNER_INSIGHT', currentUser?.district_id ?? null)
+      .then((reports) => {
+        const thisMonth = reports.filter((r) => r.period_start && new Date(r.period_start) >= firstOfMonth)
+        const submitted = thisMonth.filter((r) => r.status !== 'DRAFT').length
+        const approved = thisMonth.filter((r) => r.status === 'APPROVED' || r.status === 'PUBLISHED').length
+        setWeeklyStats((s) => ({
+          ...s,
+          plansSubmitted: submitted,
+          plansApproved: submitted ? `${approved} (${Math.round((approved / submitted) * 100)}%)` : '0',
+        }))
+      })
+      .catch(() => {})
+    listPatterns()
+      .then((res) => {
+        const patterns = res?.patterns ?? []
+        setAiInsights(patterns)
+        setInsightsModelVersion(res?.modelVersion ?? '')
+        setWeeklyStats((s) => ({ ...s, hotspots: patterns.length }))
+      })
+      .catch(() => {})
+  }, [])
 
   async function saveReport(isDraft) {
     if (saving) return
@@ -91,13 +120,20 @@ export default function PlannerReports() {
     const now = new Date()
     const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
     try {
-      await generateReport({
+      const created = await generateReport({
         report_type: 'PLANNER_INSIGHT',
         district_id: currentUser?.district_id ?? null,
         period_start: firstOfMonth,
         period_end: now.toISOString(),
         content: assessmentRef.current?.value || notesRef.current?.value || '',
       })
+      if (!isDraft) {
+        // generateReport() always creates the report as DRAFT — without this,
+        // it stays invisible to everyone but its own creator (listReports()
+        // filters out DRAFT reports for other users), so a "published" plan
+        // never actually reached the Analyst who's supposed to review it.
+        await submitReport(created.report_id)
+      }
       pushToast({ variant: 'success', title: 'Saved', message: isDraft ? 'Draft saved.' : 'Report published.' })
       if (!isDraft) {
         addNotification({
@@ -139,7 +175,11 @@ export default function PlannerReports() {
 
           <div className="rounded-lg p-4 mb-4" style={{ background: 'var(--bg-elevated)' }}>
             <div className="text-[10px] font-mono uppercase text-(--text-muted) mb-2">Auto-generated from week data</div>
-            {WEEKLY_STATS.map(([label, val]) => (
+            {[
+              ['Plans submitted', weeklyStats?.plansSubmitted ?? '…'],
+              ['Plans approved', weeklyStats?.plansApproved ?? '…'],
+              ['Active AI patterns identified', weeklyStats?.hotspots ?? '…'],
+            ].map(([label, val]) => (
               <div key={label} className="flex justify-between text-[12px] py-1">
                 <span className="text-(--text-secondary)">{label}</span>
                 <span className="font-mono font-semibold">{val}</span>
@@ -178,6 +218,11 @@ export default function PlannerReports() {
                   analysis: assessmentRef.current?.value || '',
                   notes: notesRef.current?.value || '',
                   generatedBy: cu?.fullName || sessionStorage.getItem('resq-full-name') || 'Emergency Planner',
+                  stats: {
+                    plansSubmitted: weeklyStats?.plansSubmitted ?? 'N/A',
+                    plansApproved: weeklyStats?.plansApproved ?? 'N/A',
+                    hotspots: weeklyStats?.hotspots ?? 'N/A',
+                  },
                 })
               }}>
               <Download size={14} />Export PDF
@@ -250,27 +295,36 @@ export default function PlannerReports() {
               PATTERN ANALYST
             </span>
           </div>
-          {PLANNER_AI_INSIGHTS.map((insight, i) => {
-            const Icon = INSIGHT_ICONS[insight.icon] || TrendingUp
-            const labelColor =
-              insight.type.includes('COVERAGE') ? 'var(--status-critical)' : insight.type.includes('MODEL') ? 'var(--status-info)' : 'var(--accent)'
-            return (
-              <div
-                key={i}
-                className="py-3"
-                style={{ borderBottom: i < PLANNER_AI_INSIGHTS.length - 1 ? '1px solid var(--border-subtle)' : 'none' }}
-              >
-                <div className="flex items-center gap-2">
-                  <Icon size={16} style={{ color: labelColor }} />
-                  <span className="text-[10px] font-mono uppercase" style={{ color: labelColor }}>
-                    {insight.type}
-                  </span>
+          {aiInsights.length === 0 ? (
+            <p className="text-[12px] text-(--text-muted) m-0">No patterns detected yet.</p>
+          ) : (
+            aiInsights.map((insight, i) => {
+              const meta = insightMeta(insight.severity)
+              const Icon = INSIGHT_ICONS[meta.icon] || TrendingUp
+              const labelColor = meta.type.includes('COVERAGE') ? 'var(--status-critical)' : 'var(--accent)'
+              return (
+                <div
+                  key={i}
+                  className="py-3"
+                  style={{ borderBottom: i < aiInsights.length - 1 ? '1px solid var(--border-subtle)' : 'none' }}
+                >
+                  <div className="flex items-center gap-2">
+                    <Icon size={16} style={{ color: labelColor }} />
+                    <span className="text-[10px] font-mono uppercase" style={{ color: labelColor }}>
+                      {meta.type}
+                    </span>
+                  </div>
+                  <p className="text-[12px] text-(--text-primary) m-0 mt-1.5 leading-relaxed">
+                    {insight.pattern} — {insight.recommendation}
+                    {insight.affectedZone ? ` (${insight.affectedZone})` : ''}
+                  </p>
+                  <div className="font-mono text-[10px] text-(--text-muted) mt-1">
+                    Frequency: {insight.frequency}{insightsModelVersion ? ` · Model ${insightsModelVersion}` : ''}
+                  </div>
                 </div>
-                <p className="text-[12px] text-(--text-primary) m-0 mt-1.5 leading-relaxed">{insight.text}</p>
-                <div className="font-mono text-[10px] text-(--text-muted) mt-1">{insight.ago}</div>
-              </div>
-            )
-          })}
+              )
+            })
+          )}
         </div>
       </div>
     </div>

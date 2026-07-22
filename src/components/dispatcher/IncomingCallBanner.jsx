@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Phone, PhoneOff } from 'lucide-react'
 import { useCallChannelStore } from '../../store/callChannelStore'
+import { playRingtone } from '../../utils/notificationSound'
 
 const TIMEOUT_S = 30
 
@@ -18,10 +19,13 @@ export default function IncomingCallBanner() {
   const [elapsed, setElapsed] = useState(0)
   const intervalRef = useRef(null)
 
+  const ringIntervalRef = useRef(null)
+
   useEffect(() => {
     if (!showIncomingBanner) {
       setElapsed(0)
       clearInterval(intervalRef.current)
+      clearInterval(ringIntervalRef.current)
       return
     }
 
@@ -37,7 +41,15 @@ export default function IncomingCallBanner() {
       })
     }, 1000)
 
-    return () => clearInterval(intervalRef.current)
+    // Ring on the banner appearing, then repeat every ~2s (playRingtone's
+    // own 3-cycle pattern is ~1.8s) until answered/declined/timed out.
+    playRingtone()
+    ringIntervalRef.current = setInterval(playRingtone, 2000)
+
+    return () => {
+      clearInterval(intervalRef.current)
+      clearInterval(ringIntervalRef.current)
+    }
   }, [showIncomingBanner, expireCall])
 
   if (!showIncomingBanner || !incomingCall) return null

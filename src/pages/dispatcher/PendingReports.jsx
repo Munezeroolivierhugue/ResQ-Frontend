@@ -194,18 +194,16 @@ export default function PendingReports() {
         </div>
       </div>
 
-      {/* Filter bar */}
-      <div className="bg-(--bg-surface) border border-(--border) rounded-xl px-4 py-3 mb-4">
-        <div className="relative max-w-md">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-(--text-muted)" />
-          <input
-            className="h-10 w-full bg-(--bg-input) border border-(--border) rounded-full pl-8 pr-3 text-[13px] text-(--text-primary) outline-none focus:border-(--accent) placeholder:text-(--text-muted)"
-            placeholder="Search pending reports..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ fontFamily: 'var(--font-body)' }}
-          />
-        </div>
+      {/* Search */}
+      <div className="relative max-w-md mb-4">
+        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-(--text-muted)" />
+        <input
+          className="h-10 w-full bg-(--bg-input) border border-(--border) rounded-full pl-8 pr-3 text-[13px] text-(--text-primary) outline-none focus:border-(--accent) placeholder:text-(--text-muted)"
+          placeholder="Search pending reports..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ fontFamily: 'var(--font-body)' }}
+        />
       </div>
 
       {/* Table */}
@@ -241,11 +239,8 @@ export default function PendingReports() {
                     ref={(el) => { if (el) rowRefs.current[inc.incident_id] = el }}
                     className="border-b border-(--border-subtle) transition-colors"
                     style={{
-                      background: isJustCompleted
-                        ? 'color-mix(in srgb, var(--accent) 8%, transparent)'
-                        : undefined,
-                      outline: isJustCompleted ? '2px solid var(--accent)' : undefined,
-                      outlineOffset: isJustCompleted ? '-2px' : undefined,
+                      outline: isJustCompleted ? '1px solid var(--accent)' : undefined,
+                      outlineOffset: isJustCompleted ? '-1px' : undefined,
                     }}
                   >
                     <td className="px-3.5 h-12">
@@ -258,10 +253,10 @@ export default function PendingReports() {
                         </span>
                         {isJustCompleted && (
                           <span
-                            className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                            className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border"
                             style={{
-                              background: 'var(--accent)',
-                              color: '#fff',
+                              borderColor: 'var(--accent)',
+                              color: 'var(--accent)',
                               fontFamily: 'var(--font-display)',
                             }}
                           >
@@ -322,10 +317,11 @@ export default function PendingReports() {
                       <button
                         type="button"
                         onClick={() => navigate('/dispatcher/incident-report', { state: { incident: inc } })}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border-none cursor-pointer text-[11px] font-bold transition-opacity hover:opacity-80"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border cursor-pointer text-[11px] font-bold transition-colors hover:bg-(--bg-elevated)"
                         style={{
-                          background: 'var(--accent)',
-                          color: '#fff',
+                          background: 'transparent',
+                          borderColor: 'var(--accent)',
+                          color: 'var(--accent)',
                           fontFamily: 'var(--font-display)',
                         }}
                       >

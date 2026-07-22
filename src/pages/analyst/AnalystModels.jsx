@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import AnalystPageHeader from '../../components/analyst/AnalystPageHeader'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
-import { listModels, getOverrideAnalysis } from '../../api/reporting'
+import { listModels, getOverrideAnalysis, getAnomalies } from '../../api/reporting'
 
 const MODEL_BORDER = {
   ACTIVE: '#22c55e',
@@ -17,11 +17,12 @@ function fmtDate(iso) {
 export default function AnalystModels() {
   const [models, setModels] = useState([])
   const [overrides, setOverrides] = useState([])
+  const [anomalies, setAnomalies] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.allSettled([listModels(), getOverrideAnalysis()])
-      .then(([modelsRes, overridesRes]) => {
+    Promise.allSettled([listModels(), getOverrideAnalysis(), getAnomalies()])
+      .then(([modelsRes, overridesRes, anomaliesRes]) => {
         if (modelsRes.status === 'fulfilled') {
           setModels(modelsRes.value.map((m) => {
             const raw = m.accuracy
@@ -32,23 +33,59 @@ export default function AnalystModels() {
             // only — showing the whole string inline was overflowing the card.
             const algorithmShort = algorithm.split('(')[0].trim()
             const unsupervised = algorithm.includes('IsolationForest')
+            // Rule-based scoring engines (Dispatch Brain / Coverage Watcher)
+            // have no training/accuracy concept at all — distinct from an
+            // unsupervised ML model, which just lacks a labeled-accuracy metric.
+            const ruleBased = !unsupervised && algorithm.toLowerCase().includes('rule-based')
+            // Real MAE-vs-baseline comparison the training script already
+            // computes (train_prediction_model.py) — parse it out of the full
+            // algorithm string instead of discarding it, so we can show the
+            // honest "beats a naive baseline by N%" framing instead of a bare
+            // normalized-accuracy percentage that reads as a low score.
+            const maeMatch = algorithm.match(/MAE=([\d.]+)\s+vs\s+baseline=([\d.]+)/i)
+            let improvementPct = null
+            if (maeMatch) {
+              const mae = parseFloat(maeMatch[1])
+              const baselineMae = parseFloat(maeMatch[2])
+              if (baselineMae > 0) {
+                improvementPct = Math.round(((baselineMae - mae) / baselineMae) * 1000) / 10
+              }
+            }
             return {
               model_id: m.modelId,
               name: m.modelName,
               algorithm,
               algorithm_short: algorithmShort,
               unsupervised,
+              ruleBased,
               accuracy,
-              status: m.status ?? 'UNKNOWN',
+              improvementPct,
               training_data_size: m.trainingDataSize,
+              status: m.status ?? 'UNKNOWN',
               last_trained: m.lastTrained,
             }
           }))
         }
         if (overridesRes.status === 'fulfilled') setOverrides(overridesRes.value)
+        if (anomaliesRes.status === 'fulfilled') setAnomalies(anomaliesRes.value)
       })
       .finally(() => setLoading(false))
   }, [])
+
+  // Pattern Analyst (IsolationForest) is genuinely unsupervised — no accuracy
+  // metric exists for it. Instead of a vague "no accuracy metric" line (reads
+  // like a broken/zero value), show the real stat this model actually
+  // produces: how many of the real incidents it analysed got flagged.
+  const anomalySummary = anomalies
+    ? anomalies.total_analyzed > 0
+      ? (() => {
+          const flagged = anomalies.anomalies.length
+          const total = anomalies.total_analyzed
+          const patternConsistentPct = Math.round((1 - flagged / total) * 100)
+          return `${flagged} anomalies flagged of ${total} incidents reviewed (${patternConsistentPct}% pattern-consistent)`
+        })()
+      : (anomalies.message || 'Not enough real incidents yet')
+    : null
 
   return (
     <div className="portal-page flex flex-col gap-5 min-w-[1024px]">
@@ -72,17 +109,33 @@ export default function AnalystModels() {
               <StatusBadge label={m.status} variant={m.status === 'ACTIVE' ? 'resolved' : 'handover'} />
             </div>
             <div
-              className={m.accuracy != null ? 'font-mono text-[28px] font-bold mb-3' : 'font-mono text-[13px] font-semibold mb-3'}
+              className={m.accuracy != null ? 'font-mono text-[28px] font-bold mb-1' : 'font-mono text-[13px] font-semibold mb-3'}
               style={{ color: MODEL_BORDER[m.status] ?? '#94a3b8' }}
             >
-              {m.accuracy != null ? `${m.accuracy}%` : m.unsupervised ? 'Unsupervised — no accuracy metric' : 'Not yet trained'}
+              {m.accuracy != null
+                ? (m.improvementPct != null && m.improvementPct > 0 ? `Beats baseline by ${m.improvementPct}%` : `${m.accuracy}%`)
+                : m.unsupervised
+                  ? (anomalySummary ?? 'Unsupervised anomaly detection — evaluated by flagged-pattern review, not accuracy %')
+                  : 'Rule-based scoring — no training/accuracy metric applies'}
             </div>
+            {m.accuracy != null && m.improvementPct != null && (
+              <div className="text-[11px] text-(--text-muted) mb-3">
+                {m.improvementPct > 0
+                  ? <>Reduces prediction error by {m.improvementPct}% vs. a naive average-based baseline <span className="opacity-70">(normalized accuracy: {m.accuracy}%)</span></>
+                  : <>Matches the naive average-based baseline on error (MAE currently tied) <span className="opacity-70">— normalized accuracy: {m.accuracy}%</span></>}
+              </div>
+            )}
             <div className="flex justify-between gap-3 text-[12px] py-1.5 border-b border-(--border-subtle)">
               <span className="text-(--text-secondary) shrink-0">Algorithm</span>
               <span className="font-mono font-semibold text-right truncate min-w-0" title={m.algorithm}>{m.algorithm_short}</span>
             </div>
+            {m.training_data_size != null && (
+              <div className="flex justify-between text-[12px] py-1.5 border-b border-(--border-subtle)">
+                <span className="text-(--text-secondary)">Training data</span>
+                <span className="font-mono font-semibold">{m.training_data_size} incident-time-buckets</span>
+              </div>
+            )}
             {[
-              ['Training data', m.training_data_size != null ? `${m.training_data_size.toLocaleString()} incidents` : '—'],
               ['Last trained', fmtDate(m.last_trained)],
             ].map(([label, val]) => (
               <div key={label} className="flex justify-between text-[12px] py-1.5 border-b border-(--border-subtle) last:border-0">

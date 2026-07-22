@@ -1,8 +1,13 @@
 import { useState, useEffect, useMemo } from 'react'
+import { Search } from 'lucide-react'
 import AnalystPageHeader from '../../components/analyst/AnalystPageHeader'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
+import FilterDropdown from '../../components/admin/FilterDropdown'
+import AdminPagination from '../../components/admin/AdminPagination'
 import { listReports, getReport } from '../../api/reporting'
 import { listDistricts } from '../../api/districts'
+
+const PAGE_SIZE = 10
 
 export default function AnalystLibrary() {
   const [reports, setReports] = useState([])
@@ -13,6 +18,7 @@ export default function AnalystLibrary() {
   const [districtFilter, setDistrictFilter] = useState('')
   const [preview, setPreview] = useState(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [page, setPage] = useState(1)
 
   useEffect(() => {
     Promise.all([listReports(), listDistricts()])
@@ -36,6 +42,10 @@ export default function AnalystLibrary() {
     return true
   })
 
+  useEffect(() => { Promise.resolve().then(() => setPage(1)) }, [search, typeFilter, districtFilter])
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const pageReports = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
   function openPreview(reportId) {
     setPreviewLoading(true)
     setPreview({ report_id: reportId })
@@ -52,21 +62,28 @@ export default function AnalystLibrary() {
         badge="Report Library"
       />
 
-      <div className="flex flex-wrap gap-2">
-        <input
-          className="dispatcher-input dispatcher-text-input h-10 flex-1 min-w-[200px]"
-          placeholder="Search by type, district, author..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+      <div className="flex flex-nowrap items-center gap-2">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-(--text-muted)" />
+          <input
+            className="dispatcher-input dispatcher-text-input h-9 w-full pl-8 text-[12px]"
+            placeholder="Search by type, district, author..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <FilterDropdown
+          label="All types"
+          value={typeFilter}
+          onChange={setTypeFilter}
+          options={[{ value: '', label: 'All types' }, ...reportTypes.map((t) => ({ value: t, label: t }))]}
         />
-        <select className="dispatcher-input dispatcher-select h-10 w-44 text-[12px]" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
-          <option value="">All types</option>
-          {reportTypes.map((t) => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <select className="dispatcher-input dispatcher-select h-10 w-44 text-[12px]" value={districtFilter} onChange={(e) => setDistrictFilter(e.target.value)}>
-          <option value="">All districts</option>
-          {districts.map((d) => <option key={d.district_id} value={d.district_id}>{d.name}</option>)}
-        </select>
+        <FilterDropdown
+          label="All districts"
+          value={districtFilter}
+          onChange={setDistrictFilter}
+          options={[{ value: '', label: 'All districts' }, ...districts.map((d) => ({ value: d.district_id, label: d.name }))]}
+        />
       </div>
 
       <div className="dispatcher-surface overflow-x-auto">
@@ -89,7 +106,7 @@ export default function AnalystLibrary() {
             {!loading && filtered.length === 0 && (
               <tr><td colSpan={7} className="p-6 text-center text-(--text-muted)">No reports found.</td></tr>
             )}
-            {filtered.map((r) => (
+            {pageReports.map((r) => (
               <tr key={r.report_id} className="border-b border-(--border-subtle) dispatcher-table-row">
                 <td className="p-3 font-medium">{r.report_type}</td>
                 <td className="p-3">{r.district_name ?? 'All Districts'}</td>
@@ -109,6 +126,8 @@ export default function AnalystLibrary() {
           </tbody>
         </table>
       </div>
+
+      <AdminPagination page={page} totalPages={totalPages} totalCount={filtered.length} pageSize={PAGE_SIZE} onPageChange={setPage} />
 
       {preview && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setPreview(null)}>

@@ -23,6 +23,7 @@ import SettingsProfileSection from './SettingsProfileSection'
 import { useToastStore } from '../../store/toastStore'
 import { FR_OFFICER } from '../../data/mockFieldResponderData'
 import { useFieldResponderStore } from '../../store/fieldResponderStore'
+import { getMyStats } from '../../api/fieldResponderStats'
 
 const THEME_OPTIONS = [
   {
@@ -78,6 +79,12 @@ export default function FieldResponderSettingsView() {
   const pushToast = useToastStore((s) => s.pushToast)
   const [language, setLanguage] = useState('en')
   const [mfaEnabled, setMfaEnabled] = useState(false)
+  const [district, setDistrict] = useState(null)
+  const [incidentsToday, setIncidentsToday] = useState(null)
+
+  useEffect(() => {
+    getMyStats().then((s) => setIncidentsToday(s.incidents_today)).catch(() => {})
+  }, [])
   // Persisted to localStorage — was plain in-memory useState with no
   // persistence at all, resetting to default on every reload.
   const [toggles, setToggles] = useState(loadFrToggles)
@@ -107,12 +114,15 @@ export default function FieldResponderSettingsView() {
 
       {section === 'profile' && (
         <SettingsProfileSection
-          onUserLoaded={(u) => setMfaEnabled(u.mfa_enabled)}
+          onUserLoaded={(u) => {
+            setMfaEnabled(u.mfa_enabled)
+            setDistrict(u.district_name)
+          }}
           shiftStats={[
             { label: 'Shift window', value: FR_OFFICER.shift },
             { label: 'Unit', value: FR_OFFICER.unit },
-            { label: 'Incidents today', value: '—' },
-            { label: 'Assigned sector', value: '—' },
+            { label: 'Incidents today', value: incidentsToday ?? '—' },
+            { label: 'Assigned district', value: district || '—' },
           ]}
         />
       )}

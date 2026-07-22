@@ -49,6 +49,7 @@ import OpsManagerMultiAgency from './pages/ops-manager/OpsManagerMultiAgency'
 import OpsManagerClosedIncidents from './pages/ops-manager/OpsManagerClosedIncidents'
 import OpsManagerIncidentClosureReview from './pages/ops-manager/OpsManagerIncidentClosureReview'
 import OpsManagerShift from './pages/ops-manager/OpsManagerShift'
+import OpsManagerPlanReview from './pages/ops-manager/OpsManagerPlanReview'
 import OpsManagerProfile from './pages/ops-manager/OpsManagerProfile'
 import OpsManagerSettings from './pages/ops-manager/OpsManagerSettings'
 import DistrictCommanderRoute from './components/layout/DistrictCommanderRoute'
@@ -104,11 +105,15 @@ import DistrictCommanderHelp from './pages/district-commander/Help'
 import FieldResponderHelp from './pages/field-responder/Help'
 import OpsManagerHelp from './pages/ops-manager/Help'
 import PlannerHelp from './pages/planner/Help'
+import LocateCall from './pages/public/LocateCall'
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Public — reached via the SMS link Twilio sends to real callers */}
+        <Route path="/locate/:callId" element={<LocateCall />} />
+
         {/* Field Responder mobile auth */}
         <Route path="/fr" element={<FRSplash />} />
         <Route path="/fr/login" element={<FRLogin />} />
@@ -231,6 +236,7 @@ export default function App() {
             <Route path="escalations/:incidentId" element={<OpsManagerEscalation />} />
             <Route path="resources" element={<OpsManagerResources />} />
             <Route path="multi-agency" element={<OpsManagerMultiAgency />} />
+            <Route path="plan-review" element={<OpsManagerPlanReview />} />
             <Route path="closed-incidents" element={<OpsManagerClosedIncidents />} />
             <Route path="incident-closure" element={<OpsManagerIncidentClosureReview />} />
             <Route path="shift" element={<OpsManagerShift />} />

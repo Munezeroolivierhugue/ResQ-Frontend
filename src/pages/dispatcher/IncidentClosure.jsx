@@ -18,6 +18,7 @@ import { submitFieldReport, uploadAttachment, getReportForIncident, getClosureFo
 import { listDispatchesForIncident } from '../../api/dispatches'
 import { listVehicles } from '../../api/vehicles'
 import { formatIncidentType } from '../../utils/incidentTypeLabels'
+import { useToastStore } from '../../store/toastStore'
 
 const DISPOSITION_OPTIONS = [
   { value: 'arrests', label: 'Arrest(s) made' },
@@ -36,6 +37,7 @@ const CLOSURE_INCIDENT_KEY = 'resq-closure-incident-id'
 
 export default function IncidentClosure() {
   const navigate = useNavigate()
+  const pushToast = useToastStore((s) => s.pushToast)
   const { state: navState } = useLocation()
   const storedIncidentId = navState?.incident ? null : sessionStorage.getItem(CLOSURE_INCIDENT_KEY)
   const [incident, setIncident] = useState(navState?.incident ?? null)
@@ -203,6 +205,7 @@ export default function IncidentClosure() {
     sessionStorage.removeItem(CLOSURE_INCIDENT_KEY)
     if (draftKey) localStorage.removeItem(draftKey)
     setSubmitted(true)
+    pushToast({ variant: 'success', title: 'Incident Closed', message: 'Incident closed — record written. Redirecting to shift handover…' })
     setTimeout(() => navigate('/dispatcher/shift-handover'), 1800)
   }
 
@@ -257,6 +260,7 @@ export default function IncidentClosure() {
     sessionStorage.removeItem(CLOSURE_INCIDENT_KEY)
     if (draftKey) localStorage.removeItem(draftKey)
     setSubmitted(true)
+    pushToast({ variant: 'success', title: 'Incident Closed', message: 'Incident closed — record written. Redirecting to shift handover…' })
     setTimeout(() => navigate('/dispatcher/shift-handover'), 1800)
   }
 
@@ -313,22 +317,6 @@ export default function IncidentClosure() {
           }}
         >
           {submitError}
-        </div>
-      )}
-
-      {/* Success toast */}
-      {submitted && (
-        <div
-          className="flex items-center gap-2 px-4 py-3 rounded-xl border mb-5 text-[13px] font-semibold"
-          style={{
-            background: 'var(--status-low-bg)',
-            color: 'var(--status-low)',
-            borderColor: 'var(--status-low)',
-            fontFamily: 'var(--font-display)',
-          }}
-        >
-          <CheckCircle size={16} />
-          Incident closed — record written. Redirecting to shift handover…
         </div>
       )}
 
@@ -548,7 +536,7 @@ export default function IncidentClosure() {
       )}
 
       {/* Timeline + Media — always visible */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
         <SurfaceCard padding="p-5 md:p-6">
           <SectionTitle
             title="Response timeline"
@@ -560,7 +548,7 @@ export default function IncidentClosure() {
                 {incident?.call_time ? `Started: ${new Date(incident.call_time).toLocaleString()}` : ''}
               </span>
             }
-            className="mb-4"
+            className="mb-2"
           />
           <VerticalTimeline events={[]} />
         </SurfaceCard>

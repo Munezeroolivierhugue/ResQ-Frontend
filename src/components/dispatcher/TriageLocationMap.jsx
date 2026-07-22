@@ -5,11 +5,12 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { MapContainer, TileLayer, Marker, Circle, useMap } from 'react-leaflet'
 import L from 'leaflet'
-import { Navigation, Crosshair, MapPin, Search, X } from 'lucide-react'
+import { Crosshair, MapPin, Search, X } from 'lucide-react'
 import RwandaBoundsEnforcer from '../map/RwandaBoundsEnforcer'
 import { RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../map/rwandaConstants'
 import { IntakePanel } from '../intake/IntakeUi'
 import api from '../../lib/apiClient'
+import { subscribe } from '../../lib/wsClient'
 import 'leaflet/dist/leaflet.css'
 
 const MAP_TILES = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'
@@ -77,15 +78,7 @@ function makeDistrictIcon() {
   })
 }
 
-const GPS_STATES = {
-  idle: null,
-  sending: 'Sending...',
-  waiting: 'Link sent. Waiting for caller...',
-  received: 'Precise GPS received',
-  error: 'SMS failed — retry?',
-}
-
-export default function TriageLocationMap({ caller, onLocationChange, onAddressFound, districtCenter }) {
+export default function TriageLocationMap({ caller, callId, onLocationChange, onAddressFound, districtCenter }) {
   const roughPos = useMemo(
     () => (caller?.rough_lat && caller?.rough_lng ? [caller.rough_lat, caller.rough_lng] : null),
     [caller],
@@ -93,7 +86,6 @@ export default function TriageLocationMap({ caller, onLocationChange, onAddressF
 
   const [precisePos, setPrecisePos] = useState(null)
   const [manualPos, setManualPos] = useState(null)
-  const [gpsState, setGpsState] = useState('idle')
   const [isPinDropMode, setIsPinDropMode] = useState(false)
 
   // ── Street search state ──────────────────────────────────────────────────────
@@ -197,24 +189,18 @@ export default function TriageLocationMap({ caller, onLocationChange, onAddressF
     onLocationChange?.({ lat: pos[0], lng: pos[1], source: locationSource })
   }, [precisePos, manualPos, roughPos, locationSource, onLocationChange])
 
-  async function handleSendSms() {
-    const phone = caller?.phone_number
-    if (!phone) return
-    setGpsState('sending')
-    try {
-      const { data } = await api.get('/api/location/sms-gps', { params: { phoneNumber: phone } })
-      setGpsState('waiting')
-      // If backend returns coordinates immediately (e.g. device already has GPS)
-      const coords = data?.data ?? data
-      if (coords?.lat && coords?.lng) {
-        setPrecisePos([coords.lat, coords.lng])
-        setGpsState('received')
+  // Real GPS the caller shared via the SMS link (see LocationWebhookController)
+  // previously had nowhere to land in the UI at all — the backend broadcast
+  // `location_updated` but nothing here ever subscribed to it.
+  useEffect(() => {
+    if (!callId) return
+    const unsub = subscribe(`/topic/calls/${callId}/status`, (evt) => {
+      if (evt?.type === 'location_updated' && evt.lat != null && evt.lng != null) {
+        setPrecisePos([evt.lat, evt.lng])
       }
-    } catch {
-      setGpsState('error')
-      setTimeout(() => setGpsState('idle'), 3000)
-    }
-  }
+    })
+    return unsub
+  }, [callId])
 
   async function handlePinDrop(latlng) {
     if (!isPinDropMode) return
@@ -227,15 +213,6 @@ export default function TriageLocationMap({ caller, onLocationChange, onAddressF
       // Non-fatal — coordinates are still captured locally
     }
   }
-
-  const hasPhone = !!caller?.phone_number
-  const canSendSms = hasPhone && (gpsState === 'idle' || gpsState === 'error')
-  const gpsLabel =
-    gpsState === 'idle' || gpsState === 'error'
-      ? hasPhone
-        ? 'Send GPS link via SMS'
-        : 'No phone number'
-      : GPS_STATES[gpsState]
 
   const sourceColors = {
     TELECOM_ROUGH: 'var(--location-rough)',
@@ -334,24 +311,10 @@ export default function TriageLocationMap({ caller, onLocationChange, onAddressF
         )}
       </div>
 
-      {/* SMS + pin controls */}
+      {/* Pin controls — the GPS-share SMS is sent automatically the moment a
+          real call comes in (see TwilioVoiceWebhookController), so there is
+          no manual "send" action here anymore. */}
       <div className="px-4 py-2.5 border-b border-(--border-subtle) flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          disabled={!canSendSms}
-          onClick={canSendSms ? handleSendSms : undefined}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12px] font-semibold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{
-            fontFamily: 'var(--font-display)',
-            borderColor: gpsState === 'received' ? 'var(--location-precise)' : gpsState === 'error' ? 'var(--status-critical)' : 'var(--border)',
-            color: gpsState === 'received' ? 'var(--location-precise)' : gpsState === 'error' ? 'var(--status-critical)' : 'var(--text-primary)',
-            background: gpsState === 'received' ? 'color-mix(in srgb, var(--location-precise) 10%, transparent)' : 'var(--bg-input)',
-          }}
-        >
-          <Navigation size={12} />
-          {gpsLabel}
-        </button>
-
         <button
           type="button"
           onClick={() => setIsPinDropMode((v) => !v)}

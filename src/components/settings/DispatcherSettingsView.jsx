@@ -13,6 +13,10 @@ import SettingsProfileSection from './SettingsProfileSection'
 import SettingsNavLayout from './SettingsNavLayout'
 import SettingsShiftManagementSection from './SettingsShiftManagementSection'
 import { useToastStore } from '../../store/toastStore'
+import { getAudioPrefs, setAudioPrefs, previewTone, setNotificationSoundMuted } from '../../utils/notificationSound'
+import { getMyStats } from '../../api/fieldResponderStats'
+
+const SHIFT_LABELS = { MORNING: 'Morning', EVENING: 'Evening', NIGHT: 'Night', ROTATING: 'Rotating' }
 
 const THEME_OPTIONS = [
   { id: 'light', label: 'Light mode', description: 'High-contrast command interface optimized for daylight operations centers.', icon: Sun },
@@ -74,6 +78,13 @@ export default function DispatcherSettingsView() {
   const { theme, setTheme } = useThemeStore()
   const pushToast = useToastStore((s) => s.pushToast)
   const [mfaEnabled, setMfaEnabled] = useState(false)
+  const [shiftType, setShiftType] = useState(null)
+  const [district, setDistrict] = useState(null)
+  const [incidentsToday, setIncidentsToday] = useState(null)
+
+  useEffect(() => {
+    getMyStats().then((s) => setIncidentsToday(s.incidents_today)).catch(() => {})
+  }, [])
 
   // Persisted to localStorage (same fix already applied to Admin's settings
   // this session) — these were plain useState with zero persistence, so
@@ -88,10 +99,20 @@ export default function DispatcherSettingsView() {
   const [mapZoom, setMapZoom] = useState(12)
   const [unitLabels, setUnitLabels] = useState('always')
   const [language, setLanguage] = useState('en')
-  const [volume, setVolume] = useState(75)
-  const [toneCritical, setToneCritical] = useState('siren')
-  const [toneHigh, setToneHigh] = useState('beep')
-  const [toneMed, setToneMed] = useState('beep')
+  // Volume + per-priority tone were plain useState with no persistence and
+  // nothing downstream ever read them — playNotificationSound() always
+  // played the same fixed chime regardless of what was picked here. Now
+  // backed by localStorage (see notificationSound.js's getAudioPrefs) so
+  // the selection actually affects live notification playback.
+  const [audioPrefs, setAudioPrefsState] = useState(getAudioPrefs)
+  const { volume, toneCritical, toneHigh, toneMed } = audioPrefs
+  const updateAudioPref = (key, value) => {
+    setAudioPrefsState(setAudioPrefs({ [key]: value }))
+  }
+  const setVolume = (v) => updateAudioPref('volume', v)
+  const setToneCritical = (v) => updateAudioPref('toneCritical', v)
+  const setToneHigh = (v) => updateAudioPref('toneHigh', v)
+  const setToneMed = (v) => updateAudioPref('toneMed', v)
   const [overrideReasons, setOverrideReasons] = useState([])
   const flashToast = () => {
     pushToast({ variant: 'success', title: 'Saved', message: 'Settings updated' })
@@ -120,7 +141,17 @@ export default function DispatcherSettingsView() {
     >
           {section === 'profile' && (
             <SettingsProfileSection
-              onUserLoaded={(u) => setMfaEnabled(u.mfa_enabled)}
+              onUserLoaded={(u) => {
+                setMfaEnabled(u.mfa_enabled)
+                setShiftType(u.shift_type)
+                setDistrict(u.district_name)
+              }}
+              shiftStats={[
+                { label: 'Shift', value: SHIFT_LABELS[shiftType] || '—' },
+                { label: 'Incidents handled today', value: incidentsToday ?? '—' },
+                { label: 'Time on duty', value: '00:00:00', mono: true },
+                { label: 'Assigned district', value: district || '—' },
+              ]}
             />
           )}
 
@@ -289,12 +320,16 @@ export default function DispatcherSettingsView() {
                       <option value="horn">Horn Blast</option>
                     </select>
                   </label>
-                  <button type="button" className="dispatcher-btn-ghost text-[12px] flex items-center gap-1 mb-0.5">
+                  <button
+                    type="button"
+                    className="dispatcher-btn-ghost text-[12px] flex items-center gap-1 mb-0.5"
+                    onClick={() => previewTone(row.value)}
+                  >
                     <Play size={14} /> Test
                   </button>
                 </div>
               ))}
-              <SettingsToggleRow label="Mute all sounds" description="Override all audio settings. Badge notifications still appear." on={toggles.muteAll} onChange={(v) => setToggle('muteAll', v)} />
+              <SettingsToggleRow label="Mute all sounds" description="Override all audio settings. Badge notifications still appear." on={toggles.muteAll} onChange={(v) => { setToggle('muteAll', v); setNotificationSoundMuted(v) }} />
               <div className="mt-4 p-3 rounded-lg flex gap-2 text-[12px] text-(--text-secondary)" style={{ background: 'var(--accent-ghost)', border: '1px solid var(--accent)' }}>
                 <Info size={16} className="text-(--accent) shrink-0" />
                 In a shared operations center, use headphones and coordinate alert volume with your team.

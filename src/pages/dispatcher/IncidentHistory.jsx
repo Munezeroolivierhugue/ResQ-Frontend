@@ -218,17 +218,6 @@ export default function IncidentHistory() {
       </div>
 
       <div className="flex flex-nowrap items-center gap-2 mb-4">
-        <div className="relative w-56 shrink-0">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-(--text-muted)" />
-          <input
-            type="text"
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1) }}
-            placeholder="Search incidents…"
-            className="dispatcher-input h-8 w-full rounded-full pl-8 pr-3 text-[11px]"
-            style={{ borderRadius: 9999 }}
-          />
-        </div>
         <FilterDropdown
           label="All Time"
           value={range}
@@ -247,6 +236,17 @@ export default function IncidentHistory() {
           onChange={(v) => setDistrictFilter(v)}
           options={[{ value: 'All', label: 'All Districts' }, ...districts.map(d => ({ value: d.district_id, label: d.name }))]}
         />
+        <div className="relative w-56 shrink-0 ml-auto">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-(--text-muted)" />
+          <input
+            type="text"
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1) }}
+            placeholder="Search incidents…"
+            className="dispatcher-input h-8 w-full rounded-full pl-8 pr-3 text-[11px]"
+            style={{ borderRadius: 9999 }}
+          />
+        </div>
       </div>
 
       <div className="dispatcher-surface table-scroll">

@@ -1,7 +1,7 @@
 import { useLocation, Link } from 'react-router-dom'
 import {
   LayoutDashboard, Map, AlertTriangle, ArrowLeftRight, Building2, BarChart3,
-  Settings, HelpCircle, LogOut, Siren, X, FileCheck,
+  Settings, HelpCircle, LogOut, Siren, X, FileCheck, ClipboardList,
 } from 'lucide-react'
 import SidebarToggle from './SidebarToggle'
 import { useSidebarClasses } from '../../hooks/useSidebarClasses'
@@ -17,6 +17,7 @@ const RESOURCES = [
 ]
 
 const OVERSIGHT = [
+  { icon: ClipboardList, label: 'Plan Review', href: '/ops-manager/plan-review' },
   { icon: FileCheck, label: 'Closed Incidents', href: '/ops-manager/closed-incidents' },
   { icon: BarChart3, label: 'Shift Performance', href: '/ops-manager/shift' },
 ]

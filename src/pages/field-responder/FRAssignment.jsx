@@ -7,8 +7,8 @@ import FlagIssueModal from '../../components/field-responder/FlagIssueModal'
 import { etaColor } from '../../data/mockFieldResponderData'
 import { useFieldResponderStore } from '../../store/fieldResponderStore'
 import { connect, subscribe, disconnect } from '../../lib/wsClient'
-import { getAccessToken } from '../../utils/authSession'
-import { listDispatchesForIncident } from '../../api/dispatches'
+import { getAccessToken, getCurrentUser } from '../../utils/authSession'
+import { listDispatchesForIncident, getDispatchMessages } from '../../api/dispatches'
 import { getIncident } from '../../api/incidents'
 import { formatIncidentType } from '../../utils/incidentTypeLabels'
 
@@ -29,6 +29,7 @@ export default function FRAssignment() {
   const vehicleId       = useFieldResponderStore((s) => s.vehicleId)
   const dispatchMessages  = useFieldResponderStore((s) => s.dispatchMessages)
   const addDispatchMessage = useFieldResponderStore((s) => s.addDispatchMessage)
+  const hydrateDispatchMessages = useFieldResponderStore((s) => s.hydrateDispatchMessages)
   const [flagOpen, setFlagOpen] = useState(false)
   const [polling, setPolling]   = useState(false)
 
@@ -40,6 +41,31 @@ export default function FRAssignment() {
   // topic/shared store as FRNavigation.jsx and FROnScene.jsx — one persistent
   // thread across the whole assignment lifecycle.
   const dispatchId = assignment?.dispatch?.dispatch_id
+
+  // Persisted history fetch — the live WS subscription below only ever showed
+  // messages sent AFTER this component mounted, so the dispatcher's very first
+  // message (sent at dispatch time, before the responder even opened the app)
+  // was permanently invisible. Fetch full history on mount and merge it in
+  // (hydrateDispatchMessages dedupes against anything the WS subscription may
+  // have already delivered).
+  useEffect(() => {
+    if (!dispatchId) return
+    const cu = getCurrentUser()
+    getDispatchMessages(dispatchId).then((history) => {
+      hydrateDispatchMessages(history.map((m) => ({
+        id: m.message_id,
+        message_id: m.message_id,
+        type: 'text',
+        from: cu?.user_id && m.sender_id === cu.user_id ? 'officer' : 'dispatch',
+        text: m.text,
+        senderName: m.sender_name,
+        time: m.sent_at
+          ? new Date(m.sent_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+          : '',
+      })))
+    }).catch(() => { /* history is best-effort — live WS still works if this fails */ })
+  }, [dispatchId]) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (!dispatchId) return
     const token = getAccessToken()

@@ -177,7 +177,10 @@ export default function AnalystReports() {
       ['Metric', 'Value'],
       ['Avg Response Time', report.avg_response_time != null ? `${report.avg_response_time.toFixed(1)}m` : '—'],
       ['Within Target', withinTargetPct != null ? `${withinTargetPct}%` : '—'],
-      ['Dispatch Accuracy', report.resolution_rate != null ? `${Math.round(report.resolution_rate * 100)}%` : '—'],
+      // resolution_rate already arrives as a 0–100 percentage (backend's
+      // computeDispatchAccuracy() returns accepted/all*100) — multiplying by
+      // 100 again produced nonsensical values like "5313%". Round it as-is.
+      ['Dispatch Accuracy', report.resolution_rate != null ? `${Math.round(report.resolution_rate)}%` : '—'],
       ['Total Incidents', String(report.total_incidents ?? preview.incidentCount)],
       [],
       ['DISTRICT BREAKDOWN'],
@@ -268,7 +271,7 @@ export default function AnalystReports() {
       <div style="font-size:11px;font-weight:600;color:#2d8050">Within Target</div>
     </div>
     <div style="background:rgba(135,157,31,0.12);border-left:4px solid #879D1F;border-radius:8px;padding:14px">
-      <div style="font-size:28px;font-weight:800;font-family:monospace;color:#879D1F;line-height:1;margin-bottom:5px">${report.resolution_rate != null ? Math.round(report.resolution_rate * 100) + '%' : '—'}</div>
+      <div style="font-size:28px;font-weight:800;font-family:monospace;color:#879D1F;line-height:1;margin-bottom:5px">${report.resolution_rate != null ? Math.round(report.resolution_rate) + '%' : '—'}</div>
       <div style="font-size:11px;font-weight:600;color:#6a7b17">Dispatch Accuracy</div>
     </div>
     <div style="background:rgba(212,160,23,0.12);border-left:4px solid #D4A017;border-radius:8px;padding:14px">
@@ -341,34 +344,43 @@ export default function AnalystReports() {
           badge="Reports"
         />
       </div>
-      <div className="analyst-report-builder flex min-h-[calc(100vh-120px)]">
-        <aside
-          className="w-[280px] shrink-0 border-r border-(--border) bg-(--bg-surface) p-4 overflow-y-auto"
-          style={{ maxHeight: 'calc(100vh - 120px)' }}
+      <div className="analyst-report-builder flex flex-col min-h-[calc(100vh-120px)]">
+        <div
+          className="w-full p-4"
+          style={{ background: 'var(--bg-canvas)' }}
         >
-          <div className="flex flex-col gap-5">
-            <label className="dispatcher-field">
-              <span className="text-[12px] font-medium">Report name</span>
-              <input ref={reportNameRef} className="dispatcher-input dispatcher-text-input h-10" placeholder="e.g. Weekly Kigali Response Time Summary" />
-            </label>
-            <label className="dispatcher-field">
-              <span className="text-[12px] font-medium">Report type</span>
-              <select className="dispatcher-input dispatcher-select h-10" value={reportType} onChange={(e) => setReportType(e.target.value)}>
-                <option>Incident Analysis</option>
-                <option>Resource Utilization</option>
-                <option>Response Time Performance</option>
-                <option>Coverage Analysis</option>
-                <option>Unit & Officer Performance</option>
-                <option>Cross-District Comparison</option>
-                <option>Executive Summary</option>
-              </select>
-            </label>
-            <div className="flex flex-col gap-2">
+          <div className="dispatcher-surface p-4 flex flex-col gap-5">
+            <div>
+              <h3 className="text-[13px] font-bold m-0 mb-0.5">Report Configuration</h3>
+              <p className="text-[11px] text-(--text-muted) m-0">Set the scope, then generate.</p>
+            </div>
+
+            <div className="flex flex-col gap-4 pb-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <label className="dispatcher-field">
+                <span className="text-[12px] font-semibold text-(--text-secondary)">Report name</span>
+                <input ref={reportNameRef} className="dispatcher-input dispatcher-text-input h-10" placeholder="e.g. Weekly Kigali Response Time Summary" />
+              </label>
+              <label className="dispatcher-field">
+                <span className="text-[12px] font-semibold text-(--text-secondary)">Report type</span>
+                <select className="dispatcher-input dispatcher-select h-10" value={reportType} onChange={(e) => setReportType(e.target.value)}>
+                  <option>Incident Analysis</option>
+                  <option>Resource Utilization</option>
+                  <option>Response Time Performance</option>
+                  <option>Coverage Analysis</option>
+                  <option>Unit & Officer Performance</option>
+                  <option>Cross-District Comparison</option>
+                  <option>Executive Summary</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="flex flex-col gap-2 pb-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <span className="text-[12px] font-semibold text-(--text-secondary)">Date range</span>
               <div className="flex gap-2">
                 <input type="date" className="dispatcher-input dispatcher-text-input h-10 flex-1" value={dateFrom} max={dateTo} onChange={(e) => { setDateFrom(e.target.value); setRange('Custom') }} />
                 <input type="date" className="dispatcher-input dispatcher-text-input h-10 flex-1" value={dateTo} min={dateFrom} onChange={(e) => { setDateTo(e.target.value); setRange('Custom') }} />
               </div>
-              <div className="flex gap-1.5 overflow-x-auto pb-1">
+              <div className="flex gap-1.5 overflow-x-auto pb-1 pt-1">
                 {QUICK_RANGES.map((r) => (
                   <button
                     key={r.id}
@@ -386,21 +398,25 @@ export default function AnalystReports() {
                 ))}
               </div>
             </div>
-            <label className="dispatcher-field">
-              <span className="text-[12px] font-medium">Geographic scope</span>
-              <select
-                className="dispatcher-input dispatcher-select h-10"
-                value={scopeDistrictId}
-                onChange={(e) => setScopeDistrictId(e.target.value)}
-              >
-                <option value="">All Rwanda</option>
-                {districts.map((d) => (
-                  <option key={d.district_id} value={d.district_id}>{d.name}</option>
-                ))}
-              </select>
-            </label>
+
+            <div className="pb-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <label className="dispatcher-field">
+                <span className="text-[12px] font-semibold text-(--text-secondary)">Geographic scope</span>
+                <select
+                  className="dispatcher-input dispatcher-select h-10"
+                  value={scopeDistrictId}
+                  onChange={(e) => setScopeDistrictId(e.target.value)}
+                >
+                  <option value="">All Rwanda</option>
+                  {districts.map((d) => (
+                    <option key={d.district_id} value={d.district_id}>{d.name}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
             <div className="flex flex-col gap-2">
-              <div className="font-semibold text-[12px]">Chart type</div>
+              <span className="text-[12px] font-semibold text-(--text-secondary)">Chart type</span>
               <div className="grid grid-cols-3 gap-2">
                 {CHART_TYPES.map((c) => {
                   const Icon = c.icon
@@ -409,10 +425,10 @@ export default function AnalystReports() {
                       key={c.id}
                       type="button"
                       title={c.label}
-                      className="w-10 h-10 rounded-lg border flex items-center justify-center cursor-pointer"
+                      className="h-10 rounded-lg border flex items-center justify-center cursor-pointer"
                       style={{
                         borderColor: chartType === c.id ? 'var(--accent)' : 'var(--border)',
-                        background: chartType === c.id ? 'var(--accent-ghost)' : 'transparent',
+                        background: chartType === c.id ? 'var(--accent-ghost)' : 'var(--bg-elevated)',
                         color: chartType === c.id ? 'var(--accent)' : 'var(--text-secondary)',
                       }}
                       onClick={() => setChartType(c.id)}
@@ -423,6 +439,7 @@ export default function AnalystReports() {
                 })}
               </div>
             </div>
+
             <button
               type="button"
               className="dispatcher-btn-primary w-full h-12 font-bold text-[13px] inline-flex items-center justify-center gap-2"
@@ -433,9 +450,9 @@ export default function AnalystReports() {
               {generating ? 'GENERATING…' : 'GENERATE REPORT'}
             </button>
           </div>
-        </aside>
+        </div>
 
-        <div className="flex-1 min-w-0 overflow-y-auto p-6">
+        <div className="w-full p-6">
           {!preview ? (
             <p className="text-[13px] text-(--text-muted) text-center py-16">Configure a report and click "Generate Report" to see real data.</p>
           ) : (
@@ -455,7 +472,7 @@ export default function AnalystReports() {
                 {[
                   { v: report.avg_response_time != null ? `${report.avg_response_time.toFixed(1)}m` : '—', l: 'Avg Response' },
                   { v: preview.withinTargetPct != null ? `${preview.withinTargetPct}%` : '—', l: `Within Target (${targetMinutes}m)` },
-                  { v: report.resolution_rate != null ? `${Math.round(report.resolution_rate * 100)}%` : '—', l: 'Dispatch Accuracy' },
+                  { v: report.resolution_rate != null ? `${Math.round(report.resolution_rate)}%` : '—', l: 'Dispatch Accuracy' },
                   { v: String(report.total_incidents ?? preview.incidentCount), l: 'Total Incidents' },
                 ].map((k) => (
                   <div key={k.l} className="dispatcher-metric-card p-3">
@@ -526,7 +543,7 @@ export default function AnalystReports() {
           )}
         </div>
 
-        <aside className="w-[240px] shrink-0 border-l border-(--border) p-4 sticky top-0 self-start overflow-y-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
+        <div className="w-full border-t border-(--border) p-4">
           <h3 className="font-semibold text-[13px] m-0 mb-4">Export & Share</h3>
           <div className="flex flex-col gap-2 mb-5">
             <button type="button" className="dispatcher-btn-primary w-full inline-flex items-center justify-center gap-2" onClick={exportPDF} disabled={!preview}>
@@ -560,7 +577,7 @@ export default function AnalystReports() {
               </div>
             </div>
           )}
-        </aside>
+        </div>
       </div>
     </div>
   )

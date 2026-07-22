@@ -82,7 +82,7 @@ export const useNotificationsStore = create((set, get) => ({
       // Only for live, newly-arriving pushes — never on the initial
       // fetchNotifications() load, which would replay a sound for every
       // pre-existing unread notification on page load.
-      playNotificationSound()
+      playNotificationSound(payload.priority)
     })
     return unsub
   },

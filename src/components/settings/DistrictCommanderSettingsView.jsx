@@ -26,6 +26,9 @@ import SettingsNavLayout from './SettingsNavLayout'
 import { getDistrictCommanderDistrict } from '../../utils/districtCommanderSession'
 import { useToastStore } from '../../store/toastStore'
 import { listLockedUsersDc, unlockUserDc } from '../../api/admin'
+import { getMyStats } from '../../api/fieldResponderStats'
+
+const SHIFT_LABELS = { MORNING: 'Morning', EVENING: 'Evening', NIGHT: 'Night', ROTATING: 'Rotating' }
 
 const THEME_OPTIONS = [
   {
@@ -85,6 +88,12 @@ export default function DistrictCommanderSettingsView() {
   const [unlockingId, setUnlockingId] = useState(null)
   const navigate = useNavigate()
   const [mfaEnabled, setMfaEnabled] = useState(false)
+  const [shiftType, setShiftType] = useState(null)
+  const [incidentsToday, setIncidentsToday] = useState(null)
+
+  useEffect(() => {
+    getMyStats().then((s) => setIncidentsToday(s.incidents_today)).catch(() => {})
+  }, [])
   // Persisted to localStorage — was plain in-memory useState resetting to
   // default on every reload.
   const [toggles, setToggles] = useState(loadDcToggles)
@@ -136,12 +145,15 @@ export default function DistrictCommanderSettingsView() {
     >
       {section === 'profile' && (
         <SettingsProfileSection
-          onUserLoaded={(u) => setMfaEnabled(u.mfa_enabled)}
+          onUserLoaded={(u) => {
+            setMfaEnabled(u.mfa_enabled)
+            setShiftType(u.shift_type)
+          }}
           shiftStats={[
-            { label: 'Command window', value: '—' },
-            { label: 'Shift reports pending', value: '—' },
-            { label: 'Time on command', value: '00:00:00', mono: true },
             { label: 'Assigned district', value: district },
+            { label: 'Incidents handled today', value: incidentsToday ?? '—' },
+            { label: 'Shift', value: SHIFT_LABELS[shiftType] || '—' },
+            { label: 'Time on command', value: '00:00:00', mono: true },
           ]}
         />
       )}

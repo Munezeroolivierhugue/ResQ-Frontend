@@ -9,6 +9,9 @@ import { useToastStore } from '../../store/toastStore'
 import SettingsPasswordSection from './SettingsPasswordSection'
 import SettingsTrustedIpsSection from './SettingsTrustedIpsSection'
 import { SettingsToggleRow, SettingsGroup } from './SettingsToggle'
+import { getMyStats } from '../../api/fieldResponderStats'
+
+const SHIFT_LABELS = { MORNING: 'Morning', EVENING: 'Evening', NIGHT: 'Night', ROTATING: 'Rotating' }
 
 const THEME_OPTIONS = [
   { id: 'light', label: 'Light mode', description: 'High-contrast interface for data analysis.', icon: Sun },
@@ -47,6 +50,13 @@ export default function AnalystSettingsView() {
   const pushToast = useToastStore((s) => s.pushToast)
   const [language, setLanguage] = useState('en')
   const [mfaEnabled, setMfaEnabled] = useState(false)
+  const [shiftType, setShiftType] = useState(null)
+  const [district, setDistrict] = useState(null)
+  const [incidentsToday, setIncidentsToday] = useState(null)
+
+  useEffect(() => {
+    getMyStats().then((s) => setIncidentsToday(s.incidents_today)).catch(() => {})
+  }, [])
   // Persisted to localStorage — was plain in-memory useState resetting to
   // default on every reload.
   const [toggles, setToggles] = useState(loadAnalystToggles)
@@ -73,7 +83,17 @@ export default function AnalystSettingsView() {
     >
       {section === 'profile' && (
         <SettingsProfileSection
-          onUserLoaded={(u) => setMfaEnabled(u.mfa_enabled)}
+          onUserLoaded={(u) => {
+            setMfaEnabled(u.mfa_enabled)
+            setShiftType(u.shift_type)
+            setDistrict(u.district_name)
+          }}
+          shiftStats={[
+            { label: 'Shift', value: SHIFT_LABELS[shiftType] || '—' },
+            { label: 'Incidents handled today', value: incidentsToday ?? '—' },
+            { label: 'Time on duty', value: '00:00:00', mono: true },
+            { label: 'Assigned district', value: district || '—' },
+          ]}
         />
       )}
       {section === 'appearance' && (

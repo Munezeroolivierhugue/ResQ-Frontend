@@ -18,6 +18,7 @@ import { createDispatch } from '../../api/dispatches'
 import SearchableSelect from '../../components/ui/SearchableSelect'
 import { formatIncidentType } from '../../utils/incidentTypeLabels'
 import { useToastStore } from '../../store/toastStore'
+import { playRingtone } from '../../utils/notificationSound'
 import 'leaflet/dist/leaflet.css'
 
 const SEV_COLOR    = { critical: '#E8354A', high: '#F07820', medium: '#D4A017', low: '#3DAA6A' }
@@ -378,7 +379,7 @@ export default function LiveDispatchMap() {
           </span>
           <button
             type="button"
-            onClick={simulateCall}
+            onClick={() => { playRingtone(); simulateCall() }}
             className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-lg cursor-pointer text-[10px] font-bold uppercase tracking-wide"
             style={{
               background: 'var(--accent-ghost)',

@@ -6,6 +6,7 @@ import StatusBadge from "../../components/dispatcher/StatusBadge";
 import OpsManagerDistrictLabel from "../../components/ops-manager/OpsManagerDistrictLabel";
 import { getCurrentUser } from "../../utils/authSession";
 import { listCoverageGaps } from "../../api/planning";
+import { listVehicles } from "../../api/vehicles";
 import {
   listMutualAidRequests,
   createMutualAidRequest,
@@ -13,6 +14,17 @@ import {
 import { useToastStore } from "../../store/toastStore";
 
 const DURATION_MINUTES = { "1h": 60, "2h": 120, "4h": 240, "Full shift": 480 };
+
+// Real vehicle_type values only exist as backend enum strings (e.g. "FIRE_TRUCK").
+// Humanize for display while keeping the exact backend value as the option's value,
+// so matchesUnitType() in MutualAidService can match it against real fleet vehicles.
+function humanizeUnitType(type) {
+  return type
+    .toLowerCase()
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
 
 function timeAgo(isoString) {
   const diffMin = Math.floor((Date.now() - new Date(isoString).getTime()) / 60000);
@@ -79,8 +91,9 @@ function MutualAidPanel() {
   const districtId = currentUser?.district_id;
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [unitTypes, setUnitTypes] = useState([]);
   const [form, setForm] = useState({
-    unitType: "Police Van",
+    unitType: "",
     qty: 2,
     duration: "2h",
     notes: "",
@@ -100,6 +113,23 @@ function MutualAidPanel() {
       .catch(() => {})
       .finally(() => setHistoryLoading(false));
   }, [districtId]);
+
+  useEffect(() => {
+    // Derive the unit-type options from real fleet vehicle_type values instead
+    // of a hardcoded/guessed list, so the selected value always matches an
+    // actual vehicle type in the system (e.g. "AMBULANCE", "FIRE_TRUCK").
+    listVehicles()
+      .then((vehicles) => {
+        const types = Array.from(
+          new Set(vehicles.map((v) => v.vehicle_type).filter(Boolean))
+        ).sort();
+        setUnitTypes(types);
+        if (types.length > 0) {
+          setForm((f) => (f.unitType ? f : { ...f, unitType: types[0] }));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleSubmitMutualAid = async () => {
     if (!districtId) return;
@@ -157,9 +187,13 @@ function MutualAidPanel() {
                 value={form.unitType}
                 onChange={(e) => setForm((f) => ({ ...f, unitType: e.target.value }))}
               >
-                {["Police Van", "Motorcycle", "Ambulance", "Fire Unit"].map((t) => (
-                  <option key={t}>{t}</option>
-                ))}
+                {unitTypes.length === 0 ? (
+                  <option value="">Loading fleet types…</option>
+                ) : (
+                  unitTypes.map((t) => (
+                    <option key={t} value={t}>{humanizeUnitType(t)}</option>
+                  ))
+                )}
               </select>
             </label>
             <label className="dispatcher-field">

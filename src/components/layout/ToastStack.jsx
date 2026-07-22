@@ -2,7 +2,7 @@ import { CheckCircle2, XCircle, AlertTriangle, Info, X } from 'lucide-react'
 import { useToastStore } from '../../store/toastStore'
 
 const VARIANTS = {
-  success: { color: 'var(--status-low)', bg: 'var(--status-low-bg)', Icon: CheckCircle2 },
+  success: { color: 'var(--accent)', bg: 'var(--accent-ghost)', Icon: CheckCircle2 },
   error:   { color: 'var(--status-critical)', bg: 'var(--status-critical-bg)', Icon: XCircle },
   warning: { color: 'var(--status-medium)', bg: 'var(--status-medium-bg)', Icon: AlertTriangle },
   info:    { color: 'var(--status-info)', bg: 'var(--status-info-bg)', Icon: Info },

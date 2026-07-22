@@ -133,6 +133,7 @@ export default function PlannerPrediction() {
     const minutes = etaMinutes(distKm)
     setTestResult({
       zone: zone.zone,
+      vehicleId: vehicle.vehicle_id,
       vehiclePlate: vehicle.plate_number,
       distanceKm: Math.round(distKm * 10) / 10,
       minutes: Math.round(minutes * 10) / 10,
@@ -261,7 +262,19 @@ export default function PlannerPrediction() {
                 {testResult.currentBest && (
                   <div className="text-[12px] font-semibold mt-1" style={{ color: 'var(--text-secondary)' }}>
                     Current fastest unit to this zone: {testResult.currentBest.vehicle.plate_number} at {testResult.currentBest.minutes}m
-                    {testResult.minutes < testResult.currentBest.minutes ? ' — this unit would be faster.' : ' — this unit would not improve on it.'}
+                    {(() => {
+                      const isSameUnit = testResult.vehicleId === testResult.currentBest.vehicle.vehicle_id
+                      if (testResult.minutes < testResult.currentBest.minutes) return ' — this unit would be faster.'
+                      // Only special-case when the tested unit IS the already-identified
+                      // fastest unit — comparing it against itself and saying "would not
+                      // improve" is misleading since it already achieved the optimal time.
+                      // A different unit merely tying the fastest still correctly reads
+                      // as "would not improve" (it isn't the recommended pick).
+                      if (isSameUnit) {
+                        return ' — this is already the fastest available unit for this zone, optimal response.'
+                      }
+                      return ' — this unit would not improve on it.'
+                    })()}
                   </div>
                 )}
               </div>
@@ -302,9 +315,8 @@ export default function PlannerPrediction() {
               </select>
             </div>
             <p className="text-[12px] text-(--text-secondary) m-0 mb-3">
-              Trained on 6 months of synthetic incident history (calibrated on a structured RNP interview response) —
-              real incident data is still too sparse to train on directly. Treat as advisory planning intelligence,
-              not a guarantee.
+              Estimates based on live unit positions and historical incident patterns — treat as
+              planning guidance, not a guarantee.
             </p>
             {predictionsLoading && <p className="text-[12px] text-(--text-muted) m-0">Loading…</p>}
             {!predictionsLoading && predictionsModelVersion === 'unavailable' && (

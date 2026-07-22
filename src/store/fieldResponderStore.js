@@ -98,6 +98,24 @@ export const useFieldResponderStore = create(
       setGpsActive: (gpsActive) => set({ gpsActive }),
       addDispatchMessage: (msg) => set((s) => ({ dispatchMessages: [...s.dispatchMessages, msg] })),
       clearDispatchMessages: () => set({ dispatchMessages: [] }),
+      // Hydrates the thread with persisted history fetched on mount (see
+      // FRAssignment.jsx) — merged ahead of whatever's already there (live WS
+      // messages that may have arrived first) and deduped by message_id when
+      // available, else by a timestamp+sender+text match, so a message that
+      // arrives both via the initial history fetch AND the live WS subscription
+      // during the overlap window is never shown twice.
+      hydrateDispatchMessages: (historyMsgs) => set((s) => {
+        const existingKeys = new Set(
+          s.dispatchMessages.map((m) => m.message_id ?? `${m.time}|${m.senderName}|${m.text}`)
+        )
+        const toPrepend = historyMsgs.filter((m) => {
+          const key = m.message_id ?? `${m.time}|${m.senderName}|${m.text}`
+          if (existingKeys.has(key)) return false
+          existingKeys.add(key)
+          return true
+        })
+        return { dispatchMessages: [...toPrepend, ...s.dispatchMessages] }
+      }),
 
       goAvailable: async () => {
         const { vehicleId } = get()

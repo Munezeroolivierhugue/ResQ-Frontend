@@ -8,10 +8,14 @@ import { getTriageQuestions, getSeverityRules } from '../../api/triage'
 import { checkDuplicates, createIncident } from '../../api/incidents'
 import { listDistricts } from '../../api/districts'
 import { getCallerByPhone } from '../../api/callers'
+import { endCall as endCallApi, recordOutcome as recordCallOutcome } from '../../api/calls'
 import { calculateSeverity } from '../../utils/severityEngine'
 import { estimateAmbulanceNeed } from '../../utils/ambulanceEstimate'
 import { haversineMeters } from '../../utils/geo'
 import { generateCallerName } from '../../utils/rwandaNames'
+import { subscribe } from '../../lib/wsClient'
+import { MuLawAudioPlayer, MicUplinkRecorder } from '../../utils/muLawAudioPlayer'
+import { publish } from '../../lib/wsClient'
 import TriageLocationMap from '../../components/dispatcher/TriageLocationMap'
 import IncidentTimeline from '../../components/intake/IncidentTimeline'
 import AiDispatchRecommendation from '../../components/intake/AiDispatchRecommendation'
@@ -72,10 +76,22 @@ export default function NewIncident() {
   // ── Live call timer ──────────────────────────────────────────────────────────
   const [callElapsed, setCallElapsed] = useState(0)
   const [isMuted, setIsMuted] = useState(false)
+  const [callHasEnded, setCallHasEnded] = useState(false)
   useEffect(() => {
-    if (!callId) return
+    if (!callId || callHasEnded) return
     const t = setInterval(() => setCallElapsed((s) => s + 1), 1000)
     return () => clearInterval(t)
+  }, [callId, callHasEnded])
+
+  // Caller hanging up (Twilio status webhook) or another dispatcher screen
+  // ending the same call previously never reached this page at all — the
+  // timer just kept counting up on a call that was already long over.
+  useEffect(() => {
+    if (!callId) return
+    const unsub = subscribe(`/topic/calls/${callId}/status`, (evt) => {
+      if (evt?.type === 'call_ended') setCallHasEnded(true)
+    })
+    return unsub
   }, [callId])
 
   const fmtCallTime = (s) => {
@@ -85,6 +101,59 @@ export default function NewIncident() {
   }
 
   const callTimeRef = useRef(new Date().toISOString())
+
+  // ── Live caller audio (Twilio Media Stream → WebSocket → Web Audio) ─────────
+  const [audioListening, setAudioListening] = useState(false)
+  const [audioStarted, setAudioStarted] = useState(false)
+  const audioPlayerRef = useRef(null)
+
+  const startListening = useCallback(() => {
+    if (audioPlayerRef.current) return
+    audioPlayerRef.current = new MuLawAudioPlayer()
+    setAudioStarted(true)
+  }, [])
+
+  // ── Dispatcher mic → Twilio (so the caller hears the dispatcher back) ───────
+  const micRecorderRef = useRef(null)
+  const [micError, setMicError] = useState(null)
+
+  useEffect(() => {
+    // Ending a call no longer navigates away (the dispatcher stays on this page
+    // to finish the incident), so this effect's own cleanup was never running —
+    // the mic kept capturing and publishing frames indefinitely after the real
+    // call was long over, all silently rejected backend-side once Twilio's
+    // session was gone.
+    if (!callId || !audioStarted || callHasEnded) return
+    const recorder = new MicUplinkRecorder((base64Frame) => {
+      publish(`/app/calls/${callId}/audio`, { payload: base64Frame })
+    })
+    recorder.start().catch(() => setMicError('Could not access microphone'))
+    micRecorderRef.current = recorder
+    return () => {
+      recorder.stop()
+      micRecorderRef.current = null
+    }
+  }, [callId, audioStarted, callHasEnded])
+
+  useEffect(() => {
+    micRecorderRef.current?.setMuted(isMuted)
+  }, [isMuted])
+
+  useEffect(() => {
+    if (!callId || !audioStarted || callHasEnded) return
+    const unsub = subscribe(`/topic/calls/${callId}/audio`, (msg) => {
+      if (msg?.type === 'audio_chunk' && msg.payload && audioPlayerRef.current) {
+        audioPlayerRef.current.pushChunk(msg.payload)
+        setAudioListening(true)
+      }
+    })
+    return () => {
+      unsub()
+      audioPlayerRef.current?.stop()
+      audioPlayerRef.current = null
+      setAudioListening(false)
+    }
+  }, [callId, audioStarted, callHasEnded])
 
   // ── Caller profile — fetched from backend, no mock fallback ─────────────────
   const [callerData, setCallerData] = useState(null)
@@ -378,6 +447,11 @@ export default function NewIncident() {
     let createdIncident = null
     try {
       createdIncident = await createIncident(incidentPayload)
+      // A dispatcher only ever gets this far for a real emergency — treat a
+      // successfully created incident as proof the call wasn't a prank, and
+      // upgrade the caller off UNVERIFIED so repeat genuine callers build a
+      // real trust record instead of showing UNVERIFIED forever.
+      if (callId) recordCallOutcome(callId, 'GENUINE').catch(() => {})
     } catch {
       setSubmitError('Incident saved locally — backend sync failed. Proceeding.')
     }
@@ -515,20 +589,23 @@ export default function NewIncident() {
         {callId && (
           <div
             className="rounded-xl border px-4 py-3 flex flex-wrap items-center gap-3 animate-fade-in-up"
-            style={{ background: 'var(--status-low-bg)', borderColor: 'var(--status-low)' }}
+            style={{
+              background: callHasEnded ? 'var(--status-critical-bg)' : 'var(--status-low-bg)',
+              borderColor: callHasEnded ? 'var(--status-critical)' : 'var(--status-low)',
+            }}
           >
             <span
               className="inline-flex items-center justify-center w-8 h-8 rounded-full shrink-0"
-              style={{ background: 'var(--status-low)', color: '#fff' }}
+              style={{ background: callHasEnded ? 'var(--status-critical)' : 'var(--status-low)', color: '#fff' }}
             >
               <PhoneCall size={15} />
             </span>
             <div className="flex-1 min-w-0">
               <p
                 className="m-0 text-[11px] font-bold uppercase tracking-widest"
-                style={{ fontFamily: 'var(--font-display)', color: 'var(--status-low)' }}
+                style={{ fontFamily: 'var(--font-display)', color: callHasEnded ? 'var(--status-critical)' : 'var(--status-low)' }}
               >
-                Call active
+                {callHasEnded ? 'Call ended' : 'Call active'}
               </p>
               <p
                 className="m-0 text-[13px] font-semibold"
@@ -566,7 +643,22 @@ export default function NewIncident() {
             {/* End call */}
             <button
               type="button"
-              onClick={() => { endCall(); navigate('/dispatcher') }}
+              onClick={() => {
+                if (callId) endCallApi(callId).catch(() => {})
+                // resq-active-call was only ever cleared from ActiveIncident.jsx
+                // (after a full incident was created) — ending a call here without
+                // creating one left the stale entry behind, so the next visit to
+                // New Incident silently re-hydrated the already-ended call.
+                try {
+                  sessionStorage.removeItem('resq-active-call')
+                  if (callId) sessionStorage.removeItem(intakeKey(callId))
+                } catch {}
+                endCall()
+                // Ending the call is not the same as abandoning the incident —
+                // the dispatcher still needs everything already captured (caller
+                // info, location, notes) to finish submitting it. Previously this
+                // navigated straight back to the live map, losing that context.
+              }}
               className="text-[11px] font-bold px-3 py-1.5 rounded-lg border-none cursor-pointer shrink-0"
               style={{
                 fontFamily: 'var(--font-display)',
@@ -867,27 +959,43 @@ export default function NewIncident() {
               </p>
             </IntakePanel>
 
-            {/* Live transcript placeholder */}
+            {/* Live two-way call audio — Twilio Media Stream relayed over WebSocket */}
             {callId && (
               <IntakePanel className="p-4 md:p-5 flex flex-col gap-2">
                 <PanelHeader
                   icon={Mic}
-                  title="Live transcript"
+                  title="Live call audio"
                   badge={
-                    <span className="text-[9px] font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: 'var(--status-low)' }}>
-                      <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: 'var(--status-low)', animation: 'pulse 1.4s infinite' }} />
-                      Listening
-                    </span>
+                    audioListening ? (
+                      <span className="text-[9px] font-bold uppercase tracking-wider flex items-center gap-1" style={{ color: 'var(--status-low)' }}>
+                        <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: 'var(--status-low)', animation: 'pulse 1.4s infinite' }} />
+                        Live
+                      </span>
+                    ) : audioStarted ? (
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-(--text-muted)">Connecting…</span>
+                    ) : null
                   }
                 />
-                <div
-                  className="rounded-lg px-3 py-2.5 text-[12px] leading-relaxed"
-                  style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontStyle: 'italic', minHeight: 72 }}
-                >
-                  Transcript will stream here once the backend connects the voice pipeline.
-                </div>
+                {audioStarted ? (
+                  <div
+                    className="rounded-lg px-3 py-2.5 text-[12px] leading-relaxed"
+                    style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontStyle: 'italic', minHeight: 48 }}
+                  >
+                    {micError
+                      ? micError
+                      : audioListening ? 'Two-way audio connected — speak normally, mic is live.' : 'Waiting for audio from the call…'}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={startListening}
+                    className="dispatcher-btn-outline text-[12px] self-start"
+                  >
+                    Start call audio (speak + listen)
+                  </button>
+                )}
                 <p className="text-[10px] text-(--text-muted) m-0">
-                  Powered by Africa's Talking STT · streams on call_id {callId}
+                  Powered by Twilio Media Streams · streams on call_id {callId}. Live transcript not yet enabled.
                 </p>
               </IntakePanel>
             )}
@@ -957,6 +1065,7 @@ export default function NewIncident() {
             {/* Three-way location map */}
             <TriageLocationMap
               caller={callerData}
+              callId={callId}
               onLocationChange={handleLocationChange}
               onAddressFound={handleAddressFound}
               districtCenter={(() => {

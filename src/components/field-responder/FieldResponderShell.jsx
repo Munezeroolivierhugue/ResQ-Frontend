@@ -1,8 +1,10 @@
+import { useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import FieldResponderTopBar from './FieldResponderTopBar'
 import FieldResponderBottomNav from './FieldResponderBottomNav'
 import AnnouncementPopup from '../layout/AnnouncementPopup'
-import ToastStack from '../layout/ToastStack'
+import FRAlertModal from './FRAlertModal'
+import { useNotificationsStore } from '../../store/notificationsStore'
 
 const TITLES = {
   '/field-responder/shift-start': 'Shift Status',
@@ -32,6 +34,15 @@ export default function FieldResponderShell() {
   const showTop = !isFullscreen
   const showBottom = !isFullscreen
 
+  const fetchNotifications = useNotificationsStore((s) => s.fetchNotifications)
+  const subscribeToWs = useNotificationsStore((s) => s.subscribeToWs)
+
+  useEffect(() => {
+    fetchNotifications()
+    const unsub = subscribeToWs()
+    return () => { if (typeof unsub === 'function') unsub() }
+  }, [])
+
   const title = (() => {
     if (path.startsWith('/field-responder/settings/')) {
       const section = path.split('/').pop()
@@ -44,8 +55,8 @@ export default function FieldResponderShell() {
     <div className="fr-app field-responder-shell">
       <div className="fixed top-4 right-4 z-[10001] flex flex-col gap-2 w-full max-w-sm">
         <AnnouncementPopup />
-        <ToastStack />
       </div>
+      <FRAlertModal />
       {showTop && <FieldResponderTopBar title={title} />}
       <main
         className={`fr-main field-responder-content${isFullscreen ? ' fr-main--fullscreen' : ''}${!showBottom ? ' fr-main--no-nav' : ''}`}

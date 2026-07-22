@@ -1,26 +1,18 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Moon, LogOut, AlertCircle, Clock, CheckCircle2, Radio } from 'lucide-react'
-import { FR_OFFICER, FR_OUTSTANDING_REPORTS, FR_SHIFT_HISTORY } from '../../data/mockFieldResponderData'
+import { Moon, LogOut, AlertCircle } from 'lucide-react'
 import { useFieldResponderStore } from '../../store/fieldResponderStore'
 import { useToastStore } from '../../store/toastStore'
+import { getCurrentUser } from '../../utils/authSession'
+import { getMyStats } from '../../api/fieldResponderStats'
 
-const STATS = [
-  ['14', 'Incidents'],
-  ['6.8m', 'Avg response'],
-  ['94 km', 'Distance'],
-  ['14', 'Reports filed'],
-  ['87', 'Performance'],
-  ['100%', 'GPS uptime'],
-]
-
-const SHIFT_TIMELINE = [
-  { time: '08:00', label: 'Shift started · GPS active', done: true },
-  { time: '09:15', label: 'INC-2387 · Theft · Nyamirambo', done: true },
-  { time: '11:42', label: 'INC-2398 · Traffic · Remera', done: true },
-  { time: '14:18', label: 'INC-2403 · Armed Robbery · Kimironko', done: true },
-  { time: '16:00', label: 'Scheduled shift end', done: false },
-]
+// This screen has no dedicated "shift timeline" / "handoff notes" endpoint
+// on the backend (nothing in ShiftController or FieldReportController tracks
+// a per-shift event log or free-text handoff notes for a responder), so that
+// section was removed rather than kept showing fabricated entries — a
+// follow-up would need a real backend table for that if this feature is
+// wanted. The outstanding-reports queue also has no real source yet.
+const outstanding = []
 
 export default function FRShiftEnd() {
   const navigate = useNavigate()
@@ -29,14 +21,26 @@ export default function FRShiftEnd() {
   const hasActiveAssignment = useFieldResponderStore((s) => s.hasActiveAssignment)
   const assignmentStage = useFieldResponderStore((s) => s.assignmentStage)
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const outstanding = FR_OUTSTANDING_REPORTS
+  const [stats, setStats] = useState(null)
+  const user = getCurrentUser()
+
+  useEffect(() => {
+    getMyStats().then(setStats).catch(() => {})
+  }, [])
+
+  const STATS = [
+    [String(stats?.incidents_today ?? '—'), 'Incidents'],
+    [stats?.avg_response_minutes_today != null ? `${stats.avg_response_minutes_today}m` : '—', 'Avg response'],
+    [String(stats?.reports_filed_today ?? '—'), 'Reports filed'],
+  ]
+
   const reportBlocked = outstanding.length > 0
   const assignmentBlocked = hasActiveAssignment && assignmentStage !== 'incident_clear'
   const blocked = reportBlocked || assignmentBlocked
 
   const confirmEnd = () => {
     endShift()
-    pushToast({ variant: 'success', title: 'Shift Ended', message: `See you next time, ${FR_OFFICER.name.split(' ')[0]}` })
+    pushToast({ variant: 'success', title: 'Shift Ended', message: `See you next time, ${(user?.full_name || 'Officer').split(' ')[0]}` })
     setConfirmOpen(false)
     navigate('/field-responder/shift-start')
   }
@@ -57,45 +61,6 @@ export default function FRShiftEnd() {
               </div>
             ))}
           </div>
-        </div>
-
-        <div className="dispatcher-surface fr-card fr-card--tight">
-          <div className="fr-card-header">
-            <Clock size={16} className="text-(--accent)" />
-            <span className="font-semibold text-[13px]">Shift Timeline</span>
-          </div>
-          <div className="fr-divider" />
-          <ul className="fr-shift-timeline">
-            {SHIFT_TIMELINE.map((item) => (
-              <li key={item.time} className={`fr-shift-timeline-item${item.done ? ' fr-shift-timeline-item--done' : ''}`}>
-                <span className="fr-shift-timeline-time font-mono">{item.time}</span>
-                <span className="fr-shift-timeline-label">{item.label}</span>
-                {item.done && <CheckCircle2 size={14} className="fr-shift-timeline-check" aria-hidden />}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="dispatcher-surface fr-card fr-card--tight">
-          <div className="fr-card-header">
-            <Radio size={16} className="text-(--accent)" />
-            <span className="font-semibold text-[13px]">Handoff Notes</span>
-          </div>
-          <p className="text-[12px] text-(--text-secondary) m-0 mt-2 leading-relaxed">
-            All incidents cleared. INC-2403 report filed. Unit P-12 fuel at 60% — next shift should refuel.
-            No equipment issues to report.
-          </p>
-        </div>
-
-        <div className="dispatcher-surface fr-card fr-card--tight">
-          <div className="font-semibold text-[13px] mb-2">Recent Incidents</div>
-          {FR_SHIFT_HISTORY.slice(0, 3).map((inc) => (
-            <div key={inc.id} className="fr-shift-inc-row">
-              <span className="font-mono text-[11px] text-(--accent)">{inc.id}</span>
-              <span className="text-[12px] text-(--text-secondary) flex-1 truncate">{inc.type}</span>
-              <span className="font-mono text-[11px] text-(--text-muted)">{inc.time}</span>
-            </div>
-          ))}
         </div>
 
         {assignmentBlocked && (

@@ -29,6 +29,7 @@ const ROLE_HREF = {
     INCIDENT_CLOSED: "/ops-manager/closed-incidents",
     INCIDENT_ESCALATED: "/ops-manager/escalations",
     BACKUP_REQUESTED: "/ops-manager/dashboard",
+    DEPLOYMENT_PLAN_SUBMITTED: "/ops-manager/plan-review",
   },
   ADMIN: {
     USER_INVITED: "/admin/users",
@@ -37,6 +38,7 @@ const ROLE_HREF = {
     AI_RECOMMENDATION: null,
     UNIT_OFFLINE: null,
     SHIFT: null,
+    ACCOUNT_LOCKED: "/admin/users",
   },
   SUPER_ADMIN: {
     USER_INVITED: "/admin/users",
@@ -45,6 +47,7 @@ const ROLE_HREF = {
     AI_RECOMMENDATION: null,
     UNIT_OFFLINE: null,
     SHIFT: null,
+    ACCOUNT_LOCKED: "/admin/users",
   },
   DISTRICT_COMMANDER: {
     INCIDENT: "/district-commander/incidents",
@@ -53,6 +56,14 @@ const ROLE_HREF = {
     UNIT_OFFLINE: "/district-commander",
     SHIFT: "/district-commander/shift-reports",
     USER_INVITED: null,
+    // The backend actually sends type "SHIFT_HANDOVER_SUBMITTED" (not
+    // "SHIFT") for this event — the old "SHIFT" key here never matched it,
+    // so a handover notification never deep-linked anywhere for the DC.
+    SHIFT_HANDOVER_SUBMITTED: "/district-commander/shift-reports",
+    ACCOUNT_LOCKED: "/district-commander/users",
+    MUTUAL_AID_UNIT_REALLOCATED: "/district-commander/units",
+    MUTUAL_AID_UNIT_RECEIVED: "/district-commander/units",
+    MUTUAL_AID_UNIT_RETURNED: "/district-commander/units",
   },
   ANALYST: {
     INCIDENT: "/analyst/incidents",
@@ -69,6 +80,11 @@ const ROLE_HREF = {
     UNIT_OFFLINE: null,
     SHIFT: null,
     USER_INVITED: null,
+    MUTUAL_AID_REQUESTED: "/planner/mutual-aid",
+    MUTUAL_AID_FULFILLED: "/planner/mutual-aid",
+    MUTUAL_AID_DECLINED: "/planner/mutual-aid",
+    DEPLOYMENT_PLAN_APPROVED: "/planner/deployment",
+    DEPLOYMENT_PLAN_REJECTED: "/planner/deployment",
   },
   FIELD_RESPONDER: {
     INCIDENT: "/field-responder/current-incident",
@@ -77,6 +93,7 @@ const ROLE_HREF = {
     UNIT_OFFLINE: null,
     SHIFT: "/field-responder/shift-start",
     USER_INVITED: null,
+    BACKUP_ACKNOWLEDGED: "/field-responder/current-incident",
   },
 };
 
@@ -95,11 +112,21 @@ function getHref(type, referenceId) {
   return resolveHref(type, referenceId);
 }
 
+// Humanizes a type string like "SHIFT_HANDOVER_SUBMITTED" into "Shift
+// handover submitted" — a last-resort fallback so a legacy notification row
+// that genuinely has no message text still shows something readable instead
+// of an empty title.
+function humanizeType(type) {
+  if (!type) return "Notification";
+  const words = type.toLowerCase().split("_");
+  return words[0].charAt(0).toUpperCase() + words[0].slice(1) + (words.length > 1 ? " " + words.slice(1).join(" ") : "");
+}
+
 function transform(n) {
   return {
     id: n.notificationId,
     type: n.type,
-    title: n.message?.split(": ")[0] ?? n.message ?? "",
+    title: n.message?.split(": ")[0] || humanizeType(n.type),
     desc: n.message?.split(": ").slice(1).join(": ") ?? "",
     time: n.createdAt,
     read: n.read,

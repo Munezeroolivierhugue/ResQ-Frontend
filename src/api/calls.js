@@ -40,6 +40,11 @@ export async function missCall(sessionId) {
   return transform(data.data ?? data)
 }
 
+export async function endCall(sessionId) {
+  const { data } = await api.post(`/api/calls/${sessionId}/end`)
+  return transform(data.data ?? data)
+}
+
 export async function linkIncident(sessionId, incidentId) {
   const { data } = await api.patch(`/api/calls/${sessionId}/link-incident`, { incidentId })
   return transform(data.data ?? data)
