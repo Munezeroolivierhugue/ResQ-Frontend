@@ -19,10 +19,11 @@ const PAGE_SIZE = 10
 const ROLE_FILTERS = ['All Roles', 'Dispatcher', 'Field Responder', 'Ops Manager', 'District Commander', 'Emergency Planner', 'Analyst', 'Super Admin']
 const STATUS_FILTERS = ['All', 'Active', 'Pending', 'Suspended']
 const SHIFT_OPTIONS = [
-  { value: 'MORNING',  label: 'Morning (07:00 – 15:00)' },
-  { value: 'EVENING',  label: 'Evening (15:00 – 23:00)' },
-  { value: 'NIGHT',    label: 'Night (23:00 – 07:00)' },
-  { value: 'ROTATING', label: 'Rotating / Not fixed' },
+  { value: 'MORNING',   label: 'Morning (07:00 – 15:00)' },
+  { value: 'EVENING',   label: 'Evening (15:00 – 23:00)' },
+  { value: 'NIGHT',     label: 'Night (23:00 – 07:00)' },
+  { value: 'FULL_TIME', label: 'Full-time / Always available' },
+  { value: 'ROTATING',  label: 'Rotating / Not fixed' },
 ]
 
 const ROLE_MAP = {
@@ -89,7 +90,10 @@ function UserEditModal({ user, agencies, districts, vehicles, onClose, onSaved }
     phone:      user.phone_number ?? '',
     districtId: user.district_id  ?? '',
     agencyId:   user.agency_id    ?? '',
-    vehicleId:  user.current_vehicle_id ?? user.vehicle_id ?? '',
+    // The standing Admin/DC-assigned unit, not whatever vehicle happens to
+    // be linked for an active shift right now — those are different fields
+    // server-side (see User.assignedVehicle vs User.currentVehicle).
+    vehicleId:  user.assigned_vehicle_id ?? '',
     shiftType:  user.shift_type   ?? '',
   })
   const [saving, setSaving] = useState(false)
@@ -135,7 +139,7 @@ function UserEditModal({ user, agencies, districts, vehicles, onClose, onSaved }
         phone_number: form.phone,
         district_id: form.districtId || user.district_id,
         agency_id: form.agencyId || user.agency_id,
-        current_vehicle_id: form.vehicleId || user.current_vehicle_id,
+        assigned_vehicle_id: form.vehicleId || user.assigned_vehicle_id,
         shift_type: form.shiftType || user.shift_type,
       })
     } catch (err) {

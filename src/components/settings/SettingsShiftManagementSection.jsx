@@ -4,6 +4,8 @@ import { Clock, ClipboardList, ChevronRight } from "lucide-react";
 import { SettingsToggleRow } from "./SettingsToggle";
 import StatusBadge from "../dispatcher/StatusBadge";
 import { getMyProfile } from "../../api/users";
+import { getMyShifts } from "../../api/shifts";
+import { getMyStats } from "../../api/fieldResponderStats";
 
 const DISPATCHER_DEFAULTS = {
   handoverReminder: "30",
@@ -26,6 +28,7 @@ const SHIFT_LABELS = {
   MORNING: "Morning · 07:00 – 15:00",
   EVENING: "Evening · 15:00 – 23:00",
   NIGHT: "Night · 23:00 – 07:00",
+  FULL_TIME: "Full-time · Always available",
   ROTATING: "Rotating / Not fixed",
 };
 
@@ -59,9 +62,15 @@ export default function SettingsShiftManagementSection({
 }) {
   const isOps = variant === "OPERATIONS_MANAGER";
   const [shiftType, setShiftType] = useState(null);
+  const [district, setDistrict] = useState(null);
+  const [incidentsToday, setIncidentsToday] = useState(null);
+  const [onDuty, setOnDuty] = useState(false);
   useEffect(() => {
     getMyProfile()
-      .then((u) => setShiftType(u.shift_type || null))
+      .then((u) => { setShiftType(u.shift_type || null); setDistrict(u.district_name || null); })
+      .catch(() => {});
+    getMyStats()
+      .then((s) => setIncidentsToday(s.incidents_today))
       .catch(() => {});
   }, []);
   const shiftLabel = shiftType
@@ -82,12 +91,30 @@ export default function SettingsShiftManagementSection({
     draftReport: OM_DEFAULTS.draftReport,
     notifyDcOnSubmit: OM_DEFAULTS.notifyDcOnSubmit,
   });
-  const [elapsed, setElapsed] = useState(20538);
+  const [elapsed, setElapsed] = useState(0);
+
+  // Seeded from the real active shift's shift_start, not a fixed counter —
+  // previously this always started at a hardcoded 20538 seconds (~5.7h) on
+  // every mount with no connection to when the shift actually began.
+  useEffect(() => {
+    getMyShifts()
+      .then((shifts) => {
+        const active = shifts.find((s) => s.status === "ACTIVE");
+        if (active?.shift_start) {
+          setElapsed(Math.max(0, Math.floor((Date.now() - new Date(active.shift_start).getTime()) / 1000)));
+          setOnDuty(true);
+        } else {
+          setOnDuty(false);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
+    if (!onDuty) return undefined;
     const t = setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [onDuty]);
 
   const formatElapsed = (s) => {
     const h = Math.floor(s / 3600);
@@ -156,7 +183,7 @@ export default function SettingsShiftManagementSection({
               label="Shift (assigned)"
               value={shiftLabel}
             />
-            <ShiftStatTile label="Incidents handled today" value="14" />
+            <ShiftStatTile label="Incidents handled today" value={incidentsToday ?? '—'} />
             <ShiftStatTile
               label="Time on duty"
               value={formatElapsed(elapsed)}
@@ -164,7 +191,7 @@ export default function SettingsShiftManagementSection({
             />
             <ShiftStatTile
               label="Assigned district"
-              value="Nyarugenge / Kicukiro"
+              value={district || '—'}
             />
           </>
         )}

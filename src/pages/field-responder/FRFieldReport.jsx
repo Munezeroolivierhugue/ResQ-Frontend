@@ -54,18 +54,30 @@ export default function FRFieldReport() {
   const [supportNeeded, setSupportNeeded] = useState('')
   const [followUp, setFollowUp] = useState('')
   const [agencies, setAgencies] = useState([])
-  const [photoFile, setPhotoFile] = useState(null)
+  // Was a single file — a field responder photographing a scene (vehicle
+  // damage, injuries, the surroundings) realistically needs more than one
+  // shot, and there was no way to attach a second without losing the first.
+  const [photoFiles, setPhotoFiles] = useState([])
   const [submitting, setSubmitting] = useState(false)
   const fileInputRef = useRef(null)
 
   // Previously the "thumbnail" was just the filename in a plain gray box —
   // no actual image preview, so there was no way to confirm the right photo
   // was selected before submitting.
-  const photoPreviewUrl = useMemo(
-    () => (photoFile ? URL.createObjectURL(photoFile) : null),
-    [photoFile]
+  const photoPreviewUrls = useMemo(
+    () => photoFiles.map((f) => URL.createObjectURL(f)),
+    [photoFiles]
   )
-  useEffect(() => () => { if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl) }, [photoPreviewUrl])
+  useEffect(() => () => { photoPreviewUrls.forEach((url) => URL.revokeObjectURL(url)) }, [photoPreviewUrls])
+
+  const addPhotos = (fileList) => {
+    const newFiles = Array.from(fileList ?? [])
+    if (newFiles.length === 0) return
+    setPhotoFiles((prev) => [...prev, ...newFiles])
+  }
+  const removePhotoAt = (index) => {
+    setPhotoFiles((prev) => prev.filter((_, i) => i !== index))
+  }
 
   const showAgency = sceneStatus === 'Requires Specialist' || suspects === 'YES'
 
@@ -86,11 +98,17 @@ export default function FRFieldReport() {
       // Photo can only be attached to a report that already exists server-side
       // — sequence the upload after a successful submission, using the real
       // report_id returned by the backend (not a locally-generated one).
-      if (photoFile && saved?.report_id) {
-        try {
-          await uploadAttachment(saved.report_id, photoFile)
-        } catch {
-          pushToast({ variant: 'error', title: 'Photo Upload Failed', message: 'Report submitted, but the photo failed to upload.' })
+      if (photoFiles.length > 0 && saved?.report_id) {
+        const results = await Promise.allSettled(
+          photoFiles.map((file) => uploadAttachment(saved.report_id, file))
+        )
+        const failedCount = results.filter((r) => r.status === 'rejected').length
+        if (failedCount > 0) {
+          pushToast({
+            variant: 'error',
+            title: 'Photo Upload Failed',
+            message: `Report submitted, but ${failedCount} of ${photoFiles.length} photo${photoFiles.length > 1 ? 's' : ''} failed to upload.`,
+          })
           navigate('/field-responder/shift-start')
           return
         }
@@ -217,29 +235,31 @@ export default function FRFieldReport() {
           <input
             type="file"
             accept="image/*"
+            multiple
             ref={fileInputRef}
             style={{ display: 'none' }}
-            onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
+            onChange={(e) => { addPhotos(e.target.files); e.target.value = '' }}
           />
           <button type="button" className="fr-photo-add" onClick={() => fileInputRef.current?.click()}>
             <Camera size={24} className="text-(--text-muted)" />
             <span>Add Photo</span>
           </button>
-          {photoFile && (
+          {photoFiles.map((file, i) => (
             <div
+              key={`${file.name}-${file.lastModified}-${i}`}
               className="fr-photo-thumb"
               style={{
-                backgroundImage: `url(${photoPreviewUrl})`,
+                backgroundImage: `url(${photoPreviewUrls[i]})`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
               }}
             >
-              <button type="button" className="fr-photo-remove" onClick={() => setPhotoFile(null)} aria-label="Remove">
+              <button type="button" className="fr-photo-remove" onClick={() => removePhotoAt(i)} aria-label="Remove">
                 <X size={10} />
               </button>
-              <div className="fr-photo-meta font-mono">{photoFile.name}</div>
+              <div className="fr-photo-meta font-mono">{file.name}</div>
             </div>
-          )}
+          ))}
         </div>
       </div>
 
@@ -262,7 +282,7 @@ export default function FRFieldReport() {
             </button>
           ))}
           <p className="text-[11px] text-(--text-muted) m-0 mt-2">
-            System will automatically generate a handover record for selected agencies.
+            Selected agencies with a configured contact will be emailed this case's summary and asked to follow up.
           </p>
         </div>
       )}

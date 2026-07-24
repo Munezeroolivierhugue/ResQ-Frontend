@@ -40,7 +40,7 @@ export default function FRPerformance() {
   // Was never referenced anywhere on this page — this panel judged "your
   // avg" purely against the district average, with no tie to the actual
   // admin-configured National Response Time Target used everywhere else.
-  const [slaTargetMinutes, setSlaTargetMinutes] = useState(8)
+  const [slaTargetMinutes, setSlaTargetMinutes] = useState(12)
 
   useEffect(() => {
     if (!canFileFieldReports()) {

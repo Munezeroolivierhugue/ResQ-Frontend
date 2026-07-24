@@ -30,6 +30,14 @@ export async function getResponseTimeTarget() {
   return (data.data ?? data).responseTimeTargetMinutes
 }
 
+// Same pattern as getResponseTimeTarget() above — the fleet-availability
+// threshold every "coverage vs target" screen should read, instead of each
+// one hardcoding its own guess independent of Admin Settings.
+export async function getCoverageScoreTarget() {
+  const { data } = await api.get('/api/settings/coverage-score-target')
+  return (data.data ?? data).coverageScoreTarget
+}
+
 export async function saveSystemSettings(payload) {
   const { data } = await api.put('/api/admin/settings', payload)
   return data.data ?? data

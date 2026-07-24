@@ -72,7 +72,7 @@ export default function Help() {
       title: 'Shifts & Performance',
       icon: Clock,
       faqs: [
-        { q: 'What are my SLA targets?', a: 'The primary target is an 8-minute or less response time from dispatch acceptance to arriving on scene.' },
+        { q: 'What are my SLA targets?', a: 'The primary target is a 12-minute or less response time from dispatch acceptance to arriving on scene.' },
         { q: 'How do I end my shift?', a: 'Navigate to your Profile tab, click "End Shift", complete your final handover notes, and await the District Commander\'s digital sign-off.' }
       ]
     }

@@ -6,9 +6,10 @@ import SurfaceCard from '../../components/dispatcher/SurfaceCard'
 import MetricCard from '../../components/dispatcher/MetricCard'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
 import DataTable from '../../components/dispatcher/DataTable'
+import AdminPagination from '../../components/admin/AdminPagination'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import { FormTextarea } from '../../components/dispatcher/FormControls'
-import { getMyShifts, saveShiftNotes, startShift } from '../../api/shifts'
+import { getMyShifts, saveShiftNotes, startShift, endShift } from '../../api/shifts'
 import { listIncidents } from '../../api/incidents'
 import { getResponseTimeTarget } from '../../api/admin'
 import { getCurrentUser } from '../../utils/authSession'
@@ -22,16 +23,29 @@ function fmtDate(iso) {
 export default function ShiftHandover() {
   const navigate = useNavigate()
   const [sort, setSort] = useState('recent')
+  const [page, setPage] = useState(1)
+  const perPage = 10
   const [officerNote, setOfficerNote] = useState('')
   // 'idle' | 'saving' | 'saved' | 'error'
   const [noteState, setNoteState] = useState('idle')
 
+  // "Save notes" is the dispatcher's only submit action — it's what actually
+  // reaches the District Commander (ShiftService.saveHandoverNotes notifies
+  // them). Previously it only wrote the notes and left the shift record
+  // ACTIVE forever, so the "period" shown on this page (and the DC's copy)
+  // kept growing from whenever the shift was first auto-started — days
+  // earlier — instead of reflecting one real shift. Submitting now actually
+  // ends that shift and starts the next one immediately, so the period is
+  // accurate from this point on.
   const handleSaveNotes = async () => {
     if (!shift?.shift_id || noteState === 'saving') return
     setNoteState('saving')
     try {
       await saveShiftNotes(shift.shift_id, officerNote)
+      await endShift(shift.shift_id)
       setNoteState('saved')
+      setOfficerNote('')
+      await loadShiftAndIncidents()
       setTimeout(() => setNoteState('idle'), 2500)
     } catch {
       setNoteState('error')
@@ -40,16 +54,24 @@ export default function ShiftHandover() {
   const [shift, setShift] = useState(null)
   const [incidents, setIncidents] = useState([])
   const [loading, setLoading] = useState(true)
-  const [slaTargetMinutes, setSlaTargetMinutes] = useState(8)
+  const [slaTargetMinutes, setSlaTargetMinutes] = useState(12)
   const currentUser = getCurrentUser()
 
   useEffect(() => {
     getResponseTimeTarget().then(setSlaTargetMinutes).catch(() => {})
   }, [])
 
-  useEffect(() => {
+  // Scoped to incidents THIS dispatcher personally logged/handled — a
+  // dispatcher can take a call for and dispatch units to any district in
+  // the country, not just their own, so filtering by district (as this
+  // used to) both wrongly excluded incidents they handled elsewhere and
+  // wrongly included incidents other dispatchers handled in their home
+  // district. Previously fetched every incident system-wide with no
+  // scoping at all.
+  async function loadShiftAndIncidents() {
     setLoading(true)
-    Promise.allSettled([getMyShifts(), listIncidents()]).then(async ([shiftsResult, incsResult]) => {
+    try {
+      const [shiftsResult, incsResult] = await Promise.allSettled([getMyShifts(), listIncidents({ loggedBy: currentUser?.user_id })])
       const shifts = shiftsResult.status === 'fulfilled' ? shiftsResult.value : []
       const incs   = incsResult.status === 'fulfilled'  ? incsResult.value  : []
       let latest = shifts.sort((a, b) => new Date(b.shift_start) - new Date(a.shift_start))[0] ?? null
@@ -57,10 +79,12 @@ export default function ShiftHandover() {
       // field responders do, via "Go Available") — so this page always found
       // zero shift records and "Save notes" stayed permanently disabled,
       // meaning a handover summary could never actually be submitted or
-      // reach the district commander. Start one silently on first visit so
-      // the rest of this page's existing flow (which already assumes a
-      // shift exists) works the way it was designed to.
-      if (!latest && currentUser?.user_id) {
+      // reach the district commander. Start one silently on first visit, and
+      // again whenever the most recent shift has already been submitted
+      // (status ENDED) — previously the page kept reusing that same ended
+      // shift forever, since only "no shift at all" triggered a fresh start,
+      // so the "period" shown never actually reset after a submission.
+      if ((!latest || latest.status === 'ENDED') && currentUser?.user_id) {
         try {
           latest = await startShift({
             user_id: currentUser.user_id,
@@ -70,7 +94,8 @@ export default function ShiftHandover() {
         } catch { /* non-fatal — page still works read-only */ }
       }
       setShift(latest)
-      if (latest?.handover_notes) setOfficerNote(latest.handover_notes)
+      setPage(1)
+      setOfficerNote(latest?.handover_notes ?? '')
       if (latest?.shift_start) {
         const start = new Date(latest.shift_start)
         const end = latest.shift_end ? new Date(latest.shift_end) : new Date()
@@ -82,8 +107,15 @@ export default function ShiftHandover() {
         startOfDay.setHours(0, 0, 0, 0)
         setIncidents(incs.filter(i => i.call_time && new Date(i.call_time) >= startOfDay))
       }
-    }).finally(() => setLoading(false))
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadShiftAndIncidents()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const resolved = incidents.filter(i => ['RESOLVED', 'resolved', 'CLOSED', 'closed'].includes(i.status)).length
   const critical = incidents.filter(i => i.severity === 'critical').length
@@ -124,6 +156,8 @@ export default function ShiftHandover() {
     if (sort === 'status') return (a.status ?? '').localeCompare(b.status ?? '')
     return new Date(b.call_time ?? 0) - new Date(a.call_time ?? 0)
   })
+  const totalPages = Math.max(1, Math.ceil(sortedIncidents.length / perPage))
+  const pagedIncidents = sortedIncidents.slice((page - 1) * perPage, page * perPage)
 
   const handleGeneratePdf = () => {
     const generatedBy = currentUser?.full_name ?? currentUser?.email ?? 'Dispatcher'
@@ -205,7 +239,7 @@ export default function ShiftHandover() {
             <select
               className="dispatcher-input dispatcher-select h-9 min-w-[140px]"
               value={sort}
-              onChange={(e) => setSort(e.target.value)}
+              onChange={(e) => { setSort(e.target.value); setPage(1) }}
             >
               <option value="recent">Recent first</option>
               <option value="type">By type</option>
@@ -218,13 +252,15 @@ export default function ShiftHandover() {
         ) : (
           <DataTable
             columns={columns}
-            rows={sortedIncidents}
+            rows={pagedIncidents}
             footer={
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-[12px] text-(--text-muted)">
-                  {incidents.length} incident{incidents.length !== 1 ? 's' : ''} this shift
-                </span>
-              </div>
+              <AdminPagination
+                page={page}
+                totalPages={totalPages}
+                totalCount={sortedIncidents.length}
+                pageSize={perPage}
+                onPageChange={setPage}
+              />
             }
           />
         )}
@@ -245,9 +281,6 @@ export default function ShiftHandover() {
             <div>
               <div className="text-[13px] font-semibold text-(--text-primary)">
                 {currentUser?.full_name ?? currentUser?.email ?? 'Dispatcher'}
-              </div>
-              <div className="text-[11px] text-(--text-muted)" style={{ fontFamily: 'var(--font-mono)' }}>
-                {shift ? `Shift: ${shift.shift_id}` : 'No shift data'}
               </div>
             </div>
             <div className="ml-auto flex items-center gap-2 shrink-0">

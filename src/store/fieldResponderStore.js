@@ -145,6 +145,26 @@ export const useFieldResponderStore = create(
         }
       },
 
+      // On break — vehicle status leaves AVAILABLE so the existing
+      // assignment queries (DispatchService, AI recommendation pool) that
+      // already only match status === 'AVAILABLE' naturally skip this
+      // responder without any change to those queries. GPS stays on so the
+      // dispatcher still sees where they are.
+      takeBreak: () => {
+        const { vehicleId } = get()
+        set({ dutyStatus: 'break' })
+        if (vehicleId && vehicleId !== MOCK_VEHICLE_ID) {
+          updateVehicleStatus(vehicleId, 'on_break').catch(() => {})
+        }
+      },
+      endBreak: () => {
+        const { vehicleId } = get()
+        set({ dutyStatus: 'available' })
+        if (vehicleId && vehicleId !== MOCK_VEHICLE_ID) {
+          updateVehicleStatus(vehicleId, 'available').catch(() => {})
+        }
+      },
+
       // Poll for dispatches assigned to this responder
       pollForAssignment: async () => {
         const { assignment } = get()

@@ -100,19 +100,19 @@ export const FR_BACKUP_REASONS = [
   {
     id: 'units',
     label: 'Additional Units Needed',
-    sub: 'Capacity — more officers required',
+    sub: 'Capacity — more units required',
     icon: 'users',
   },
   {
     id: 'safety',
-    label: 'Officer Safety Threat',
+    label: 'Responder Safety Threat',
     sub: 'Weapons or physical danger present',
     icon: 'shield',
   },
   {
     id: 'specialist',
-    label: 'Specialist Support Required',
-    sub: 'K9, negotiator, or forensics needed',
+    label: 'Specialized Unit Required',
+    sub: 'A unit with specific equipment or training is needed',
     icon: 'star',
   },
 ]

@@ -66,11 +66,11 @@ export default function BackupRequestModal({ open, onClose }) {
             </button>
           )
         })}
-        <label className="dispatcher-field mt-2">
+        <label className="dispatcher-field mt-1">
           <span className="field-label">Additional context (optional)</span>
           <textarea
             className="dispatcher-input dispatcher-textarea"
-            style={{ minHeight: '72px' }}
+            style={{ minHeight: '52px' }}
             placeholder="Describe the immediate threat..."
             value={notes}
             onChange={(e) => setNotes(e.target.value)}

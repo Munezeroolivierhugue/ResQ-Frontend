@@ -19,6 +19,9 @@ function transform(u) {
     current_vehicle_id: u.currentVehicleId ?? null,
     current_vehicle_plate: u.currentVehiclePlate ?? null,
     current_vehicle_type: u.currentVehicleType ?? null,
+    assigned_vehicle_id: u.assignedVehicleId ?? null,
+    assigned_vehicle_plate: u.assignedVehiclePlate ?? null,
+    assigned_vehicle_type: u.assignedVehicleType ?? null,
     shift_type: u.shiftType ?? null,
     photo_url: u.photoUrl ?? null,
   }

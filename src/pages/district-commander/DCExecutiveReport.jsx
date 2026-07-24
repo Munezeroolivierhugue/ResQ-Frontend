@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Download, Send, Check, Siren, Clock, CheckCircle2, Car, MapPin } from 'lucide-react'
 import { buildPdfHtml, openPdfWindow, sectionHtml } from '../../utils/pdfExport'
 
-function exportPDF({ periodLabel, periodStart, periodEnd, districtName, draftReport, assessment, recommendations, generatedBy }) {
+function exportPDF({ periodLabel, periodStart, periodEnd, districtName, draftReport, assessment, recommendations, generatedBy, slaTargetMinutes }) {
   const fmtTime = (v) => v != null ? `${Number(v).toFixed(1)} min` : '—'
   const fmtRate = (v) => v != null ? `${Math.round(v * 100)}%` : '—'
 
@@ -23,7 +23,7 @@ function exportPDF({ periodLabel, periodStart, periodEnd, districtName, draftRep
     ],
     kpis: [
       { label: 'Total Incidents', value: draftReport?.total_incidents ?? '—', sub: 'In period' },
-      { label: 'Avg Response Time', value: fmtTime(draftReport?.avg_response_time), sub: 'Target < 8 min' },
+      { label: 'Avg Response Time', value: fmtTime(draftReport?.avg_response_time), sub: `Target < ${slaTargetMinutes ?? 12} min` },
       { label: 'Resolution Rate', value: fmtRate(draftReport?.resolution_rate), sub: 'Resolved / total' },
       { label: 'District', value: districtName ?? '—', sub: 'Assigned area' },
     ],
@@ -41,6 +41,7 @@ import { listVehicles } from '../../api/vehicles'
 import { getCurrentUser } from '../../utils/authSession'
 import { getDistrictCommanderDistrict } from '../../utils/districtCommanderSession'
 import { useToastStore } from '../../store/toastStore'
+import { getResponseTimeTarget } from '../../api/admin'
 
 function fmtRespTime(minutes) {
   if (minutes == null) return '—'
@@ -86,6 +87,11 @@ export default function DCExecutiveReport() {
   const [periodIncidents, setPeriodIncidents] = useState([])
   const [incidentsLoading, setIncidentsLoading] = useState(true)
   const [coverageRatio, setCoverageRatio] = useState(null)
+  const [slaTargetMinutes, setSlaTargetMinutes] = useState(12)
+
+  useEffect(() => {
+    getResponseTimeTarget().then(setSlaTargetMinutes).catch(() => {})
+  }, [])
 
   function showToast(msg, variant = 'success') {
     pushToast({ variant, title: variant === 'error' ? 'Error' : 'Executive Report', message: msg })
@@ -245,6 +251,7 @@ export default function DCExecutiveReport() {
                     assessment,
                     recommendations,
                     generatedBy: cu?.fullName || 'District Commander',
+                    slaTargetMinutes,
                   })
                 }}>
                 <Download size={14} />
@@ -419,6 +426,7 @@ export default function DCExecutiveReport() {
                           assessment: '',
                           recommendations: '',
                           generatedBy: row.generated_by_name ?? cu?.fullName ?? 'District Commander',
+                          slaTargetMinutes,
                         })
                       }}
                     >

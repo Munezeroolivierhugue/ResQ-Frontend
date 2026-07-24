@@ -5,6 +5,7 @@ import Sidebar from './Sidebar'
 import { getCurrentUser } from '../../utils/authSession'
 import IncomingCallBanner from '../dispatcher/IncomingCallBanner'
 import CallEndedToast from '../dispatcher/CallEndedToast'
+import GlobalCallCard from '../dispatcher/GlobalCallCard'
 
 export default function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -36,6 +37,7 @@ export default function AppShell() {
         </main>
       </div>
       <IncomingCallBanner />
+      <GlobalCallCard />
       <CallEndedToast />
     </div>
   )

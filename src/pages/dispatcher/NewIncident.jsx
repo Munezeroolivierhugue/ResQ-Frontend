@@ -1,21 +1,18 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
-import { Phone, Mic, MicOff, Zap, AlertTriangle, Check, X, PhoneCall } from 'lucide-react'
+import { Phone, Mic, Zap, AlertTriangle, Check, X } from 'lucide-react'
 import { DEFAULT_IMMEDIATE_INCIDENT_ID } from '../../data/mockDispatchImmediateData'
 import { useThemeStore } from '../../store/themeStore'
-import { useCallChannelStore } from '../../store/callChannelStore'
 import { getTriageQuestions, getSeverityRules } from '../../api/triage'
 import { checkDuplicates, createIncident } from '../../api/incidents'
 import { listDistricts } from '../../api/districts'
 import { getCallerByPhone } from '../../api/callers'
-import { endCall as endCallApi, recordOutcome as recordCallOutcome } from '../../api/calls'
+import { recordOutcome as recordCallOutcome } from '../../api/calls'
 import { calculateSeverity } from '../../utils/severityEngine'
 import { estimateAmbulanceNeed } from '../../utils/ambulanceEstimate'
 import { haversineMeters } from '../../utils/geo'
 import { generateCallerName } from '../../utils/rwandaNames'
-import { subscribe } from '../../lib/wsClient'
-import { MuLawAudioPlayer, MicUplinkRecorder } from '../../utils/muLawAudioPlayer'
-import { publish } from '../../lib/wsClient'
+import { useCallAudioStore } from '../../store/callAudioStore'
 import TriageLocationMap from '../../components/dispatcher/TriageLocationMap'
 import IncidentTimeline from '../../components/intake/IncidentTimeline'
 import AiDispatchRecommendation from '../../components/intake/AiDispatchRecommendation'
@@ -31,7 +28,10 @@ import FieldLabel from '../../components/ui/FieldLabel'
 // Maps UI category labels → backend triage type codes
 const CATEGORY_TO_TRIAGE_TYPE = {
   'Medical':               'MEDICAL',
-  'Traffic / MVA':         'RTA',
+  // "Traffic / MVA" is for non-accident road problems (jam, obstruction,
+  // broken-down vehicle, intoxicated person on the road) — police only, no
+  // ambulance. A real crash with injuries is "Accident" (RTA), not this.
+  'Traffic / MVA':         'TRAFFIC',
   'Accident':              'RTA',
   'Fire':                  'FIRE',
   'Security / Disturbance':'SECURITY',
@@ -71,89 +71,22 @@ export default function NewIncident() {
   })
   const callId    = activeCall.callId
   const callPhone = activeCall.callPhone
-  const { endCall } = useCallChannelStore()
 
-  // ── Live call timer ──────────────────────────────────────────────────────────
-  const [callElapsed, setCallElapsed] = useState(0)
-  const [isMuted, setIsMuted] = useState(false)
-  const [callHasEnded, setCallHasEnded] = useState(false)
+  // Call timer, mute, and the live two-way audio pipe now live in a shared
+  // store (see store/callAudioStore.js) so they survive navigating away from
+  // this page — previously all of it was local state here, so leaving New
+  // Incident during a live call silently dropped the mic uplink and gave the
+  // dispatcher no way to see or end the call from anywhere else.
+  const {
+    callElapsed, isMuted, callHasEnded, audioStarted, audioListening, micError,
+    initCall, startAudio,
+  } = useCallAudioStore()
+
   useEffect(() => {
-    if (!callId || callHasEnded) return
-    const t = setInterval(() => setCallElapsed((s) => s + 1), 1000)
-    return () => clearInterval(t)
-  }, [callId, callHasEnded])
-
-  // Caller hanging up (Twilio status webhook) or another dispatcher screen
-  // ending the same call previously never reached this page at all — the
-  // timer just kept counting up on a call that was already long over.
-  useEffect(() => {
-    if (!callId) return
-    const unsub = subscribe(`/topic/calls/${callId}/status`, (evt) => {
-      if (evt?.type === 'call_ended') setCallHasEnded(true)
-    })
-    return unsub
-  }, [callId])
-
-  const fmtCallTime = (s) => {
-    const m = Math.floor(s / 60).toString().padStart(2, '0')
-    const sec = (s % 60).toString().padStart(2, '0')
-    return `${m}:${sec}`
-  }
+    if (callId) initCall(callId, callPhone)
+  }, [callId, callPhone, initCall])
 
   const callTimeRef = useRef(new Date().toISOString())
-
-  // ── Live caller audio (Twilio Media Stream → WebSocket → Web Audio) ─────────
-  const [audioListening, setAudioListening] = useState(false)
-  const [audioStarted, setAudioStarted] = useState(false)
-  const audioPlayerRef = useRef(null)
-
-  const startListening = useCallback(() => {
-    if (audioPlayerRef.current) return
-    audioPlayerRef.current = new MuLawAudioPlayer()
-    setAudioStarted(true)
-  }, [])
-
-  // ── Dispatcher mic → Twilio (so the caller hears the dispatcher back) ───────
-  const micRecorderRef = useRef(null)
-  const [micError, setMicError] = useState(null)
-
-  useEffect(() => {
-    // Ending a call no longer navigates away (the dispatcher stays on this page
-    // to finish the incident), so this effect's own cleanup was never running —
-    // the mic kept capturing and publishing frames indefinitely after the real
-    // call was long over, all silently rejected backend-side once Twilio's
-    // session was gone.
-    if (!callId || !audioStarted || callHasEnded) return
-    const recorder = new MicUplinkRecorder((base64Frame) => {
-      publish(`/app/calls/${callId}/audio`, { payload: base64Frame })
-    })
-    recorder.start().catch(() => setMicError('Could not access microphone'))
-    micRecorderRef.current = recorder
-    return () => {
-      recorder.stop()
-      micRecorderRef.current = null
-    }
-  }, [callId, audioStarted, callHasEnded])
-
-  useEffect(() => {
-    micRecorderRef.current?.setMuted(isMuted)
-  }, [isMuted])
-
-  useEffect(() => {
-    if (!callId || !audioStarted || callHasEnded) return
-    const unsub = subscribe(`/topic/calls/${callId}/audio`, (msg) => {
-      if (msg?.type === 'audio_chunk' && msg.payload && audioPlayerRef.current) {
-        audioPlayerRef.current.pushChunk(msg.payload)
-        setAudioListening(true)
-      }
-    })
-    return () => {
-      unsub()
-      audioPlayerRef.current?.stop()
-      audioPlayerRef.current = null
-      setAudioListening(false)
-    }
-  }, [callId, audioStarted, callHasEnded])
 
   // ── Caller profile — fetched from backend, no mock fallback ─────────────────
   const [callerData, setCallerData] = useState(null)
@@ -328,10 +261,14 @@ export default function NewIncident() {
     const type = (incidentType ?? '').toUpperCase()
 
     let resources, context, reasoning
-    if (type === 'RTA' || type === 'TRAFFIC / MVA') {
-      resources = [`${policeCount} Police Officer${policeCount > 1 ? 's' : ''}`, `${ambCount} Ambulance${ambCount > 1 ? 's' : ''}`, '1 Traffic Officer']
+    if (type === 'RTA') {
+      resources = [`${policeCount} Police Officer${policeCount > 1 ? 's' : ''}`, `${ambCount} Ambulance${ambCount > 1 ? 's' : ''}`]
       context   = `Road traffic accident — ${n} person${n > 1 ? 's' : ''} involved`
       reasoning = `Caller reports ${n} person${n > 1 ? 's' : ''} affected. ${ambCount} ambulance${ambCount > 1 ? 's' : ''} + police dispatched per triage.`
+    } else if (type === 'TRAFFIC') {
+      resources = [`${policeCount} Police Officer${policeCount > 1 ? 's' : ''}`]
+      context   = 'Traffic problem — no injuries reported'
+      reasoning = 'No ambulance required — police dispatched to manage the road. Will escalate if it turns out to be an accident.'
     } else if (type === 'MEDICAL') {
       resources = [`${policeCount} Police Officer${policeCount > 1 ? 's' : ''}`, `${ambCount} Ambulance${ambCount > 1 ? 's' : ''}`, `${ambCount} Paramedic Team${ambCount > 1 ? 's' : ''}`]
       context   = `Medical emergency — ${n} patient${n > 1 ? 's' : ''} reported`
@@ -584,93 +521,6 @@ export default function NewIncident() {
       </header>
 
       <div className="flex-1 min-h-0 max-w-[1800px] w-full mx-auto px-5 md:px-6 py-4 flex flex-col gap-4">
-
-        {/* ── Active inbound call banner ── */}
-        {callId && (
-          <div
-            className="rounded-xl border px-4 py-3 flex flex-wrap items-center gap-3 animate-fade-in-up"
-            style={{
-              background: callHasEnded ? 'var(--status-critical-bg)' : 'var(--status-low-bg)',
-              borderColor: callHasEnded ? 'var(--status-critical)' : 'var(--status-low)',
-            }}
-          >
-            <span
-              className="inline-flex items-center justify-center w-8 h-8 rounded-full shrink-0"
-              style={{ background: callHasEnded ? 'var(--status-critical)' : 'var(--status-low)', color: '#fff' }}
-            >
-              <PhoneCall size={15} />
-            </span>
-            <div className="flex-1 min-w-0">
-              <p
-                className="m-0 text-[11px] font-bold uppercase tracking-widest"
-                style={{ fontFamily: 'var(--font-display)', color: callHasEnded ? 'var(--status-critical)' : 'var(--status-low)' }}
-              >
-                {callHasEnded ? 'Call ended' : 'Call active'}
-              </p>
-              <p
-                className="m-0 text-[13px] font-semibold"
-                style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}
-              >
-                {callPhone}
-              </p>
-            </div>
-            <span
-              className="text-[13px] font-bold shrink-0"
-              style={{ fontFamily: 'var(--font-mono)', color: 'var(--status-low)' }}
-            >
-              {fmtCallTime(callElapsed)}
-            </span>
-
-            {/* Mute toggle */}
-            <button
-              type="button"
-              onClick={() => setIsMuted((v) => !v)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border cursor-pointer shrink-0 text-[11px] font-bold transition-colors"
-              style={{
-                fontFamily: 'var(--font-display)',
-                background: isMuted
-                  ? 'color-mix(in srgb, var(--status-warning) 12%, transparent)'
-                  : 'var(--bg-elevated)',
-                color:    isMuted ? 'var(--status-warning)' : 'var(--text-secondary)',
-                borderColor: isMuted ? 'var(--status-warning)' : 'var(--border)',
-              }}
-              title={isMuted ? 'Unmute microphone' : 'Mute microphone'}
-            >
-              {isMuted ? <MicOff size={13} /> : <Mic size={13} />}
-              {isMuted ? 'Muted' : 'Mute'}
-            </button>
-
-            {/* End call */}
-            <button
-              type="button"
-              onClick={() => {
-                if (callId) endCallApi(callId).catch(() => {})
-                // resq-active-call was only ever cleared from ActiveIncident.jsx
-                // (after a full incident was created) — ending a call here without
-                // creating one left the stale entry behind, so the next visit to
-                // New Incident silently re-hydrated the already-ended call.
-                try {
-                  sessionStorage.removeItem('resq-active-call')
-                  if (callId) sessionStorage.removeItem(intakeKey(callId))
-                } catch {}
-                endCall()
-                // Ending the call is not the same as abandoning the incident —
-                // the dispatcher still needs everything already captured (caller
-                // info, location, notes) to finish submitting it. Previously this
-                // navigated straight back to the live map, losing that context.
-              }}
-              className="text-[11px] font-bold px-3 py-1.5 rounded-lg border-none cursor-pointer shrink-0"
-              style={{
-                fontFamily: 'var(--font-display)',
-                background: 'var(--status-critical-bg)',
-                color:      'var(--status-critical)',
-                border:     '1px solid var(--status-critical)',
-              }}
-            >
-              End call
-            </button>
-          </div>
-        )}
 
         {/* ── Duplicate detection banner ── */}
         {showDuplicateBanner && firstDuplicate && (
@@ -988,7 +838,7 @@ export default function NewIncident() {
                 ) : (
                   <button
                     type="button"
-                    onClick={startListening}
+                    onClick={startAudio}
                     className="dispatcher-btn-outline text-[12px] self-start"
                   >
                     Start call audio (speak + listen)
@@ -1183,6 +1033,32 @@ export default function NewIncident() {
                   {effectiveSeverity === 'CRITICAL' && (
                     <Link
                       to={`/dispatcher/dispatch-immediate/${DEFAULT_IMMEDIATE_INCIDENT_ID}`}
+                      // Carry forward whatever's already been filled in on this
+                      // page — type, location, severity — so Dispatch Immediate
+                      // doesn't discard it and make the dispatcher start over.
+                      // Previously this always linked to a hardcoded mock
+                      // incident id and ignored the real form state entirely.
+                      state={(() => {
+                        // location.lat/lng only ever gets set from a real call's
+                        // telecom position or a manually dropped pin — a dispatcher
+                        // who just picked a district from the dropdown (no call, no
+                        // pin) had a district but no coordinates, which silently
+                        // failed incident creation on the next screen and bounced
+                        // them right back to "pick a location" — looking exactly
+                        // like their district choice had been ignored. Falling back
+                        // to that district's own centroid closes the gap.
+                        const selectedDistrictObj = districts.find((d) => d.district_id === district)
+                        return {
+                          presetType: incidentType || null,
+                          presetSeverity: effectiveSeverity,
+                          presetDistrict: district || null,
+                          presetSector: sector || null,
+                          presetAddress: streetAddress || null,
+                          presetLat: location?.lat ?? selectedDistrictObj?.lat ?? null,
+                          presetLng: location?.lng ?? selectedDistrictObj?.lng ?? null,
+                          presetCallerPhone: callPhone || null,
+                        }
+                      })()}
                       className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg border-none text-[12px] font-bold uppercase tracking-wide no-underline transition-opacity hover:opacity-90"
                       style={{
                         fontFamily: 'var(--font-display)',

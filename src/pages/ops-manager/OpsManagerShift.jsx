@@ -27,7 +27,7 @@ export default function OpsManagerShift() {
   const [shift, setShift] = useState(null);
   const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [slaTargetMinutes, setSlaTargetMinutes] = useState(8);
+  const [slaTargetMinutes, setSlaTargetMinutes] = useState(12);
   const [notes, setNotes] = useState("");
   // 'idle' | 'saving' | 'saved' | 'error'
   const [noteState, setNoteState] = useState("idle");

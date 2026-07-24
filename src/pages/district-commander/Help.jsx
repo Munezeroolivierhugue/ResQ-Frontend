@@ -86,7 +86,7 @@ export default function Help() {
       icon: Map,
       desc: 'Ensuring adequate geographic response capabilities.',
       articles: [
-        { title: 'Analyzing Coverage Gaps', content: 'The Coverage map highlights areas in your district that cannot be reached within the 8-minute SLA by currently available units. These "red zones" require immediate attention.' },
+        { title: 'Analyzing Coverage Gaps', content: 'The Coverage map highlights areas in your district that cannot be reached within the 12-minute SLA by currently available units. These "red zones" require immediate attention.' },
         { title: 'Requesting Mutual Aid', content: 'If your district coverage drops below 70%, the system will prompt you to submit a formal Mutual Aid request to the central Operations Manager to borrow units from neighboring districts.' }
       ]
     },

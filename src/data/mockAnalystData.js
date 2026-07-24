@@ -317,7 +317,7 @@ export const ANALYST_REPORT_METRICS = [
   { id: 'avg_rt', label: 'Average response time', default: true },
   { id: 'rt_district', label: 'Response time by district', default: true },
   { id: 'rt_trend', label: 'Response time trend (30 days)', default: true },
-  { id: 'within_target', label: '% within 8-min target', default: true },
+  { id: 'within_target', label: '% within 12-min target', default: true },
   { id: 'dispatch_acc', label: 'Dispatch accuracy rate', default: true },
   { id: 'ai_accept', label: 'AI acceptance rate', default: false },
   { id: 'override', label: 'Override rate and outcomes', default: false },

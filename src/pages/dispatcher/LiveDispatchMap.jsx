@@ -318,8 +318,17 @@ export default function LiveDispatchMap() {
     listDistricts().then(setAllDistricts).catch(() => {})
   }, [])
 
-  const deployed  = 0  // only available units are fetched; deployed shown in KPI but sourced elsewhere
+  const deployed  = allVehicles.filter(u => u.status === 'deployed').length
   const available = vehicles.length
+
+  const timedIncidents = incidents.filter(i => i.response_time_minutes != null)
+  const avgResponse = timedIncidents.length
+    ? (timedIncidents.reduce((s, i) => s + i.response_time_minutes, 0) / timedIncidents.length).toFixed(1)
+    : null
+
+  const coveragePct = allVehicles.length
+    ? Math.round(100 * allVehicles.filter(u => u.status === 'available').length / allVehicles.length)
+    : null
 
   const districtOptions = [
     { value: 'All', label: 'All Districts', icon: MapPin },
@@ -353,8 +362,8 @@ export default function LiveDispatchMap() {
       <div className="h-[46px] bg-(--bg-surface) border-b border-(--border) flex items-center px-1.5 shrink-0">
         <KpiPill label="Units Deployed"  value={deployed}  color="#2196C8" />
         <KpiPill label="Units Available" value={available} color="#3DAA6A" />
-        <KpiPill label="Avg Response"    value="7.2m"      color="var(--accent)" />
-        <KpiPill label="Coverage"        value="84%"       color="var(--accent)" />
+        <KpiPill label="Avg Response"    value={avgResponse != null ? `${avgResponse}m` : '—'} color="var(--accent)" />
+        <KpiPill label="Coverage"        value={coveragePct != null ? `${coveragePct}%` : '—'} color="var(--accent)" />
         <div className="ml-auto px-3.5 flex items-center gap-3">
           <button
             type="button"

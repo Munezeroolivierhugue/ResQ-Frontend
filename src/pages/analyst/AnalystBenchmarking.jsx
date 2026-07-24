@@ -18,7 +18,7 @@ function responseColor(m, target) {
 export default function AnalystBenchmarking() {
   const [period, setPeriod] = useState(PERIODS[1])
   const [rows, setRows] = useState([])
-  const [targetMinutes, setTargetMinutes] = useState(8)
+  const [targetMinutes, setTargetMinutes] = useState(12)
   const [trend, setTrend] = useState([])
   const [selectedDistricts, setSelectedDistricts] = useState([])
   const [loading, setLoading] = useState(true)

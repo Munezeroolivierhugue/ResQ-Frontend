@@ -8,6 +8,7 @@ import FilterDropdown from '../../components/admin/FilterDropdown'
 import { listActiveShifts } from '../../api/shifts'
 import { listIncidents } from '../../api/incidents'
 import { getCurrentUser } from '../../utils/authSession'
+import { getResponseTimeTarget } from '../../api/admin'
 
 const PAGE_SIZE = 15
 const STATUS_OPTIONS = ['All', 'ACTIVE', 'COMPLETED']
@@ -38,7 +39,7 @@ function shiftStats(shift, incidents) {
   }
 }
 
-function exportShiftPDF(shift, stats) {
+function exportShiftPDF(shift, stats, slaTargetMinutes) {
   const period = shift.shift_start ? `${fmtDateTime(shift.shift_start)} — ${shift.shift_end ? fmtDateTime(shift.shift_end) : 'Ongoing'}` : '—'
   openPdfWindow(buildPdfHtml({
     title: 'District Shift Report',
@@ -53,7 +54,7 @@ function exportShiftPDF(shift, stats) {
     ],
     kpis: [
       { label: 'Total Incidents', value: stats.total, sub: 'This shift' },
-      { label: 'Avg Response Time', value: stats.avgResponse != null ? `${stats.avgResponse.toFixed(1)} min` : '—', sub: 'Target < 8 min' },
+      { label: 'Avg Response Time', value: stats.avgResponse != null ? `${stats.avgResponse.toFixed(1)} min` : '—', sub: `Target < ${slaTargetMinutes ?? 12} min` },
       { label: 'Resolution Rate', value: stats.resolutionRate != null ? `${Math.round(stats.resolutionRate * 100)}%` : '—' },
       { label: 'District', value: shift.district_name ?? '—' },
     ],
@@ -96,6 +97,11 @@ export default function DCShiftReports() {
   const [page, setPage] = useState(1)
 
   const [selectedId, setSelectedId] = useState(null)
+  const [slaTargetMinutes, setSlaTargetMinutes] = useState(12)
+
+  useEffect(() => {
+    getResponseTimeTarget().then(setSlaTargetMinutes).catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (!districtId) { Promise.resolve().then(() => setLoading(false)); return }
@@ -311,7 +317,7 @@ export default function DCShiftReports() {
               </div>
               <button
                 type="button"
-                onClick={() => exportShiftPDF(selected, selectedStats)}
+                onClick={() => exportShiftPDF(selected, selectedStats, slaTargetMinutes)}
                 className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg cursor-pointer text-[12px] font-bold text-(--accent) transition-opacity hover:opacity-70 shrink-0"
                 style={{ background: 'none', border: 'none' }}
               >

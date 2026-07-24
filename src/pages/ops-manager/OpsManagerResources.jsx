@@ -7,6 +7,7 @@ import OpsManagerDistrictLabel from "../../components/ops-manager/OpsManagerDist
 import { getCurrentUser } from "../../utils/authSession";
 import { listCoverageGaps } from "../../api/planning";
 import { listVehicles } from "../../api/vehicles";
+import { getCoverageScoreTarget } from "../../api/admin";
 import {
   listMutualAidRequests,
   createMutualAidRequest,
@@ -44,6 +45,7 @@ function statusVariant(status) {
 function CoverageGapsPanel() {
   const [gaps, setGaps] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [coverageTarget, setCoverageTarget] = useState(60);
   const districtId = getCurrentUser()?.district_id;
 
   useEffect(() => {
@@ -51,19 +53,20 @@ function CoverageGapsPanel() {
       .then(setGaps)
       .catch(() => {})
       .finally(() => setLoading(false));
+    getCoverageScoreTarget().then(setCoverageTarget).catch(() => {});
   }, [districtId]);
 
   return (
     <div className="flex flex-col gap-3">
       <p className="dispatcher-page-subtitle m-0">
-        Real fleet availability by vehicle category in your district — a gap means fewer than 60% of that
+        Real fleet availability by vehicle category in your district — a gap means fewer than {coverageTarget}% of that
         category's units are currently available.
       </p>
       {loading ? (
         <div className="dispatcher-surface p-8 text-center text-(--text-muted) text-[13px]">Loading…</div>
       ) : gaps.length === 0 ? (
         <div className="dispatcher-surface p-8 text-center text-(--text-muted) text-[13px]">
-          No coverage gaps right now — every vehicle category is at or above target availability.
+          No coverage gaps right now — every vehicle category is at or above {coverageTarget}% target availability.
         </div>
       ) : (
         gaps.map((g) => (

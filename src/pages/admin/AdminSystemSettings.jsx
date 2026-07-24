@@ -111,7 +111,7 @@ export default function AdminSystemSettings() {
   const { section: sectionParam } = useParams()
   const section = sectionParam || 'general'
   const [priority, setPriority] = useState('WARNING')
-  const [responseTarget, setResponseTarget] = useState(8)
+  const [responseTarget, setResponseTarget] = useState(12)
   const [coverageTarget, setCoverageTarget] = useState(90)
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState(null)

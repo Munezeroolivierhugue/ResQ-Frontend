@@ -16,7 +16,7 @@ function exportPDF(rows) {
       rows.map((r) => {
         const sc = sevColor[(r.severity || '').toLowerCase()] || '#888'
         const ct = r.call_time ? new Date(r.call_time).toLocaleString('en-GB') : '—'
-        const mins = elapsedMinutes(r.call_time)
+        const mins = elapsedMinutes(r.call_time, r.pending_report_at)
         return [
           `<span style="font-family:monospace;font-weight:700">${r.incident_ref ?? '—'}</span>`,
           formatIncidentType(r.incident_type) ?? '—',
@@ -63,13 +63,25 @@ function exportCsv(rows) {
 // table, so both tables render severity identically.
 const severityColor = { critical: '#E8354A', high: '#F07820', medium: '#D4A017', low: '#3DAA6A' }
 
-function elapsedMinutes(callTime) {
+// Counts up to `freezeAt` (when the dispatcher marked the scene complete) once
+// it's known, instead of always counting up to Date.now() — an incident just
+// sitting here waiting for its field report to be filed isn't still "elapsing"
+// on scene, so the timer shouldn't keep climbing after that point.
+function elapsedMinutes(callTime, freezeAt) {
   if (!callTime) return null
-  return Math.round((Date.now() - new Date(callTime).getTime()) / 60000)
+  const end = freezeAt ? new Date(freezeAt).getTime() : Date.now()
+  return Math.round((end - new Date(callTime).getTime()) / 60000)
 }
 
-function ElapsedChip({ callTime }) {
-  const mins = elapsedMinutes(callTime)
+function formatElapsed(mins) {
+  if (mins < 60) return `${mins}m`
+  const hours = Math.floor(mins / 60)
+  const rem = mins % 60
+  return rem === 0 ? `${hours}h` : `${hours}h ${rem}m`
+}
+
+function ElapsedChip({ callTime, pendingReportAt }) {
+  const mins = elapsedMinutes(callTime, pendingReportAt)
   if (mins == null) return null
   const over60 = mins > 60
   return (
@@ -82,7 +94,7 @@ function ElapsedChip({ callTime }) {
       }}
     >
       <Clock size={10} />
-      {mins}m elapsed
+      {formatElapsed(mins)} elapsed
     </span>
   )
 }
@@ -238,10 +250,6 @@ export default function PendingReports() {
                     key={inc.incident_id}
                     ref={(el) => { if (el) rowRefs.current[inc.incident_id] = el }}
                     className="border-b border-(--border-subtle) transition-colors"
-                    style={{
-                      outline: isJustCompleted ? '1px solid var(--accent)' : undefined,
-                      outlineOffset: isJustCompleted ? '-1px' : undefined,
-                    }}
                   >
                     <td className="px-3.5 h-12">
                       <div className="flex items-center gap-2">
@@ -253,11 +261,11 @@ export default function PendingReports() {
                         </span>
                         {isJustCompleted && (
                           <span
-                            className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border"
+                            className="text-[9px] font-bold uppercase tracking-wide px-1 py-0.5 rounded"
                             style={{
-                              borderColor: 'var(--accent)',
-                              color: 'var(--accent)',
-                              fontFamily: 'var(--font-display)',
+                              background: 'var(--status-medium-bg)',
+                              color: 'var(--status-medium)',
+                              fontFamily: 'var(--font-body)',
                             }}
                           >
                             Just completed
@@ -290,7 +298,7 @@ export default function PendingReports() {
                       {inc.call_time ? new Date(inc.call_time).toLocaleString() : '—'}
                     </td>
                     <td className="px-3.5">
-                      <ElapsedChip callTime={inc.call_time} />
+                      <ElapsedChip callTime={inc.call_time} pendingReportAt={inc.pending_report_at} />
                     </td>
                     <td
                       className="px-3.5 text-[12px] text-(--status-info)"
@@ -317,13 +325,8 @@ export default function PendingReports() {
                       <button
                         type="button"
                         onClick={() => navigate('/dispatcher/incident-report', { state: { incident: inc } })}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border cursor-pointer text-[11px] font-bold transition-colors hover:bg-(--bg-elevated)"
-                        style={{
-                          background: 'transparent',
-                          borderColor: 'var(--accent)',
-                          color: 'var(--accent)',
-                          fontFamily: 'var(--font-display)',
-                        }}
+                        className="inline-flex items-center gap-1 px-1 py-1 rounded-lg cursor-pointer text-[11px] font-bold text-(--accent) transition-opacity hover:opacity-70"
+                        style={{ background: 'none', border: 'none', fontFamily: 'var(--font-display)' }}
                       >
                         <FileCheck size={12} />
                         File Report

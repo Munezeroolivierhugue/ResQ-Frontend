@@ -82,6 +82,11 @@ export default function AdminSecurity() {
     return Object.values(map).sort((a, b) => a.role.localeCompare(b.role))
   }, [users])
 
+  const openAlertCount = useMemo(
+    () => securityEvents.filter((ev) => ev.status === 'OPEN').length,
+    [securityEvents]
+  )
+
   const nonCompliantUsers = useMemo(
     () => users.filter((u) => !u.mfa_enabled && u.status === 'ACTIVE'),
     [users],
@@ -172,7 +177,7 @@ export default function AdminSecurity() {
 
   return (
     <div className="portal-page flex flex-col gap-5 min-w-[1024px]">
-      <AdminPageHeader title="Security Management" subtitle="MFA compliance, sessions, and security policies." eyebrow="Super Admin Portal" badge="2 Open Alerts" />
+      <AdminPageHeader title="Security Management" subtitle="MFA compliance, sessions, and security policies." eyebrow="Super Admin Portal" badge={eventsLoading ? undefined : `${openAlertCount} Open Alert${openAlertCount !== 1 ? 's' : ''}`} />
 
       {eventsError && (
         <div className="text-[12px] px-3 py-2 rounded" style={{ background: 'var(--status-medium-bg)', color: 'var(--status-medium)' }}>

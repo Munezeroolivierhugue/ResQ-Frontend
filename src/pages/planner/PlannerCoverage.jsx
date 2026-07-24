@@ -8,6 +8,7 @@ import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import { getDistrictCoverage, getCoverageGapDetails } from '../../api/planning'
 import { listDistricts } from '../../api/districts'
+import { getCoverageScoreTarget } from '../../api/admin'
 import { coverageColor } from '../../data/mockPlannerData'
 import 'leaflet/dist/leaflet.css'
 
@@ -27,10 +28,12 @@ export default function PlannerCoverage() {
   const [districtCoverage, setDistrictCoverage] = useState([])
   const [coverageGaps, setCoverageGaps] = useState([])
   const [loading, setLoading] = useState(true)
+  const [coverageTarget, setCoverageTarget] = useState(60)
 
   useEffect(() => {
     listDistricts().then(setDistricts).catch(() => {})
     getDistrictCoverage().then(setDistrictCoverage).catch(() => {})
+    getCoverageScoreTarget().then(setCoverageTarget).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -130,7 +133,7 @@ export default function PlannerCoverage() {
           <div className="dispatcher-surface p-4 overflow-x-auto">
             <div className="flex items-center gap-2 mb-3">
               <AlertTriangle size={14} style={{ color: 'var(--status-critical)' }} />
-              <h3 className="text-[13px] font-semibold m-0">Coverage Gaps — Below 60% Target</h3>
+              <h3 className="text-[13px] font-semibold m-0">Coverage Gaps — Below {coverageTarget}% Target</h3>
               <StatusBadge label={String(gapCount)} variant="critical" />
             </div>
             <table className="w-full text-[12px] border-collapse min-w-[520px]">

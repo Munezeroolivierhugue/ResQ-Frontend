@@ -59,7 +59,7 @@ export default function AnalystReports() {
   const [chartType, setChartType] = useState('line')
   const [districts, setDistricts] = useState([])
   const [scopeDistrictId, setScopeDistrictId] = useState('') // '' = All Rwanda
-  const [targetMinutes, setTargetMinutes] = useState(8)
+  const [targetMinutes, setTargetMinutes] = useState(12)
   const pushToast = useToastStore((s) => s.pushToast)
   const [generating, setGenerating] = useState(false)
   const [submitting, setSubmitting] = useState(false)

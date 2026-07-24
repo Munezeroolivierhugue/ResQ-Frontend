@@ -24,6 +24,7 @@ function transform(i) {
     dispatch_time:           i.dispatchTime ?? null,
     arrival_time:            i.arrivalTime ?? null,
     closure_time:            i.closureTime ?? null,
+    pending_report_at:       i.pendingReportAt ?? null,
     caller_id:               i.callerId ?? null,
     // Derived from timestamps when backend doesn't pre-compute them
     response_time_minutes:   i.responseTimeMinutes ?? minutesBetween(i.callTime, i.arrivalTime ?? i.dispatchTime),

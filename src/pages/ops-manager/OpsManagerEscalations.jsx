@@ -95,8 +95,25 @@ export default function OpsManagerEscalations() {
         incidentRef={dispatchTarget?.incident_ref}
         districtId={districtId}
         onClose={() => setDispatchTarget(null)}
-        onConfirm={(units) => {
+        onConfirm={async (units) => {
+          // "Dispatch Units" and "Acknowledge" were two separate actions —
+          // dispatching never told the field responder who originally asked
+          // for backup that it was actually happening, since only the
+          // Acknowledge button called the (real, notification-sending)
+          // acknowledge endpoint. Dispatching backup units IS acknowledging
+          // the request, so do both together.
+          const backupId = dispatchTarget?.backup_id
           setDispatchTarget(null)
+          if (backupId) {
+            try {
+              await acknowledgeBackupRequest(backupId)
+              setBackupRequests((prev) => prev.filter((r) => r.backup_id !== backupId))
+            } catch {
+              // Units are already dispatched at this point — surface the ack
+              // failure separately rather than implying the dispatch itself failed.
+              showToast('Units dispatched, but the responder could not be notified', 'error')
+            }
+          }
           showToast(`${units.length} unit${units.length > 1 ? 's' : ''} dispatched`)
         }}
       />
@@ -150,6 +167,9 @@ export default function OpsManagerEscalations() {
                   <span className="font-mono font-bold text-(--accent)">{req.incident_ref}</span>
                   <span className="text-[12px] text-(--text-muted) ml-2">{timeAgo(req.created_at)}</span>
                   <div className="text-[13px] mt-0.5">{req.reason}</div>
+                  {req.notes && (
+                    <div className="text-[12px] text-(--text-secondary) mt-0.5 italic">"{req.notes}"</div>
+                  )}
                   <div className="text-[12px] text-(--text-secondary)">
                     {req.plate_number ?? 'Unit'} · {req.incident?.district ?? req.incident?.address ?? 'Unknown location'}
                   </div>

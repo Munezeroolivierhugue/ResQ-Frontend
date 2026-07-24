@@ -18,8 +18,9 @@ import {
   mockImmediateAssessment,
   mockDispatchCallTranscript,
   detectIncidentTypeFromTranscript,
+  IMMEDIATE_INCIDENT_TYPES,
 } from "../../data/mockDispatchImmediateData";
-import { createIncident } from "../../api/incidents";
+import { createIncident, escalateIncident } from "../../api/incidents";
 import { listVehicles } from "../../api/vehicles";
 import { createDispatch } from "../../api/dispatches";
 import { formatIncidentType } from "../../utils/incidentTypeLabels";
@@ -38,6 +39,19 @@ const IMMEDIATE_TYPE_TO_BACKEND_CODE = {
   "public-disturbance": "SECURITY",
   assault: "SECURITY",
   "other-critical": "OTHER",
+};
+
+// Reverse of the above, roughly — maps New Incident's own category labels onto
+// the closest matching fast-dispatch scenario, so arriving here with a type
+// already picked doesn't discard it and force re-picking from the grid.
+const CATEGORY_LABEL_TO_IMMEDIATE_TYPE_ID = {
+  Medical: "medical-emergency",
+  Accident: "traffic-accident",
+  Fire: "structure-fire",
+  "Security / Disturbance": "public-disturbance",
+  "Traffic / MVA": "other-critical",
+  Disaster: "other-critical",
+  Other: "other-critical",
 };
 
 // Map a real vehicle from the API to the shape this UI expects
@@ -98,13 +112,30 @@ export default function DispatchImmediate() {
   // button — location is never known at this point, so the flow always goes
   // through select-location next, whether or not a type was pre-picked.
   const immediateTypeFromState = location.state?.immediateType;
-  const [step, setStep] = useState(
-    immediateTypeFromState ? "select-location" : "select-type",
-  );
+
+  // Coming from New Incident instead — type, severity, and often location
+  // were already filled in there. Previously this screen always started
+  // completely fresh regardless, discarding all of that and making the
+  // dispatcher redo everything just to use the fast-dispatch flow.
+  const preset = location.state?.presetType ? location.state : null;
+  const presetScenario = preset
+    ? IMMEDIATE_INCIDENT_TYPES.find(
+        (t) => t.id === (CATEGORY_LABEL_TO_IMMEDIATE_TYPE_ID[preset.presetType] ?? "other-critical"),
+      )
+    : null;
+  const presetHasLocation = !!(preset && (preset.presetDistrict || (preset.presetLat != null && preset.presetLng != null)));
+
+  const effectiveTypeFromState = immediateTypeFromState ?? presetScenario;
+
+  const [step, setStep] = useState(() => {
+    if (presetScenario && presetHasLocation) return "creating"; // skip both steps entirely
+    if (effectiveTypeFromState) return "select-location"; // type known, still need location
+    return "select-type";
+  });
   const [selectedType, setSelectedType] = useState(() => {
-    if (!immediateTypeFromState) return null;
+    if (!effectiveTypeFromState) return null;
     return {
-      ...immediateTypeFromState,
+      ...effectiveTypeFromState,
       selectedAt: new Date().toLocaleTimeString("en-GB", {
         hour: "2-digit",
         minute: "2-digit",
@@ -130,13 +161,13 @@ export default function DispatchImmediate() {
     try {
       const inc = await createIncident({
         incidentType: IMMEDIATE_TYPE_TO_BACKEND_CODE[selectedType?.id] ?? "OTHER",
-        callerPhone: "unknown",
+        callerPhone: preset?.presetCallerPhone || "unknown",
         districtId: picked.districtId,
         latitude: picked.lat,
         longitude: picked.lng,
         sector: picked.sector || null,
         landmark: picked.address || null,
-        finalSeverity: "CRITICAL",
+        finalSeverity: preset?.presetSeverity || "CRITICAL",
       });
       setRealIncident(inc);
 
@@ -153,15 +184,46 @@ export default function DispatchImmediate() {
       setStep("dispatch");
     } catch {
       setCreateError("Could not create the incident — check your connection and try again.");
+      setStep("select-location"); // preset auto-create failed — let the dispatcher retry manually
     } finally {
       setCreatingIncident(false);
     }
   };
 
+  // Both type and location already known — either from a New Incident preset,
+  // or because the dispatcher already confirmed a location earlier in this
+  // same session (re-created here via "Change incident type") — skip
+  // straight to creating the incident instead of re-asking for either.
+  useEffect(() => {
+    if (step !== "creating") return;
+    const known = preset
+      ? {
+          districtId: preset.presetDistrict,
+          lat: preset.presetLat,
+          lng: preset.presetLng,
+          sector: preset.presetSector,
+          address: preset.presetAddress,
+        }
+      : {
+          districtId: realIncident?.district_id,
+          lat: realIncident?.lat,
+          lng: realIncident?.lng,
+          sector: realIncident?.sector,
+          address: realIncident?.address,
+        };
+    handleLocationConfirm(known);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
   const units = nearestUnits ?? [];
   const baseIncident = realIncident ? incidentToBase(realIncident) : null;
 
-  const [elapsed, setElapsed] = useState(227);
+  // Real wall-clock time since this screen opened — was previously a fake
+  // hardcoded starting value (227s) that had no relationship to when the
+  // dispatcher actually started this dispatch, so "elapsed" never meant
+  // anything real.
+  const [screenOpenedAt] = useState(() => Date.now());
+  const [elapsed, setElapsed] = useState(0);
   const [omNotified, setOmNotified] = useState(false);
   const [selectedUnitIds, setSelectedUnitIds] = useState([]); // multi-select
   const [dispatched, setDispatched] = useState(false);
@@ -193,14 +255,20 @@ export default function DispatchImmediate() {
   }, [baseIncident, selectedType]);
 
   useEffect(() => {
-    const t = setInterval(() => setElapsed((e) => e + 1), 1000);
+    // Derived from real elapsed wall-clock time rather than a naive +1 tick,
+    // so it can't drift out of sync if the browser throttles background
+    // tabs/timers (a naive counter would just fall behind real time).
+    const t = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - screenOpenedAt) / 1000));
+    }, 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [screenOpenedAt]);
 
-  useEffect(() => {
-    const t = setTimeout(() => setOmNotified(true), 3000);
-    return () => clearTimeout(t);
-  }, []);
+  // Was a blind 3-second timeout with no connection to anything real — it
+  // fired regardless of whether the incident (or any dispatch) actually
+  // existed yet. Now set only once the real escalateIncident() call in
+  // handleDispatch below actually succeeds (see setOmNotified(true) there),
+  // so this badge means what it says.
 
   const handleTypeSelect = (type) => {
     const now = new Date();
@@ -212,7 +280,16 @@ export default function DispatchImmediate() {
         second: "2-digit",
       }),
     });
-    setStep("select-location");
+    // "Change incident type" previously always bounced back to
+    // select-location even when the location was already known (from a
+    // New Incident preset, or simply because the dispatcher had already
+    // picked one earlier in this same session) — silently discarding it
+    // and making them re-pick the district from scratch for no reason.
+    if (presetHasLocation || realIncident) {
+      setStep("creating");
+    } else {
+      setStep("select-location");
+    }
   };
 
   const selectedUnits = units.filter((u) => selectedUnitIds.includes(u.id));
@@ -272,6 +349,32 @@ export default function DispatchImmediate() {
           ai_recommended: false,
         });
       }
+
+      // The "Operations Manager Notified" badge shown throughout this screen
+      // was never actually backed by anything real — addNotification below
+      // only ever touches this dispatcher's own local notification list, it
+      // can't reach a different user's session. escalateIncident is the real
+      // backend feature for this: a persisted notification + live WebSocket
+      // push to every real Operations Manager in the incident's district.
+      // An immediate dispatch is by definition critical enough to warrant
+      // that automatically, without the dispatcher having to separately
+      // remember to escalate it.
+      try {
+        await escalateIncident(realIncidentId);
+        setOmNotified(true);
+      } catch {
+        addNotification({
+          id: `dispatch-imm-escalate-failed-${Date.now()}`,
+          type: "immediate_dispatch_escalation_failed",
+          title: "Operations Manager was not notified",
+          message: `Automatic escalation for this immediate dispatch failed to send — escalate ${baseIncident?.id ?? "this incident"} manually.`,
+          time: now.toISOString(),
+          read: false,
+          target_role: "DISPATCHER",
+          is_immediate: true,
+          ai_recommended: false,
+        });
+      }
     }
 
     addNotification({
@@ -301,6 +404,14 @@ export default function DispatchImmediate() {
         incidentId={baseIncident?.id ?? "NEW"}
         omNotified={omNotified}
       />
+
+      {step === "creating" && (
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-[13px] text-(--text-muted)">
+            Type and location already confirmed on New Incident — creating dispatch…
+          </p>
+        </div>
+      )}
 
       {step === "select-type" && (
         <DispatchImmediateTypeStep

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Phone, PhoneCall, PhoneMissed, Clock, X, CheckCircle } from 'lucide-react'
-import { listMissedCalls, markCalledBack } from '../../api/missedCalls'
+import { listMissedCalls, callBackMissedCall } from '../../api/missedCalls'
+import { useToastStore } from '../../store/toastStore'
 
 function maskPhone(num) {
   if (!num) return '—'
@@ -51,11 +53,11 @@ function StatusChip({ status }) {
   )
 }
 
-function CallbackModal({ call, onConfirm, onCancel }) {
+function CallbackModal({ call, calling, onConfirm, onCancel }) {
   return (
     <div
       className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onCancel() }}
+      onClick={(e) => { if (!calling && e.target === e.currentTarget) onCancel() }}
     >
       <div
         className="w-full max-w-[400px] rounded-2xl border border-(--border) overflow-hidden"
@@ -73,20 +75,21 @@ function CallbackModal({ call, onConfirm, onCancel }) {
               className="text-[14px] font-bold text-(--text-primary)"
               style={{ fontFamily: 'var(--font-display)' }}
             >
-              Confirm callback
+              Call back this number
             </span>
           </div>
           <button
             type="button"
             onClick={onCancel}
-            className="w-7 h-7 rounded-lg border border-(--border) bg-transparent flex items-center justify-center cursor-pointer text-(--text-muted) hover:text-(--text-primary)"
+            disabled={calling}
+            className="w-7 h-7 rounded-lg border border-(--border) bg-transparent flex items-center justify-center cursor-pointer text-(--text-muted) hover:text-(--text-primary) disabled:opacity-40"
           >
             <X size={14} />
           </button>
         </div>
         <div className="px-5 py-4">
           <p className="text-[13px] text-(--text-secondary) mb-3">
-            You are about to log a callback to:
+            This places a real call through Twilio to:
           </p>
           <div
             className="px-4 py-3 rounded-xl border border-(--border) bg-(--bg-input) mb-4"
@@ -98,21 +101,24 @@ function CallbackModal({ call, onConfirm, onCancel }) {
             </div>
           </div>
           <p className="text-[11px] text-(--text-muted) mb-4">
-            This will mark the call as <strong>called_back</strong> and record your dispatcher ID and the current timestamp.
+            Once answered, you'll be connected live and taken straight to New Incident to dispatch.
+            On a Twilio trial account this only works for numbers added under Verified Caller IDs.
           </p>
           <div className="flex gap-3">
             <button
               type="button"
               onClick={onConfirm}
-              className="flex-1 dispatcher-btn-primary"
+              disabled={calling}
+              className="flex-1 dispatcher-btn-primary disabled:opacity-60"
             >
               <PhoneCall size={14} />
-              Confirm callback
+              {calling ? 'Calling…' : 'Call now'}
             </button>
             <button
               type="button"
               onClick={onCancel}
-              className="dispatcher-btn-ghost"
+              disabled={calling}
+              className="dispatcher-btn-ghost disabled:opacity-40"
             >
               Cancel
             </button>
@@ -124,11 +130,14 @@ function CallbackModal({ call, onConfirm, onCancel }) {
 }
 
 export default function MissedCalls() {
+  const navigate = useNavigate()
+  const pushToast = useToastStore((s) => s.pushToast)
   const [calls, setCalls] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [tab, setTab] = useState('pending')
   const [callbackModal, setCallbackModal] = useState(null)
+  const [calling, setCalling] = useState(false)
   const [justCallbacked, setJustCallbacked] = useState(new Set())
 
   useEffect(() => {
@@ -142,12 +151,20 @@ export default function MissedCalls() {
   const displayed = tab === 'pending' ? calls.filter((c) => c.status === 'pending') : calls
 
   const handleCallback = async (id) => {
+    setCalling(true)
     try {
-      const updated = await markCalledBack(id)
-      setCalls((prev) => prev.map((c) => c.missed_call_id === id ? adaptCall(updated) : c))
+      const result = await callBackMissedCall(id)
       setJustCallbacked((prev) => new Set([...prev, id]))
-    } catch { /* silent */ }
-    setCallbackModal(null)
+      setCallbackModal(null)
+      navigate(
+        `/dispatcher/new-incident?call_id=${encodeURIComponent(result.call_id)}&phone=${encodeURIComponent(result.phone_number)}`
+      )
+    } catch (err) {
+      const message = err?.response?.data?.message || 'Could not place the call — check the number is verified in Twilio.'
+      pushToast({ variant: 'error', title: 'Call failed', message })
+    } finally {
+      setCalling(false)
+    }
   }
 
   const confirmCallback = () => {
@@ -298,7 +315,7 @@ export default function MissedCalls() {
                           }}
                         >
                           <PhoneCall size={12} />
-                          Callback
+                          Call back
                         </button>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-[11px] text-(--status-low)">
@@ -327,6 +344,7 @@ export default function MissedCalls() {
       {callbackModal && (
         <CallbackModal
           call={callbackModal}
+          calling={calling}
           onConfirm={confirmCallback}
           onCancel={() => setCallbackModal(null)}
         />

@@ -28,6 +28,7 @@ import { listIncidents } from '../../api/incidents'
 import { listVehicles } from '../../api/vehicles'
 import { listActiveShifts } from '../../api/shifts'
 import { getCurrentUser } from '../../utils/authSession'
+import { getResponseTimeTarget } from '../../api/admin'
 
 const ACCENT = { light: '#879D1F', dark: '#9BB826' }
 
@@ -88,6 +89,11 @@ export default function DCDashboard() {
   const [trend, setTrend] = useState([])
   const [shifts, setShifts] = useState([])
   const [error, setError] = useState(null)
+  const [slaTargetMinutes, setSlaTargetMinutes] = useState(12)
+
+  useEffect(() => {
+    getResponseTimeTarget().then(setSlaTargetMinutes).catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (!districtId) { Promise.resolve().then(() => setLoading(false)); return }
@@ -170,7 +176,7 @@ export default function DCDashboard() {
 
       <div className="portal-grid-kpi">
         <AdminStatCard icon={AlertCircle} label="Total Incidents (This Month)" value={loading ? '—' : kpis.incidents} />
-        <AdminStatCard icon={Clock} label="Avg Response Time" value={loading ? '—' : kpis.responseTime} sub="Target: 12 min" />
+        <AdminStatCard icon={Clock} label="Avg Response Time" value={loading ? '—' : kpis.responseTime} sub={`Target: ${slaTargetMinutes} min`} />
         <AdminStatCard icon={MapPin} label="Fleet Coverage" value={loading ? '—' : kpis.coverage} />
         <AdminStatCard icon={CheckCircle} label="Resolution Rate" value={loading ? '—' : kpis.resolutionRate} />
         <AdminStatCard icon={ChevronsUp} label="Escalations (This Month)" value={loading ? '—' : kpis.escalations} />

@@ -5,6 +5,7 @@ import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
 import { listSimulations, runSimulation as apiRunSimulation } from '../../api/planning'
 import { listDistricts } from '../../api/districts'
+import { getCoverageScoreTarget } from '../../api/admin'
 
 const SCENARIOS = [
   'Flash Flood — Kigali',
@@ -26,7 +27,7 @@ function fmtTime(min) {
   return min != null ? `${min.toFixed(1)}m` : '—'
 }
 
-function ResultCard({ title, result, tone }) {
+function ResultCard({ title, result, tone, coverageTarget }) {
   if (!result) return null
   const overTarget = result.target_response_time != null && result.projected_response_time > result.target_response_time
   return (
@@ -44,7 +45,7 @@ function ResultCard({ title, result, tone }) {
           fmtTime(result.projected_response_time),
           overTarget ? 'var(--status-critical)' : 'var(--status-low)',
         ],
-        ['Coverage score', `${result.projected_coverage ?? '—'}%`, result.projected_coverage < 60 ? 'var(--status-critical)' : 'var(--accent)'],
+        ['Coverage score', `${result.projected_coverage ?? '—'}%`, result.projected_coverage < coverageTarget ? 'var(--status-critical)' : 'var(--accent)'],
         ['Units', result.units_short > 0 ? `${result.units_short} short of ${result.units_available}/${result.units_total}` : `${result.units_available}/${result.units_total} sufficient`, result.units_short > 0 ? 'var(--status-critical)' : 'var(--status-low)'],
       ].map(([label, val, color]) => (
         <div key={label} className="flex justify-between text-[12px] mb-2">
@@ -77,6 +78,7 @@ export default function PlannerSimulation() {
   const [savedScenarios, setSavedScenarios] = useState([])
   const [runError, setRunError] = useState(null)
   const [scenariosPage, setScenariosPage] = useState(1)
+  const [coverageTarget, setCoverageTarget] = useState(60)
 
   // Excludes legacy rows saved before scenario config existed — they carry
   // no disaster_scenario/focus_area and share identical fabricated-looking
@@ -91,6 +93,7 @@ export default function PlannerSimulation() {
   useEffect(() => {
     listDistricts().then(setDistricts).catch(() => {})
     listSimulations().then(setSavedScenarios).catch(() => setSavedScenarios([]))
+    getCoverageScoreTarget().then(setCoverageTarget).catch(() => {})
   }, [])
 
   const runBoth = async (params) => {
@@ -257,12 +260,12 @@ export default function PlannerSimulation() {
                   The two cards below show what the model projects if incident volume rises to <strong>{multiplier}×</strong> that baseline for {durationHours}h.
                 </div>
                 <div className="flex flex-col md:flex-row items-stretch gap-3">
-                  <ResultCard title="Current Deployment" result={currentResult} />
+                  <ResultCard title="Current Deployment" result={currentResult} coverageTarget={coverageTarget} />
                   <div className="flex flex-col items-center justify-center px-2 shrink-0">
                     <ArrowRight size={24} className="text-(--text-muted)" />
                     <span className="text-[12px] text-(--text-muted)">vs</span>
                   </div>
-                  <ResultCard title="AI Optimized" result={optimizedResult} tone="accent" />
+                  <ResultCard title="AI Optimized" result={optimizedResult} tone="accent" coverageTarget={coverageTarget} />
                 </div>
 
                 <div

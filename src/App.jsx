@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useSearchParams } from 'react-router-dom'
 import AppShell from './components/layout/AppShell'
 import AdminShell from './components/admin/AdminShell'
 import LiveDispatchMap from './pages/dispatcher/LiveDispatchMap'
@@ -106,6 +106,16 @@ import FieldResponderHelp from './pages/field-responder/Help'
 import OpsManagerHelp from './pages/ops-manager/Help'
 import PlannerHelp from './pages/planner/Help'
 import LocateCall from './pages/public/LocateCall'
+
+// NewIncident's caller/intake state was only ever initialized once via
+// useState(() => ...) on first mount. Answering a second call while already
+// on this route (same path, only ?call_id= changes) doesn't remount the
+// component, so the old call's stale data stuck around instead of loading
+// the new one. Keying on call_id forces a clean remount whenever it changes.
+function NewIncidentRoute() {
+  const [params] = useSearchParams()
+  return <NewIncident key={params.get('call_id') || 'none'} />
+}
 
 export default function App() {
   return (
@@ -252,7 +262,7 @@ export default function App() {
         <Route path="/dispatcher" element={<DispatcherRoute />}>
           <Route element={<AppShell />}>
             <Route index element={<LiveDispatchMap />} />
-            <Route path="new-incident" element={<NewIncident />} />
+            <Route path="new-incident" element={<NewIncidentRoute />} />
             <Route path="ai-engine" element={<AIDispatchEngine />} />
             <Route path="active-incident" element={<ActiveIncident />} />
             <Route path="queue" element={<Navigate to="/dispatcher/active-incident" replace />} />

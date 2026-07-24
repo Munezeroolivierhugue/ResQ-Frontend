@@ -15,10 +15,11 @@ import { buildPdfHtml, openPdfWindow, sectionHtml, tableHtml } from '../../utils
 import { useToastStore } from '../../store/toastStore'
 
 const SHIFT_OPTIONS = [
-  { value: 'MORNING',  label: 'Morning (07:00 – 15:00)' },
-  { value: 'EVENING',  label: 'Evening (15:00 – 23:00)' },
-  { value: 'NIGHT',    label: 'Night (23:00 – 07:00)' },
-  { value: 'ROTATING', label: 'Rotating / Not fixed' },
+  { value: 'MORNING',   label: 'Morning (07:00 – 15:00)' },
+  { value: 'EVENING',   label: 'Evening (15:00 – 23:00)' },
+  { value: 'NIGHT',     label: 'Night (23:00 – 07:00)' },
+  { value: 'FULL_TIME', label: 'Full-time / Always available' },
+  { value: 'ROTATING',  label: 'Rotating / Not fixed' },
 ]
 
 // All roles /api/dc/users returns for this district — matches
@@ -53,7 +54,8 @@ function EditUserModal({ user, vehicles, onClose, onSaved }) {
     fullName: user.full_name ?? '',
     email: user.email ?? '',
     phone: user.phone_number ?? '',
-    vehicleId: user.current_vehicle_id ?? '',
+    // Standing Admin/DC assignment, not the shift-active vehicle link.
+    vehicleId: user.assigned_vehicle_id ?? '',
     shiftType: user.shift_type ?? '',
   })
   const [saving, setSaving] = useState(false)
@@ -80,7 +82,7 @@ function EditUserModal({ user, vehicles, onClose, onSaved }) {
         full_name: form.fullName,
         email: form.email,
         phone_number: form.phone,
-        current_vehicle_id: form.vehicleId || user.current_vehicle_id,
+        assigned_vehicle_id: form.vehicleId || user.assigned_vehicle_id,
         shift_type: form.shiftType || user.shift_type,
       })
     } catch (err) {

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { MapPin, Play, Check, ChevronDown, Truck, Megaphone } from 'lucide-react'
+import { MapPin, Play, Check, ChevronDown, Truck, Megaphone, TrendingUp, AlertTriangle, Coffee, ClipboardList } from 'lucide-react'
 import { useFieldResponderStore } from '../../store/fieldResponderStore'
 import { useToastStore } from '../../store/toastStore'
-import { listVehicles } from '../../api/vehicles'
+import { listVehicles, getVehicle } from '../../api/vehicles'
 import { getMyProfile } from '../../api/users'
 import { startShift } from '../../api/shifts'
 import { getMyStats } from '../../api/fieldResponderStats'
@@ -16,6 +16,10 @@ function timeAgo(isoString) {
   return `${Math.floor(diffMin / 60)}h ago`
 }
 
+function isUrgent(priority) {
+  return priority === 'URGENT' || priority === 'EMERGENCY'
+}
+
 function initials(name) {
   if (!name) return '??'
   return name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
@@ -26,6 +30,9 @@ export default function FRShiftStart() {
   const dutyStatus    = useFieldResponderStore((s) => s.dutyStatus)
   const vehicleId     = useFieldResponderStore((s) => s.vehicleId)
   const goAvailable   = useFieldResponderStore((s) => s.goAvailable)
+  const takeBreak     = useFieldResponderStore((s) => s.takeBreak)
+  const endBreak      = useFieldResponderStore((s) => s.endBreak)
+  const endShift      = useFieldResponderStore((s) => s.endShift)
   const setGpsActive  = useFieldResponderStore((s) => s.setGpsActive)
   const setVehicleId  = useFieldResponderStore((s) => s.setVehicleId)
   const pushToast     = useToastStore((s) => s.pushToast)
@@ -51,19 +58,25 @@ export default function FRShiftStart() {
   }, [])
 
   useEffect(() => {
-    // Load pre-assigned vehicle from user profile first
+    // Load the standing Admin/DC-assigned vehicle from the profile — this
+    // persists across shifts (unlike current_vehicle_id, which is only set
+    // while a shift is actively running and gets cleared on shift end/
+    // auto-off-shift enforcement). Reading current_vehicle_id here used to
+    // mean a responder's permanent unit "disappeared" back into a
+    // self-service picker every time their shift ended, even though nothing
+    // about their actual assignment had changed.
     getMyProfile()
       .then(profile => {
-        if (profile.current_vehicle_id) {
+        if (profile.assigned_vehicle_id) {
           setAssignedVehicle({
-            id: profile.current_vehicle_id,
-            plate: profile.current_vehicle_plate,
-            type: profile.current_vehicle_type,
+            id: profile.assigned_vehicle_id,
+            plate: profile.assigned_vehicle_plate,
+            type: profile.assigned_vehicle_type,
           })
-          setSelectedVehicle(profile.current_vehicle_id)
-          setVehicleId(profile.current_vehicle_id)
+          setSelectedVehicle(profile.assigned_vehicle_id)
+          setVehicleId(profile.assigned_vehicle_id)
         } else {
-          // No pre-assigned vehicle — fall back to picker
+          // No standing assignment — fall back to picker
           listVehicles().then(setVehicles).catch(() => {})
         }
       })
@@ -88,6 +101,25 @@ export default function FRShiftStart() {
   const isOffline   = dutyStatus === 'offline'
   const isAvailable = dutyStatus === 'available'
   const isOnScene   = dutyStatus === 'on_scene'
+  const isOnBreak   = dutyStatus === 'break'
+
+  // Admin/DC-assigned fixed shifts (Morning/Evening/Night) auto-end
+  // server-side once the window elapses (backend ShiftService.
+  // enforceShiftWindows) — the vehicle's status flips to OFF_SHIFT. Without
+  // this check the local UI would keep claiming "ON DUTY — AVAILABLE" long
+  // after the responder actually stopped being eligible for new calls.
+  useEffect(() => {
+    if (!isAvailable || !vehicleId) return
+    const t = setInterval(() => {
+      getVehicle(vehicleId).then((v) => {
+        if (v.status === 'off_shift' && useFieldResponderStore.getState().dutyStatus === 'available') {
+          endShift()
+          pushToast({ variant: 'info', title: 'Shift Ended', message: 'Your assigned shift window has ended — you are now off duty.' })
+        }
+      }).catch(() => {})
+    }, 30000)
+    return () => clearInterval(t)
+  }, [isAvailable, vehicleId, endShift, pushToast])
 
   const handleGoAvailable = async () => {
     const vehicle = selectedVehicle || assignedVehicle?.id
@@ -125,7 +157,7 @@ export default function FRShiftStart() {
               {user?.role ?? 'FIELD_RESPONDER'} · {user?.email ?? ''}
             </div>
             <div className="fr-identity-shift">
-              {isOffline ? 'Off duty' : isAvailable ? 'On duty — Available' : 'On scene'}
+              {isOffline ? 'Off duty' : isOnBreak ? 'On break' : isAvailable ? 'On duty — Available' : 'On scene'}
             </div>
           </div>
         </div>
@@ -184,35 +216,56 @@ export default function FRShiftStart() {
             Enable location services. Without GPS the dispatcher cannot see you on the map.
           </div>
         )}
+
+        <div className="fr-divider" />
+
+        {/* Incidents today */}
+        <div className="fr-gps-row">
+          <div className="flex items-center gap-2">
+            <ClipboardList size={14} className="text-(--text-secondary)" />
+            <span className="text-[13px]">Incidents today</span>
+          </div>
+          <span className="fr-pill fr-pill--ok fr-pill--wide font-mono text-[11px]">
+            {incidentsToday}
+          </span>
+        </div>
       </div>
 
       {/* Advisories — real broadcasts from the Ops Manager, scoped to this
           responder's own district. Previously a static "Weather Advisory"
           card promised rerouting alerts that nothing ever fed — no weather
           integration existed anywhere in the app. */}
-      <div className="dispatcher-surface fr-card">
-        <div className="fr-card-header">
-          <Megaphone size={16} className="text-(--accent)" />
-          <span className="font-semibold text-[13px]">Advisories</span>
-        </div>
-        <div className="fr-divider" />
-        {advisories.length === 0 ? (
+      {advisories.length === 0 ? (
+        <div className="dispatcher-surface fr-card">
+          <div className="fr-card-header">
+            <Megaphone size={16} className="text-(--accent)" />
+            <span className="font-semibold text-[13px]">Advisories</span>
+          </div>
+          <div className="fr-divider" />
           <p className="fr-briefing-text">No advisories from your Ops Manager right now.</p>
-        ) : (
-          advisories.map((b) => (
-            <div key={b.broadcast_id} className="fr-briefing-text" style={{ marginBottom: '0.5rem' }}>
-              <div><strong>{b.priority}</strong></div>
-              <div>{(b.message ?? '').replace(/^INC-\d+:\s*/, '')}</div>
-              <span className="text-(--text-muted)" style={{ fontSize: '11px' }}>{timeAgo(b.sent_at)}</span>
+        </div>
+      ) : (
+        advisories.map((b) => {
+          const urgent = isUrgent(b.priority)
+          return (
+            <div key={b.broadcast_id} className={`fr-advisory-card${urgent ? ' fr-advisory-card--urgent' : ' fr-advisory-card--normal'}`}>
+              <span className="fr-advisory-icon">
+                {urgent ? <AlertTriangle size={16} /> : <TrendingUp size={16} />}
+              </span>
+              <div className="fr-advisory-body">
+                <div className="fr-advisory-title">{urgent ? 'Urgent advisory' : 'Ops advisory'}</div>
+                <div className="fr-advisory-text">{(b.message ?? '').replace(/^INC-\d+:\s*/, '')}</div>
+                <div className="fr-advisory-meta">{timeAgo(b.sent_at)}</div>
+              </div>
             </div>
-          ))
-        )}
-      </div>
+          )
+        })
+      )}
 
       {/* Go Available button */}
       <button
         type="button"
-        className={`fr-availability-btn${isOffline ? ' fr-availability-btn--go' : ''}${isAvailable ? ' fr-availability-btn--on' : ''}${isOnScene ? ' fr-availability-btn--scene' : ''}`}
+        className={`fr-availability-btn${isOffline ? ' fr-availability-btn--go' : ''}${isAvailable ? ' fr-availability-btn--on' : ''}${isOnBreak ? ' fr-availability-btn--on' : ''}${isOnScene ? ' fr-availability-btn--scene' : ''}`}
         onClick={isOffline ? handleGoAvailable : undefined}
         disabled={!isOffline || startingShift || (!selectedVehicle && !assignedVehicle && vehicles.length > 0)}
       >
@@ -240,18 +293,29 @@ export default function FRShiftStart() {
             </div>
           </>
         )}
+        {isOnBreak && (
+          <>
+            <Coffee size={24} />
+            <div>
+              <div>● ON BREAK</div>
+              <div className="fr-availability-sub">Not eligible for new calls · GPS tracking active</div>
+            </div>
+          </>
+        )}
         {isOnScene && (
           <div>● ON SCENE — ACTIVE INCIDENT</div>
         )}
       </button>
 
-      {(isAvailable || isOnScene) && (
-        <div className="fr-stat-tiles">
-          <div className="fr-stat-tile">
-            <div className="fr-stat-value">{incidentsToday}</div>
-            <div className="fr-stat-label">Incidents today</div>
-          </div>
-        </div>
+      {(isAvailable || isOnBreak) && (
+        <button
+          type="button"
+          className="dispatcher-btn-outline w-full"
+          style={{ margin: '0 1rem', width: 'calc(100% - 2rem)' }}
+          onClick={isOnBreak ? endBreak : takeBreak}
+        >
+          {isOnBreak ? 'Resume Duty' : 'Take a Break'}
+        </button>
       )}
     </div>
   )

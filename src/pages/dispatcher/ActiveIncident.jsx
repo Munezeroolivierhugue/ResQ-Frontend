@@ -21,6 +21,7 @@ import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
 import MapFitBounds from '../../components/map/MapFitBounds'
 import { RWANDA_BOUNDS, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../components/map/rwandaConstants'
 import { useNotificationsStore } from '../../store/notificationsStore'
+import { useToastStore } from '../../store/toastStore'
 import { getIncident, updateIncidentStatus, escalateIncident } from '../../api/incidents'
 import { listDispatchesForIncident } from '../../api/dispatches'
 import { listVehicles } from '../../api/vehicles'
@@ -214,6 +215,7 @@ export default function ActiveIncident() {
   // zooming/panning instead of resetting.
   const [legendOpen, setLegendOpen] = useState(false)
   const addNotification = useNotificationsStore((state) => state.addNotification)
+  const pushToast = useToastStore((s) => s.pushToast)
 
   const navTeam = navState?.dispatchedTeam ?? (navState?.dispatchedUnit ? [navState.dispatchedUnit] : [])
 
@@ -465,6 +467,15 @@ export default function ActiveIncident() {
     const ALREADY_PAST = new Set(['PENDING_REPORT', 'RESOLVED', 'CLOSED'])
     if (incident?.incident_id && !ALREADY_PAST.has(incident.status)) {
       try {
+        // Previously jumped straight from ON_SCENE to PENDING_REPORT,
+        // skipping RESOLVED entirely — a dispatcher-closed (police-unit)
+        // incident never actually passed through "resolved," even though
+        // that's the real-world moment the scene work finished, before the
+        // report-filing step. Setting it explicitly here keeps the final
+        // destination (PENDING_REPORT) identical, so Pending Reports and
+        // closure eligibility are unaffected — it just no longer skips the
+        // step in between.
+        await updateIncidentStatus(incident.incident_id, 'RESOLVED')
         await updateIncidentStatus(incident.incident_id, 'PENDING_REPORT')
       } catch (err) {
         if (err?.response?.data?.error !== 'INVALID_TRANSITION') {
@@ -474,6 +485,11 @@ export default function ActiveIncident() {
       }
     }
     setSceneComplete(true)
+    pushToast({
+      variant: 'success',
+      title: 'Scene marked complete',
+      message: 'Redirecting to Pending Reports…',
+    })
     // Clear all session data related to this incident and its intake form
     try {
       const stored = JSON.parse(sessionStorage.getItem('resq-active-call') ?? 'null')
@@ -618,22 +634,6 @@ export default function ActiveIncident() {
 
   return (
     <div className="flex flex-col h-full min-h-0 bg-(--bg-base) overflow-hidden relative">
-      {sceneComplete && (
-        <div className="absolute inset-x-0 top-0 z-[2000] flex justify-center pt-4 pointer-events-none">
-          <div
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border text-[13px] font-semibold"
-            style={{
-              background: 'var(--status-low-bg)',
-              color: 'var(--status-low)',
-              borderColor: 'var(--status-low)',
-              fontFamily: 'var(--font-display)',
-            }}
-          >
-            <CheckCircle size={15} />
-            Scene marked complete — redirecting to Pending Reports…
-          </div>
-        </div>
-      )}
       <header className="shrink-0 px-5 md:px-6 py-4 border-b border-(--border) bg-(--bg-surface)">
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
           <div className="min-w-0 flex-1">

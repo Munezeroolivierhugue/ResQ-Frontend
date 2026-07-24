@@ -10,11 +10,10 @@ import { getDistrictCommanderDistrict } from '../../utils/districtCommanderSessi
 import { getCurrentUser } from '../../utils/authSession'
 import { listVehicles } from '../../api/vehicles'
 import { listIncidents } from '../../api/incidents'
-import { getResponseTimeTarget } from '../../api/admin'
+import { getResponseTimeTarget, getCoverageScoreTarget } from '../../api/admin'
 import 'leaflet/dist/leaflet.css'
 
 const MAP_PADDING = [40, 40]
-const TARGET_AVAILABILITY = 60
 
 function coverageFill(pct) {
   if (pct >= 85) return 'rgba(61, 170, 106, 0.25)'
@@ -54,7 +53,8 @@ export default function DCCoverage() {
 
   const [vehicles, setVehicles] = useState([])
   const [incidents, setIncidents] = useState([])
-  const [slaTarget, setSlaTarget] = useState(8)
+  const [slaTarget, setSlaTarget] = useState(12)
+  const [coverageTarget, setCoverageTarget] = useState(60)
   const [loading, setLoading] = useState(true)
 
   // Real map filters — which vehicle categories and statuses to show.
@@ -66,6 +66,7 @@ export default function DCCoverage() {
 
   useEffect(() => {
     getResponseTimeTarget().then(setSlaTarget).catch(() => {})
+    getCoverageScoreTarget().then(setCoverageTarget).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -153,7 +154,7 @@ export default function DCCoverage() {
     return Object.values(byCategory).map((c) => ({ ...c, pct: Math.round((c.available / c.total) * 100) }))
   }, [vehicles])
 
-  const atRisk = categories.filter((c) => c.pct < TARGET_AVAILABILITY).length
+  const atRisk = categories.filter((c) => c.pct < coverageTarget).length
   const overall = categories.length
     ? Math.round(categories.reduce((s, c) => s + c.pct, 0) / categories.length)
     : null
@@ -346,7 +347,7 @@ export default function DCCoverage() {
                     <span className="text-(--text-secondary)">{c.name}</span>
                     <span
                       className="font-mono font-bold"
-                      style={{ color: c.pct < TARGET_AVAILABILITY ? 'var(--status-critical)' : 'var(--status-low)' }}
+                      style={{ color: c.pct < coverageTarget ? 'var(--status-critical)' : 'var(--status-low)' }}
                     >
                       {c.available}/{c.total} ({c.pct}%)
                     </span>

@@ -369,7 +369,7 @@ export default function AdminDashboard() {
   const [incidents, setIncidents] = useState([])
   const [activity, setActivity] = useState([])
   const [activityLoading, setActivityLoading] = useState(true)
-  const [responseTarget, setResponseTarget] = useState(8)
+  const [responseTarget, setResponseTarget] = useState(12)
 
   useEffect(() => {
     getResponseTimeTarget().then(setResponseTarget).catch(() => {})

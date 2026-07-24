@@ -10,6 +10,7 @@ import { listDistricts } from '../../api/districts'
 import { getResponseTimeTarget } from '../../api/admin'
 import { buildPdfHtml, openPdfWindow, sectionHtml, tableHtml } from '../../utils/pdfExport'
 import { formatIncidentType, normalizeIncidentType } from '../../utils/incidentTypeLabels'
+import { getCurrentUser } from '../../utils/authSession'
 
 const RANGE_OPTIONS = [
   { value: 'all',   label: 'All Time' },
@@ -106,7 +107,7 @@ export default function IncidentHistory() {
   // on this page used to hardcode its own guess (8 here, 10 elsewhere)
   // instead of reading Admin Settings' National Response Time Target, so
   // changing it there never actually changed what dispatchers saw.
-  const [slaTargetMinutes, setSlaTargetMinutes] = useState(8)
+  const [slaTargetMinutes, setSlaTargetMinutes] = useState(12)
   const perPage = 5
 
   useEffect(() => {
@@ -114,16 +115,23 @@ export default function IncidentHistory() {
     getResponseTimeTarget().then(setSlaTargetMinutes).catch(() => {})
   }, [])
 
-  // District filter is a real backend query param; the rest filter client-side
+  // Always scoped to incidents THIS dispatcher personally logged/handled —
+  // a dispatcher can take a call for and dispatch units to any district in
+  // the country, so this used to show every dispatcher's closed incidents
+  // system-wide (or every closed incident in whatever district was picked)
+  // instead of just this dispatcher's own history. The district dropdown is
+  // now an additional refine-within-mine filter, not the primary scope.
+  const currentUser = getCurrentUser()
   useEffect(() => {
     setLoading(true)
-    const params = { status: 'CLOSED' }
+    const params = { status: 'CLOSED', loggedBy: currentUser?.user_id }
     if (districtFilter !== 'All') params.districtId = districtFilter
     listIncidents(params)
       .then(setIncidents)
-      .catch(() => listIncidents().then(setIncidents).catch(() => {}))
+      .catch(() => listIncidents({ loggedBy: currentUser?.user_id }).then(setIncidents).catch(() => {}))
       .finally(() => setLoading(false))
     setPage(1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [districtFilter])
 
   // Type options derived from the actual data, deduplicated by canonical
