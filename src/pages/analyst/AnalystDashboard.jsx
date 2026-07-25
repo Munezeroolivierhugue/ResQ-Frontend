@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { FileBarChart, AlertCircle, Cpu, CalendarCheck, Server, RefreshCw } from 'lucide-react'
-import MetricCard from '../../components/dispatcher/MetricCard'
+import AdminStatCard from '../../components/admin/AdminStatCard'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import AnalystPageHeader from '../../components/analyst/AnalystPageHeader'
@@ -136,24 +136,22 @@ export default function AnalystDashboard() {
       <AnalystPageHeader title="Analyst Dashboard" subtitle={`System intelligence overview · ${dateStr}`} badge="Dashboard" />
 
       <div className="portal-grid-4">
-        <MetricCard icon={FileBarChart} label="Reports Generated (Month)" value={loading ? '—' : String(reportsThisMonth)} hint="Real reports this calendar month" hintTone="neutral" />
-        <MetricCard
+        <AdminStatCard icon={FileBarChart} label="Reports Generated (Month)" value={loading ? '—' : String(reportsThisMonth)} sub="Real reports this calendar month" />
+        <AdminStatCard
           icon={AlertCircle}
           label="Data Quality Alerts"
           value={loading ? '—' : String(degradedSources.length)}
-          hint={degradedSources.length > 0 ? 'Source(s) below target' : 'All sources healthy'}
-          hintTone={degradedSources.length > 0 ? 'warning' : 'positive'}
+          sub={degradedSources.length > 0 ? 'Source(s) below target' : 'All sources healthy'}
           className={degradedSources.length > 0 ? 'dispatcher-metric-card--alert' : ''}
         />
-        <MetricCard
+        <AdminStatCard
           icon={Cpu}
           label="AI Model Alerts"
           value={loading ? '—' : String(flaggedModels.length)}
-          hint={flaggedModels.length > 0 ? 'Model(s) not active' : 'All models active'}
-          hintTone={flaggedModels.length > 0 ? 'warning' : 'positive'}
+          sub={flaggedModels.length > 0 ? 'Model(s) not active' : 'All models active'}
           className={flaggedModels.length > 0 ? 'dispatcher-metric-card--alert' : ''}
         />
-        <MetricCard icon={CalendarCheck} label="Reports Submitted (7d)" value={loading ? '—' : String(reportsSubmittedThisWeek)} hint="Real submissions this week" hintTone="neutral" />
+        <AdminStatCard icon={CalendarCheck} label="Reports Submitted (7d)" value={loading ? '—' : String(reportsSubmittedThisWeek)} sub="Real submissions this week" />
       </div>
 
       <div className="dispatcher-surface p-4">

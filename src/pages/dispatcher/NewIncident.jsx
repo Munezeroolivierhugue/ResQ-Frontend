@@ -13,6 +13,7 @@ import { estimateAmbulanceNeed } from '../../utils/ambulanceEstimate'
 import { haversineMeters } from '../../utils/geo'
 import { generateCallerName } from '../../utils/rwandaNames'
 import { useCallAudioStore } from '../../store/callAudioStore'
+import { useCallChannelStore } from '../../store/callChannelStore'
 import TriageLocationMap from '../../components/dispatcher/TriageLocationMap'
 import IncidentTimeline from '../../components/intake/IncidentTimeline'
 import AiDispatchRecommendation from '../../components/intake/AiDispatchRecommendation'
@@ -85,6 +86,18 @@ export default function NewIncident() {
   useEffect(() => {
     if (callId) initCall(callId, callPhone)
   }, [callId, callPhone, initCall])
+
+  // Marks this dispatcher unavailable for new incoming calls while they're
+  // actively on this one — callChannelStore's own `currentCall` guard for
+  // this is in-memory only and resets on a page reload, while `callId`
+  // (sessionStorage-backed, see activeCall above) survives one. A dispatcher
+  // who refreshed mid-call kept the "Call Active" badge showing but silently
+  // lost the guard, so they could still be handed a second incoming call.
+  const setDispatcherBusy = useCallChannelStore((s) => s.setDispatcherBusy)
+  useEffect(() => {
+    setDispatcherBusy(!!callId)
+    return () => setDispatcherBusy(false)
+  }, [callId, setDispatcherBusy])
 
   const callTimeRef = useRef(new Date().toISOString())
 

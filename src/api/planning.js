@@ -20,6 +20,8 @@ function transformInstruction(i) {
     plan_id: i.planId,
     vehicle_id: i.vehicleId,
     vehicle_plate: i.vehiclePlateNumber,
+    vehicle_type: i.vehicleType,
+    vehicle_district_name: i.vehicleDistrictName,
     from_location: i.fromLocation,
     to_location: i.toLocation,
     move_time: i.moveTime,
@@ -98,6 +100,10 @@ export async function createPlan(body) {
 export async function updatePlanStatus(id, status) {
   const { data } = await api.patch(`/api/planning/plans/${id}/status`, null, { params: { status } })
   return transformPlan(data.data ?? data)
+}
+
+export async function deletePlan(id) {
+  await api.delete(`/api/planning/plans/${id}`)
 }
 
 export async function listInstructions(planId) {

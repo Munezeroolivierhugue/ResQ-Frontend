@@ -4,7 +4,7 @@ import L from 'leaflet'
 import { useThemeStore } from '../../store/themeStore'
 import RwandaBoundsEnforcer from '../../components/map/RwandaBoundsEnforcer'
 import MapFitBounds from '../../components/map/MapFitBounds'
-import { RWANDA_BOUNDS, RWANDA_CENTER, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM } from '../../components/map/rwandaConstants'
+import { RWANDA_BOUNDS, RWANDA_CENTER, RWANDA_MIN_ZOOM, RWANDA_MAX_ZOOM, DISTRICT_SECTORS } from '../../components/map/rwandaConstants'
 import DCPageHeader from '../../components/district-commander/DCPageHeader'
 import { getDistrictCommanderDistrict } from '../../utils/districtCommanderSession'
 import { getCurrentUser } from '../../utils/authSession'
@@ -84,8 +84,16 @@ export default function DCCoverage() {
   // least one positioned incident are shown, since there's no other real
   // source for where a sector actually is.
   const sectorZones = useMemo(() => {
+    // Only real sectors that actually belong to this district — an
+    // incident's stored `sector` value has sometimes been the district's
+    // own name, or a sector belonging to a different district, both of
+    // which rendered as a bogus zone on this district's own map. Districts
+    // outside Kigali City (no entry in DISTRICT_SECTORS yet) fall back to
+    // trusting the recorded sector as-is, same as before.
+    const validSectors = district ? DISTRICT_SECTORS[district] : null
     const bySector = incidents.reduce((acc, i) => {
       if (!i.sector) return acc
+      if (validSectors && !validSectors.includes(i.sector)) return acc
       if (!acc[i.sector]) acc[i.sector] = []
       acc[i.sector].push(i)
       return acc
@@ -100,7 +108,7 @@ export default function DCCoverage() {
       const pct = timed.length ? Math.round((onTime / timed.length) * 100) : null
       return { name, lat, lng, pct, count: incs.length }
     }).filter(Boolean)
-  }, [incidents, slaTarget])
+  }, [incidents, slaTarget, district])
 
   const categoryNames = useMemo(
     () => Array.from(new Set(vehicles.map((v) => categoryOf(v.vehicle_type)))),

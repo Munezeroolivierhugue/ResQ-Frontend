@@ -5,6 +5,7 @@ import { listIncidents } from '../../api/incidents'
 import { listDispatchesForIncident } from '../../api/dispatches'
 import { formatIncidentType } from '../../utils/incidentTypeLabels'
 import { buildPdfHtml, openPdfWindow, sectionHtml, tableHtml } from '../../utils/pdfExport'
+import { getCurrentUser } from '../../utils/authSession'
 
 function exportPDF(rows) {
   const generatedBy = sessionStorage.getItem('resq-full-name') || 'Dispatcher'
@@ -113,7 +114,11 @@ export default function PendingReports() {
 
   useEffect(() => {
     setLoading(true)
-    listIncidents({ status: 'PENDING_REPORT' })
+    // Scoped to incidents THIS dispatcher personally logged/handled — same
+    // reasoning as ShiftHandover.jsx and IncidentHistory.jsx. Previously
+    // showed every dispatcher's pending reports system-wide.
+    const currentUser = getCurrentUser()
+    listIncidents({ status: 'PENDING_REPORT', loggedBy: currentUser?.user_id })
       .then((pending) => {
         // If the DB update hasn't landed yet, inject the completed incident at the top
         if (completedIncident?.incident_id && !pending.some((p) => p.incident_id === completedIncident.incident_id)) {

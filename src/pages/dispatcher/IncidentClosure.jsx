@@ -19,6 +19,7 @@ import { listDispatchesForIncident } from '../../api/dispatches'
 import { listVehicles } from '../../api/vehicles'
 import { formatIncidentType } from '../../utils/incidentTypeLabels'
 import { useToastStore } from '../../store/toastStore'
+import { useCallChannelStore } from '../../store/callChannelStore'
 
 const DISPOSITION_OPTIONS = [
   { value: 'arrests', label: 'Arrest(s) made' },
@@ -42,6 +43,16 @@ export default function IncidentClosure() {
   const storedIncidentId = navState?.incident ? null : sessionStorage.getItem(CLOSURE_INCIDENT_KEY)
   const [incident, setIncident] = useState(navState?.incident ?? null)
   const [loadingIncident, setLoadingIncident] = useState(!navState?.incident)
+  const setDispatcherBusy = useCallChannelStore((s) => s.setDispatcherBusy)
+
+  // Marks this dispatcher unavailable for new incoming calls for as long as
+  // this page is open — previously a dispatcher mid-closure was still fully
+  // eligible to receive and claim a new call, when a genuinely available
+  // dispatcher should take it instead.
+  useEffect(() => {
+    setDispatcherBusy(true)
+    return () => setDispatcherBusy(false)
+  }, [setDispatcherBusy])
 
   useEffect(() => {
     if (navState?.incident) {

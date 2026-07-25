@@ -11,6 +11,19 @@ export const useCallChannelStore = create((set, get) => {
     onIncomingCall: (payload) => {
       // Ignore if a call is already active
       if (get().currentCall) return
+      // A dispatcher actively resolving/closing a prior incident was still
+      // surfaced this banner and could claim the new call — nothing
+      // previously distinguished "busy with a live call" (currentCall,
+      // checked above) from "busy finishing paperwork on the last one."
+      // Auto-pass so it goes back out to the broadcast pool for the next
+      // available dispatcher, same as a manual Decline.
+      if (get().dispatcherBusy) {
+        const sessionId = payload.session_id ?? payload.call_id
+        if (sessionId && !sessionId.startsWith('CALL-MOCK-') && !sessionId.startsWith('CALL-SIM-')) {
+          passCall(sessionId).catch(console.error)
+        }
+        return
+      }
       set({ incomingCall: payload, showIncomingBanner: true })
     },
     onCallEnded: (payload) => {
@@ -38,9 +51,14 @@ export const useCallChannelStore = create((set, get) => {
     currentCall: null,        // same shape, set after answer
     showIncomingBanner: false,
     endedCallPayload: null,   // populated briefly after call_ended for toast
+    // Set while this dispatcher is actively resolving/closing an incident —
+    // see ActiveIncident.jsx / IncidentClosure.jsx, which set this true on
+    // entry and false on exit.
+    dispatcherBusy: false,
 
     // ── Actions ──────────────────────────────────────────────────────────────
     receiveCall: (payload) => handlers.onIncomingCall(payload),
+    setDispatcherBusy: (busy) => set({ dispatcherBusy: busy }),
 
     answerCall: async () => {
       const { incomingCall } = get()

@@ -21,6 +21,8 @@ export default function AvailableUnitsModal({ isOpen, onClose, onSelectUnit }) {
   const [units, setUnits] = useState([])
   const [mutualAidSubmitting, setMutualAidSubmitting] = useState(false)
   const [mutualAidError, setMutualAidError] = useState(null)
+  const [additionalUnitSubmitting, setAdditionalUnitSubmitting] = useState(false)
+  const [additionalUnitError, setAdditionalUnitError] = useState(null)
   const addNotification = useNotificationsStore((state) => state.addNotification)
 
   useEffect(() => {
@@ -66,17 +68,37 @@ export default function AvailableUnitsModal({ isOpen, onClose, onSelectUnit }) {
     }
   }
 
-  const handleAskAdditionalUnit = (payload) => {
-    if (addNotification) {
-      addNotification({
-        id: `add-unit-${Date.now()}`,
-        type: 'unit_request',
-        title: `REQUEST: Additional ${payload.unitType}`,
-        time: 'Just now',
-        read: false,
-        href: '#active-incident',
-        details: payload
+  const handleAskAdditionalUnit = async (payload) => {
+    const districtId = getCurrentUser()?.district_id
+    setAdditionalUnitSubmitting(true)
+    setAdditionalUnitError(null)
+    try {
+      // Real persisted request, notifying the district's own Ops Manager —
+      // previously this only ever fired a local, in-memory notification
+      // (useNotificationsStore.addNotification) that never left this
+      // browser tab, so no Ops Manager ever actually saw it.
+      await createMutualAidRequest({
+        requesting_district_id: districtId,
+        unit_type: payload.unitType,
+        quantity: 1,
+        reason: `[${payload.urgency}] ${payload.reason}`,
       })
+      if (addNotification) {
+        addNotification({
+          id: `add-unit-${Date.now()}`,
+          type: 'unit_request',
+          title: `REQUEST: Additional ${payload.unitType}`,
+          time: 'Just now',
+          read: false,
+          href: '#active-incident',
+          details: payload
+        })
+      }
+      setIsAdditionalUnitModalOpen(false)
+    } catch {
+      setAdditionalUnitError('Could not submit unit request — please try again.')
+    } finally {
+      setAdditionalUnitSubmitting(false)
     }
   }
 
@@ -170,6 +192,8 @@ export default function AvailableUnitsModal({ isOpen, onClose, onSelectUnit }) {
         isOpen={isAdditionalUnitModalOpen}
         onClose={() => setIsAdditionalUnitModalOpen(false)}
         onSubmit={handleAskAdditionalUnit}
+        submitting={additionalUnitSubmitting}
+        error={additionalUnitError}
       />
     </>
   )

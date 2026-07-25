@@ -8,6 +8,17 @@ import {
 import { connect, subscribe } from '../lib/wsClient'
 import { playNotificationSound } from '../utils/notificationSound'
 
+// Several backend publishNotification(...) calls push a WS payload with only
+// `type` + an id field (no `message`) — the REST fetch always has the real
+// message (persisted in the DB), which is why a refresh "fixes" a blank
+// live-pushed notification. Mirror the REST transform's humanizeType
+// fallback here so the live push reads the same as after a refresh.
+function humanizeType(type) {
+  if (!type) return 'Notification'
+  const words = type.toLowerCase().split('_')
+  return words[0].charAt(0).toUpperCase() + words[0].slice(1) + (words.length > 1 ? ' ' + words.slice(1).join(' ') : '')
+}
+
 export const useNotificationsStore = create((set, get) => ({
   items: [],
   loading: false,
@@ -68,7 +79,7 @@ export const useNotificationsStore = create((set, get) => ({
       get().addNotification({
         id: payload.notificationId ?? `ws-${Date.now()}`,
         type: payload.type,
-        title: payload.message?.split(': ')[0] ?? payload.message ?? '',
+        title: payload.message?.split(': ')[0] || humanizeType(payload.type),
         desc: payload.message?.split(': ').slice(1).join(': ') ?? '',
         time: payload.createdAt ?? new Date().toISOString(),
         read: false,

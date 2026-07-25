@@ -6196,3 +6196,11 @@ a[href*="recover"]:hover {
   color: rgba(255,255,255,0.6);
   font-family: var(--font-mono);
 }
+
+/* Hides the shared portal top header (Navbar.jsx) while a full-screen
+   preview/details card is open on top of it — toggled via a body class
+   rather than the modal's own z-index, since the header is a separate
+   fixed/sticky element from the parent layout. */
+body.rq-hide-header header {
+  visibility: hidden;
+}

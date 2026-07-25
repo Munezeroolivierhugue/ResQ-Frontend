@@ -25,9 +25,7 @@ const SEVERITY_TONE = {
   CRITICAL: { color: 'var(--status-critical)', bg: 'var(--status-critical-bg)', Icon: ShieldAlert },
 }
 
-// Closed-by-default multi-select dropdown for role targeting — replaces a
-// permanently-visible row of pill buttons with the same open/close +
-// outside-click pattern used by FilterDropdown elsewhere in admin.
+
 function RoleMultiSelect({ value, onChange }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -314,7 +312,7 @@ export default function AdminSystemSettings() {
                 min={1} max={60}
                 onChange={(e) => setResponseTarget(Number(e.target.value))} />
             </div>
-            <p className="aiu-field-hint">Current target: {responseTarget} min. Changes are saved to the database.</p>
+            <p className="aiu-field-hint"></p>
           </label>
           <label className="aiu-field">
             <span className="aiu-field-label">Minimum Coverage Score Target (%)</span>
@@ -324,7 +322,7 @@ export default function AdminSystemSettings() {
                 min={0} max={100}
                 onChange={(e) => setCoverageTarget(Number(e.target.value))} />
             </div>
-            <p className="aiu-field-hint">Current target: {coverageTarget}%.</p>
+            <p className="aiu-field-hint"></p>
           </label>
           {saveMsg && (
             <p className="text-[12px]" style={{ color: saveMsg.ok ? 'var(--status-low)' : 'var(--status-critical)' }}>

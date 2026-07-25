@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Clock, AlertTriangle, MapPin, Flame, Send, ChartScatter } from 'lucide-react'
-import MetricCard from '../../components/dispatcher/MetricCard'
+import AdminStatCard from '../../components/admin/AdminStatCard'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
@@ -86,19 +86,16 @@ export default function PlannerDashboard() {
       </div>
 
       <div className="portal-grid-4">
-        <MetricCard icon={MapPin} label="Coverage Gaps" value={loading ? '—' : String(gaps.length)} hint={gaps.length > 0 ? 'Below target' : 'All zones covered'} hintTone={gaps.length > 0 ? 'warning' : 'positive'}>
-          <div className="dispatcher-metric-target">Target: 0 gaps</div>
-        </MetricCard>
-        <MetricCard icon={Flame} label="Active Hotspots" value={loading ? '—' : String(hotspots.length)} hint={hotspots.length > 0 ? 'From recorded incidents' : 'No hotspots recorded'} hintTone="warning" />
-        <MetricCard
+        <AdminStatCard icon={MapPin} label="Coverage Gaps" value={loading ? '—' : String(gaps.length)} sub={gaps.length > 0 ? 'Below target' : 'All zones covered'} />
+        <AdminStatCard icon={Flame} label="Active Hotspots" value={loading ? '—' : String(hotspots.length)} sub={hotspots.length > 0 ? 'From recorded incidents' : 'No hotspots recorded'} />
+        <AdminStatCard
           icon={Send}
           label="Pending Deployment Plans"
           value={loading ? '—' : String(pendingPlans.length)}
-          hint="Awaiting OM approval"
-          hintTone="neutral"
+          sub="Awaiting OM approval"
           className={pendingPlans.length > 0 ? 'dispatcher-metric-card--alert' : ''}
         />
-        <MetricCard icon={ChartScatter} label="Saved Simulations" value={loading ? '—' : String(simulations.length)} hint="Total in system" hintTone="positive" />
+        <AdminStatCard icon={ChartScatter} label="Saved Simulations" value={loading ? '—' : String(simulations.length)} sub="Total in system" />
       </div>
 
       <div className="portal-split-60-40 gap-4 min-h-0">

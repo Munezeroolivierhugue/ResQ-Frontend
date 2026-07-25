@@ -304,11 +304,16 @@ export default function ActiveIncident() {
     setLoadingIncident(false)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Live elapsed time — re-renders every second so the display keeps ticking
+  // Live elapsed time — re-renders every second so the display keeps
+  // ticking. Paused while the incident is still RECEIVED (a logged call
+  // with no unit dispatched yet) — a live-ticking clock there implied
+  // someone was actively working it in real time, when nothing was
+  // actually happening. Resumes once dispatch begins.
   useEffect(() => {
+    if (incident?.status === 'RECEIVED') return undefined
     const t = setInterval(() => setElapsedTick((v) => v + 1), 1000)
     return () => clearInterval(t)
-  }, [])
+  }, [incident?.status])
 
   // Fetch the field responder's submitted report for this incident, if any —
   // previously there was no screen anywhere in the dispatcher portal that

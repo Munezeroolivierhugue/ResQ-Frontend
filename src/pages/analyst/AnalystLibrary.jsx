@@ -54,6 +54,15 @@ export default function AnalystLibrary() {
       .finally(() => setPreviewLoading(false))
   }
 
+  // The top header is a fixed/sticky element from the shared portal layout
+  // (Navbar.jsx), rendered above this page — it can't be hidden by the
+  // modal's own overlay z-index alone, so toggle a body class that the
+  // layout's CSS hides it on while the report card is open.
+  useEffect(() => {
+    document.body.classList.toggle('rq-hide-header', !!preview)
+    return () => document.body.classList.remove('rq-hide-header')
+  }, [preview])
+
   return (
     <div className="portal-page flex flex-col gap-4 min-w-[1024px]">
       <AnalystPageHeader

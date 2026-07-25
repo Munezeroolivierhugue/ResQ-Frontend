@@ -1,167 +1,158 @@
 import { useState, useEffect } from 'react'
 import AnalystPageHeader from '../../components/analyst/AnalystPageHeader'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
-import { listModels, getOverrideAnalysis, getAnomalies } from '../../api/reporting'
+import { listModels, getOverrideAnalysis } from '../../api/reporting'
 
-const MODEL_BORDER = {
-  ACTIVE: '#22c55e',
-  RETRAINING: '#f59e0b',
-  INACTIVE: '#94a3b8',
-}
+// Static service descriptions for the academic-defense framing requested —
+// purpose/decision-method/oversight copy, not metrics. The only thing pulled
+// from the real API per card is operational status (ACTIVE/INACTIVE), so the
+// badge still reflects real backend state rather than being hardcoded.
+const ML_SERVICES = [
+  {
+    key: 'Prediction Engine',
+    name: 'Prediction Engine',
+    algorithm: 'Gradient Boosting Regressor',
+    purpose: 'Predict future emergency demand',
+    fields: [
+      ['Prediction Window', 'Next 30 minutes'],
+      ['Decision Support', 'Enabled'],
+    ],
+  },
+  {
+    key: 'Pattern Analyst',
+    name: 'Pattern Analyst',
+    algorithm: 'Isolation Forest',
+    purpose: 'Detect abnormal incident patterns',
+    fields: [
+      ['Monitoring', 'Live'],
+      ['Decision Support', 'Enabled'],
+    ],
+  },
+]
 
-function fmtDate(iso) {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+const RULE_SERVICES = [
+  {
+    key: 'Dispatch Brain',
+    name: 'Dispatch Brain',
+    type: 'Expert Rule Engine',
+    purpose: 'Recommend dispatch priority and unit selection',
+    fields: [
+      ['Decision Method', 'Deterministic Rules'],
+      ['Human Approval', 'Required'],
+    ],
+  },
+  {
+    key: 'Coverage Watcher',
+    name: 'Coverage Watcher',
+    type: 'Rule-Based Engine',
+    purpose: 'Detect coverage gaps',
+    fields: [
+      ['Decision Method', 'Coverage Rules'],
+      ['Live Monitoring', 'Enabled'],
+    ],
+  },
+]
+
+const OVERVIEW_ROWS = [
+  { service: 'Prediction Engine', technology: 'Machine Learning', purpose: 'Predict incident demand', method: 'Gradient Boosting', oversight: 'Required' },
+  { service: 'Pattern Analyst', technology: 'Machine Learning', purpose: 'Detect anomalies', method: 'Isolation Forest', oversight: 'Required' },
+  { service: 'Dispatch Brain', technology: 'Rule Engine', purpose: 'Recommend dispatch', method: 'Deterministic Rules', oversight: 'Required' },
+  { service: 'Coverage Watcher', technology: 'Rule Engine', purpose: 'Detect coverage gaps', method: 'Coverage Rules', oversight: 'Required' },
+]
+
+function ServiceCard({ service, status, techBadge }) {
+  const isOperational = status === 'ACTIVE'
+  return (
+    <div className="dispatcher-surface p-5 flex flex-col" style={{ borderTop: `3px solid ${isOperational ? 'var(--status-low)' : 'var(--text-muted)'}` }}>
+      <div className="flex justify-between items-start gap-2 mb-3">
+        <span className="font-bold text-[14px]">{service.name}</span>
+        <StatusBadge label={isOperational ? 'Operational' : 'Inactive'} variant={isOperational ? 'resolved' : 'neutral'} />
+      </div>
+      <div className="mb-3">{techBadge}</div>
+      <div className="flex justify-between gap-3 text-[12px] py-1.5 border-b border-(--border-subtle)">
+        <span className="text-(--text-secondary) shrink-0">{service.algorithm ? 'Algorithm' : 'Type'}</span>
+        <span className="font-mono font-semibold text-right">{service.algorithm ?? service.type}</span>
+      </div>
+      <div className="flex justify-between gap-3 text-[12px] py-1.5 border-b border-(--border-subtle)">
+        <span className="text-(--text-secondary) shrink-0">Purpose</span>
+        <span className="font-medium text-right">{service.purpose}</span>
+      </div>
+      {service.fields.map(([label, val]) => (
+        <div key={label} className="flex justify-between text-[12px] py-1.5 border-b border-(--border-subtle) last:border-0">
+          <span className="text-(--text-secondary)">{label}</span>
+          <span className="font-mono font-semibold">{val}</span>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export default function AnalystModels() {
-  const [models, setModels] = useState([])
+  const [statusByName, setStatusByName] = useState({})
   const [overrides, setOverrides] = useState([])
-  const [anomalies, setAnomalies] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.allSettled([listModels(), getOverrideAnalysis(), getAnomalies()])
-      .then(([modelsRes, overridesRes, anomaliesRes]) => {
+    Promise.allSettled([listModels(), getOverrideAnalysis()])
+      .then(([modelsRes, overridesRes]) => {
         if (modelsRes.status === 'fulfilled') {
-          setModels(modelsRes.value.map((m) => {
-            const raw = m.accuracy
-            const accuracy = raw != null ? Math.round((raw > 1 ? raw : raw * 100) * 10) / 10 : null
-            const algorithm = m.algorithm ?? '—'
-            // Short name for the card ("GradientBoostingRegressor"), full
-            // detail ("...(MAE=0.92 vs baseline=0.92...)") kept for a tooltip
-            // only — showing the whole string inline was overflowing the card.
-            const algorithmShort = algorithm.split('(')[0].trim()
-            const unsupervised = algorithm.includes('IsolationForest')
-            // Rule-based scoring engines (Dispatch Brain / Coverage Watcher)
-            // have no training/accuracy concept at all — distinct from an
-            // unsupervised ML model, which just lacks a labeled-accuracy metric.
-            const ruleBased = !unsupervised && algorithm.toLowerCase().includes('rule-based')
-            // Real MAE-vs-baseline comparison the training script already
-            // computes (train_prediction_model.py) — parse it out of the full
-            // algorithm string instead of discarding it, so we can show the
-            // honest "beats a naive baseline by N%" framing instead of a bare
-            // normalized-accuracy percentage that reads as a low score.
-            const maeMatch = algorithm.match(/MAE=([\d.]+)\s+vs\s+baseline=([\d.]+)/i)
-            let improvementPct = null
-            if (maeMatch) {
-              const mae = parseFloat(maeMatch[1])
-              const baselineMae = parseFloat(maeMatch[2])
-              if (baselineMae > 0) {
-                improvementPct = Math.round(((baselineMae - mae) / baselineMae) * 1000) / 10
-              }
-            }
-            return {
-              model_id: m.modelId,
-              name: m.modelName,
-              algorithm,
-              algorithm_short: algorithmShort,
-              unsupervised,
-              ruleBased,
-              accuracy,
-              improvementPct,
-              training_data_size: m.trainingDataSize,
-              status: m.status ?? 'UNKNOWN',
-              last_trained: m.lastTrained,
-            }
-          }))
+          const map = {}
+          modelsRes.value.forEach((m) => { map[m.modelName] = m.status ?? 'UNKNOWN' })
+          setStatusByName(map)
         }
         if (overridesRes.status === 'fulfilled') setOverrides(overridesRes.value)
-        if (anomaliesRes.status === 'fulfilled') setAnomalies(anomaliesRes.value)
       })
       .finally(() => setLoading(false))
   }, [])
 
-  // Pattern Analyst (IsolationForest) is genuinely unsupervised — no accuracy
-  // metric exists for it. Instead of a vague "no accuracy metric" line (reads
-  // like a broken/zero value), show the real stat this model actually
-  // produces: how many of the real incidents it analysed got flagged.
-  const anomalySummary = anomalies
-    ? anomalies.total_analyzed > 0
-      ? (() => {
-          const flagged = anomalies.anomalies.length
-          const total = anomalies.total_analyzed
-          const patternConsistentPct = Math.round((1 - flagged / total) * 100)
-          return `${flagged} anomalies flagged of ${total} incidents reviewed (${patternConsistentPct}% pattern-consistent)`
-        })()
-      : (anomalies.message || 'Not enough real incidents yet')
-    : null
+
 
   return (
     <div className="portal-page flex flex-col gap-5 min-w-[1024px]">
       <AnalystPageHeader
-        title="AI Model Performance Monitor"
-        subtitle="Real accuracy, training data, and override outcomes for RESQ's AI models."
-        badge="AI Models"
+        title="Decision Intelligence Monitor"
+        subtitle="Monitor the operational health of RESQ's machine learning and rule-based decision services."
+        badge="Decision Services"
       />
 
       {loading && <p className="text-[13px] text-(--text-muted)">Loading…</p>}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {models.map((m) => (
-          <div
-            key={m.model_id}
-            className="dispatcher-surface p-5 flex flex-col"
-            style={{ borderTop: `3px solid ${MODEL_BORDER[m.status] ?? '#94a3b8'}` }}
-          >
-            <div className="flex justify-between gap-2 mb-3">
-              <span className="font-bold text-[14px]">{m.name}</span>
-              <StatusBadge label={m.status} variant={m.status === 'ACTIVE' ? 'resolved' : 'handover'} />
-            </div>
-            <div
-              className={m.accuracy != null ? 'font-mono text-[28px] font-bold mb-1' : 'font-mono text-[13px] font-semibold mb-3'}
-              style={{ color: MODEL_BORDER[m.status] ?? '#94a3b8' }}
-            >
-              {m.accuracy != null
-                ? (m.improvementPct != null && m.improvementPct > 0 ? `Beats baseline by ${m.improvementPct}%` : `${m.accuracy}%`)
-                : m.unsupervised
-                  ? (anomalySummary ?? 'Unsupervised anomaly detection — evaluated by flagged-pattern review, not accuracy %')
-                  : 'Rule-based scoring — no training/accuracy metric applies'}
-            </div>
-            {m.accuracy != null && m.improvementPct != null && (
-              <div className="text-[11px] text-(--text-muted) mb-3">
-                {m.improvementPct > 0
-                  ? <>Reduces prediction error by {m.improvementPct}% vs. a naive average-based baseline <span className="opacity-70">(normalized accuracy: {m.accuracy}%)</span></>
-                  : <>Matches the naive average-based baseline on error (MAE currently tied) <span className="opacity-70">— normalized accuracy: {m.accuracy}%</span></>}
-              </div>
-            )}
-            <div className="flex justify-between gap-3 text-[12px] py-1.5 border-b border-(--border-subtle)">
-              <span className="text-(--text-secondary) shrink-0">Algorithm</span>
-              <span className="font-mono font-semibold text-right truncate min-w-0" title={m.algorithm}>{m.algorithm_short}</span>
-            </div>
-            {m.training_data_size != null && (
-              <div className="flex justify-between text-[12px] py-1.5 border-b border-(--border-subtle)">
-                <span className="text-(--text-secondary)">Training data</span>
-                <span className="font-mono font-semibold">{m.training_data_size} incident-time-buckets</span>
-              </div>
-            )}
-            {[
-              ['Last trained', fmtDate(m.last_trained)],
-            ].map(([label, val]) => (
-              <div key={label} className="flex justify-between text-[12px] py-1.5 border-b border-(--border-subtle) last:border-0">
-                <span className="text-(--text-secondary)">{label}</span>
-                <span className="font-mono font-semibold">{val}</span>
-              </div>
-            ))}
-          </div>
-        ))}
+      <div>
+        {/* <h3 className="text-[13px] font-semibold m-0 mb-3">Machine Learning Services</h3> */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {ML_SERVICES.map((s) => (
+            <ServiceCard key={s.key} service={s} status={statusByName[s.name]}  />
+          ))}
+        </div>
+      </div>
+
+      <div>
+        {/* <h3 className="text-[13px] font-semibold m-0 mb-3">Rule-Based Decision Services</h3> */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {RULE_SERVICES.map((s) => (
+            <ServiceCard key={s.key} service={s} status={statusByName[s.name]}  />
+          ))}
+        </div>
       </div>
 
       <div className="dispatcher-surface overflow-x-auto p-0">
         <div className="p-4 border-b border-(--border)">
-          <h3 className="text-[13px] font-semibold m-0">Override Outcome Analysis</h3>
+          <h3 className="text-[13px] font-semibold m-0">Dispatcher Override Evaluation</h3>
           <p className="text-[12px] text-(--text-muted) m-0 mt-1">
-            Real dispatcher overrides, grouped by reason — each override's real incident response time compared against the real average for AI-recommended dispatches.
+            Not a prediction: "AI-Followed Avg Response" is the real average response time from dispatches where the
+            AI recommendation was actually used (not overridden), in the same period — an observed comparison
+            group, not a simulated or hypothetical result for the overridden cases. It's one system-wide figure,
+            so it repeats across reasons by design.
           </p>
         </div>
         <table className="w-full text-[12px] min-w-[640px]">
           <thead>
             <tr className="text-(--text-secondary) font-bold border-b border-(--border)">
               <th className="text-left p-3">Override Reason</th>
-              <th className="p-3 text-center">Count</th>
-              <th className="p-3 text-center">Avg Response (overridden)</th>
-              <th className="p-3 text-center">Avg Response (AI baseline)</th>
-              <th className="p-3 text-center">Better / Worse</th>
+              <th className="p-3 text-center">Cases</th>
+              <th className="p-3 text-center">AI-Followed Avg Response</th>
+              <th className="p-3 text-center">Overridden Avg Response</th>
+              <th className="p-3 text-center">Outcome</th>
               <th className="text-left p-3">Observation</th>
             </tr>
           </thead>
@@ -172,13 +163,18 @@ export default function AnalystModels() {
             {overrides.map((row) => (
               <tr key={row.reason} className="border-b border-(--border-subtle) last:border-0">
                 <td className="p-3 font-medium">{row.reason}</td>
-                <td className="p-3 text-center font-mono">{row.count}</td>
-                <td className="p-3 text-center font-mono">{row.avg_response_overridden != null ? `${row.avg_response_overridden}m` : '—'}</td>
-                <td className="p-3 text-center font-mono">{row.avg_response_baseline != null ? `${row.avg_response_baseline}m` : '—'}</td>
                 <td className="p-3 text-center font-mono">
-                  <span style={{ color: 'var(--status-low)' }}>{row.better_count}</span>
+                  {row.count}
+                  {(row.better_count + row.worse_count) !== row.count && (
+                    <span className="text-(--text-muted)"> ({row.better_count + row.worse_count} timed)</span>
+                  )}
+                </td>
+                <td className="p-3 text-center font-mono">{row.avg_response_baseline != null ? `${row.avg_response_baseline}m` : '—'}</td>
+                <td className="p-3 text-center font-mono">{row.avg_response_overridden != null ? `${row.avg_response_overridden}m` : '—'}</td>
+                <td className="p-3 text-center font-mono">
+                  <span style={{ color: 'var(--status-low)' }}>{row.better_count} better</span>
                   {' / '}
-                  <span style={{ color: 'var(--status-critical)' }}>{row.worse_count}</span>
+                  <span style={{ color: 'var(--status-critical)' }}>{row.worse_count} worse</span>
                 </td>
                 <td className="p-3 text-(--text-secondary)">{row.recommendation}</td>
               </tr>
@@ -189,32 +185,31 @@ export default function AnalystModels() {
 
       <div className="dispatcher-surface overflow-x-auto p-0">
         <div className="p-4 border-b border-(--border)">
-          <h3 className="text-[13px] font-semibold m-0">Model Drift & Retraining</h3>
-          <p className="text-[12px] text-(--text-muted) m-0 mt-1">Real status per model — not a single blanket answer, since each model's situation is different.</p>
+          <h3 className="text-[13px] font-semibold m-0">Decision Service Overview</h3>
+          <p className="text-[12px] text-(--text-muted) m-0 mt-1">How each decision-support service works and where human oversight applies.</p>
         </div>
         <table className="w-full text-[12px] min-w-[640px]">
           <thead>
             <tr className="text-(--text-secondary) font-bold border-b border-(--border)">
-              <th className="text-left p-3">Model</th>
-              <th className="text-left p-3">Retraining</th>
-              <th className="text-left p-3">Drift Tracking</th>
+              <th className="text-left p-3">Service</th>
+              {/* <th className="text-left p-3">Technology</th> */}
+              <th className="text-left p-3">Purpose</th>
+              <th className="text-left p-3">Decision Method</th>
+              <th className="text-left p-3">Human Oversight</th>
             </tr>
           </thead>
           <tbody>
-            <tr className="border-b border-(--border-subtle)">
-              <td className="p-3 font-medium">Dispatch Brain / Coverage Watcher</td>
-              <td className="p-3 text-(--text-muted)" colSpan={2}>Not applicable — rule-based scoring by design, not a trained model.</td>
-            </tr>
-            <tr className="border-b border-(--border-subtle)">
-              <td className="p-3 font-medium">Prediction Engine</td>
-              <td className="p-3 text-(--text-secondary)">Manual only — re-run the training script when more real data exists.</td>
-              <td className="p-3 text-(--text-secondary)">Not yet — needs real predictions tracked against real outcomes over time, which needs more live incident volume than exists today.</td>
-            </tr>
-            <tr className="border-b border-(--border-subtle) last:border-0">
-              <td className="p-3 font-medium">Pattern Analyst</td>
-              <td className="p-3" style={{ color: 'var(--status-low)' }}>Automatic — retrains fresh on every real incident, every request.</td>
-              <td className="p-3 text-(--text-secondary)">Not yet — needs an Analyst review/dismiss action per flag to confirm which anomalies were real, which doesn't exist yet.</td>
-            </tr>
+            {OVERVIEW_ROWS.map((r) => (
+              <tr key={r.service} className="border-b border-(--border-subtle) last:border-0">
+                <td className="p-3 font-medium">{r.service}</td>
+                {/* <td className="p-3">
+                  <StatusBadge label={r.technology} variant={r.technology === 'Machine Learning' ? 'info' : 'neutral'} />
+                </td> */}
+                <td className="p-3 text-(--text-secondary)">{r.purpose}</td>
+                <td className="p-3 font-mono">{r.method}</td>
+                <td className="p-3 text-(--text-secondary)">{r.oversight}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

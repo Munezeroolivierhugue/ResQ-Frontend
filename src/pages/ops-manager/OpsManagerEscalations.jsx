@@ -7,6 +7,7 @@ import OpsManagerDistrictLabel from '../../components/ops-manager/OpsManagerDist
 import DispatchUnitsModal from '../../components/ops-manager/DispatchUnitsModal'
 import { listIncidents } from '../../api/incidents'
 import { listBackupRequests, acknowledgeBackupRequest } from '../../api/backup-requests'
+import { listMutualAidRequests } from '../../api/mutualAid'
 import { getCurrentUser } from '../../utils/authSession'
 import { formatIncidentType } from '../../utils/incidentTypeLabels'
 import { useToastStore } from '../../store/toastStore'
@@ -41,6 +42,13 @@ export default function OpsManagerEscalations() {
   // my attention").
   const [backupRequests, setBackupRequests] = useState([])
   const [backupLoading, setBackupLoading] = useState(true)
+  // Mutual aid / "additional unit" requests for this district (submitted by
+  // dispatchers via the AI Dispatch Engine, or by the OM themselves) — these
+  // already generated a real notification, but had nowhere to actually
+  // appear on this page, the natural place an Ops Manager looks for things
+  // needing their attention.
+  const [mutualAidRequests, setMutualAidRequests] = useState([])
+  const [mutualAidLoading, setMutualAidLoading] = useState(true)
   const [dispatchTarget, setDispatchTarget] = useState(null)
   const pushToast = useToastStore((s) => s.pushToast)
   const districtId = getCurrentUser()?.district_id
@@ -71,6 +79,17 @@ export default function OpsManagerEscalations() {
       })
       .catch(() => {})
       .finally(() => setBackupLoading(false))
+  }, [districtId])
+
+  useEffect(() => {
+    if (!districtId) { setMutualAidLoading(false); return }
+    // Filtered to PENDING client-side — the backend's districtId branch
+    // takes precedence over a combined status param (same limitation as
+    // IncidentService.listAll), so passing both silently ignores status.
+    listMutualAidRequests({ districtId })
+      .then((all) => setMutualAidRequests(all.filter((r) => r.status === 'PENDING')))
+      .catch(() => {})
+      .finally(() => setMutualAidLoading(false))
   }, [districtId])
 
   const showToast = (msg, variant = 'success') => {
@@ -183,6 +202,36 @@ export default function OpsManagerEscalations() {
                   Dispatch Units
                 </button>
               </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="mt-6 flex flex-col gap-3">
+        <SectionTitle title="Mutual Aid & Unit Requests" badge={<StatusBadge label={String(mutualAidRequests.length)} variant="handover" />} />
+        {mutualAidLoading ? (
+          <div className="dispatcher-surface p-4 text-[13px] text-(--text-muted)">Loading…</div>
+        ) : mutualAidRequests.length === 0 ? (
+          <div className="dispatcher-surface p-4 text-[13px] text-(--text-muted)">
+            No pending mutual aid or unit requests for your district.
+          </div>
+        ) : (
+          mutualAidRequests.map((req) => (
+            <div key={req.request_id} className="dispatcher-surface p-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-start gap-2">
+                <ShieldAlert size={16} className="mt-0.5 shrink-0" style={{ color: 'var(--status-medium)' }} />
+                <div>
+                  <span className="font-mono font-bold text-(--accent)">{req.quantity}x {req.unit_type}</span>
+                  <span className="text-[12px] text-(--text-muted) ml-2">{timeAgo(req.created_at)}</span>
+                  <div className="text-[13px] mt-0.5">{req.reason}</div>
+                  <div className="text-[12px] text-(--text-secondary)">
+                    Requested by {req.requested_by_name ?? 'Unknown'} · Status: {req.status}
+                  </div>
+                </div>
+              </div>
+              <Link to="/ops-manager/resources" className="dispatcher-btn-ghost no-underline text-[12px]">
+                View in Resources →
+              </Link>
             </div>
           ))
         )}

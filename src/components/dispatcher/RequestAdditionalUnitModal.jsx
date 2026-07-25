@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { X, Send, Plus } from 'lucide-react'
 
-export default function RequestAdditionalUnitModal({ isOpen, onClose, onSubmit }) {
+export default function RequestAdditionalUnitModal({ isOpen, onClose, onSubmit, submitting, error }) {
   const [form, setForm] = useState({
     unitType: 'Ambulance',
     urgency: 'Immediate',
@@ -10,12 +10,15 @@ export default function RequestAdditionalUnitModal({ isOpen, onClose, onSubmit }
 
   if (!isOpen) return null
 
+  // Closing on success is the parent's responsibility (same pattern as
+  // MutualAidRequestModal) — it now awaits a real backend call, so closing
+  // unconditionally here would dismiss the modal before knowing whether the
+  // request actually reached the Ops Manager.
   const handleAsk = () => {
     onSubmit({
       ...form,
       timestamp: new Date().toISOString(),
     })
-    onClose()
   }
 
   return (
@@ -90,14 +93,18 @@ export default function RequestAdditionalUnitModal({ isOpen, onClose, onSubmit }
 
         {/* Footer */}
         <div className="p-4 border-t border-(--border-subtle) bg-(--bg-elevated) shrink-0">
+          {error && (
+            <p className="text-[12px] m-0 mb-3" style={{ color: 'var(--status-critical)' }}>{error}</p>
+          )}
           <button
             type="button"
-            className="w-full py-3 rounded-xl border-none flex items-center justify-center gap-2 cursor-pointer transition-transform active:scale-[0.98] font-bold uppercase tracking-wider text-[12px]"
+            className="w-full py-3 rounded-xl border-none flex items-center justify-center gap-2 cursor-pointer transition-transform active:scale-[0.98] font-bold uppercase tracking-wider text-[12px] disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ background: 'var(--accent)', color: 'black', fontFamily: 'var(--font-display)' }}
             onClick={handleAsk}
+            disabled={!form.reason.trim() || submitting}
           >
             <Send size={16} />
-            Submit Request
+            {submitting ? 'Sending…' : 'Submit Request'}
           </button>
         </div>
 

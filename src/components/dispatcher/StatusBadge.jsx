@@ -4,6 +4,7 @@ const VARIANTS = {
   active: { bg: 'var(--accent-ghost)', color: 'var(--accent)' },
   info: { bg: 'var(--status-info-bg)', color: 'var(--status-info)' },
   critical: { bg: 'var(--status-critical-bg)', color: 'var(--status-critical)' },
+  neutral: { bg: 'var(--bg-elevated)', color: 'var(--text-secondary)' },
 }
 
 export default function StatusBadge({ label, variant = 'resolved' }) {

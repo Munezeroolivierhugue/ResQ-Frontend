@@ -93,6 +93,10 @@ export default function NotificationsDropdown({ open, onClose, onToggle }) {
   const role = getCurrentUser()?.role;
   const viewAllHref = ROLE_NOTIF_HREF[role] ?? "/dispatcher/notifications";
   const [soundMuted, setSoundMuted] = useState(() => isNotificationSoundMuted());
+  // Some notifications (e.g. a field responder's unit being assigned to a
+  // deployment plan) have no dedicated page to deep-link to — rather than
+  // doing nothing on click, show the notification's own text as a card.
+  const [detailNotif, setDetailNotif] = useState(null);
 
   const toggleSound = (e) => {
     e.stopPropagation();
@@ -180,8 +184,11 @@ export default function NotificationsDropdown({ open, onClose, onToggle }) {
                 style={{ background: n.read ? "transparent" : "var(--accent-ghost)" }}
                 onClick={() => {
                   markRead(n.id);
+                  if (!n.href) {
+                    setDetailNotif(n);
+                    return;
+                  }
                   onClose();
-                  if (!n.href) return;
                   if (typeof n.href === "string") navigate(n.href);
                   else navigate(n.href.pathname, { state: n.href.state });
                 }}
@@ -217,6 +224,41 @@ export default function NotificationsDropdown({ open, onClose, onToggle }) {
             >
               View all notifications →
             </Link>
+          </div>
+        </div>
+      )}
+
+      {detailNotif && (
+        <div
+          className="fixed inset-0 z-[10001] flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          style={{ background: "rgba(0,0,0,0.5)" }}
+          onClick={() => setDetailNotif(null)}
+        >
+          <div
+            className="relative w-full max-w-sm rounded-xl border border-(--border) bg-(--bg-surface) p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <NotifIcon type={detailNotif.type} actorName={detailNotif.actorName} actorPhotoUrl={detailNotif.actorPhotoUrl} />
+              <div className="flex-1 min-w-0">
+                <div className="text-[14px] font-semibold text-(--text-primary)">{detailNotif.title}</div>
+                {detailNotif.desc && <p className="text-[13px] text-(--text-secondary) mt-1 m-0">{detailNotif.desc}</p>}
+                <div className="text-[11px] text-(--text-muted) mt-2" style={{ fontFamily: "var(--font-mono)" }}>
+                  {timeAgo(detailNotif.time)}
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end mt-4">
+              <button
+                type="button"
+                className="dispatcher-btn-ghost"
+                onClick={() => setDetailNotif(null)}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

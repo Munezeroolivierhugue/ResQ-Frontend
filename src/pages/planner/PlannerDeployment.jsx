@@ -1,18 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Plus, Send, X, ChartLine, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Send, X, ChartLine, ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
 import { planStatusVariant } from '../../data/mockPlannerData'
 import { getCurrentUser } from '../../utils/authSession'
-import { listPlans, createPlan, updatePlanStatus, createInstruction, listInstructions, getDistrictCoverage } from '../../api/planning'
+import { listPlans, createPlan, updatePlanStatus, deletePlan, createInstruction, listInstructions, getDistrictCoverage } from '../../api/planning'
 import { listDistricts } from '../../api/districts'
 import { listVehicles } from '../../api/vehicles'
 import { useToastStore } from '../../store/toastStore'
 
 const EMPTY_INSTRUCTION = { vehicle_id: '', from_location: '', to_location: '', move_time: '' }
-const PLAN_FILTERS = ['All', 'Draft', 'Submitted', 'Approved', 'Implemented']
+const PLAN_FILTERS = ['All', 'Draft', 'Submitted', 'Approved', 'Completed', 'Rejected']
 
 function generateId() {
   return Math.random().toString(36).slice(2, 10)
@@ -86,10 +86,21 @@ export default function PlannerDeployment() {
     getDistrictCoverage().then(setDistrictCoverage).catch(() => {})
   }, [])
 
+  // Fetched system-wide, not scoped to the plan's own district — a plan can
+  // legitimately draw units from any district (e.g. 1 police unit from
+  // Nyarugenge, 1 ambulance from Gasabo, 2 fire units from Kicukiro, all
+  // positioned for an event in Nyarugenge), the same way a mutual aid
+  // request borrows a unit from a different district. The plan's own
+  // `district` is only where the incident/event itself takes place.
+  // Every real unit is offered, regardless of its status RIGHT NOW — a
+  // deployment plan targets a future active window (its own activeFrom/
+  // activeUntil, often not "now"), so a unit currently DISPATCHED/ON_BREAK
+  // this minute can easily be free by the time the plan actually starts.
+  // Previously filtered to status=AVAILABLE only, which silently hid most
+  // of the real fleet from the picker at any given moment.
   useEffect(() => {
-    if (!selectedDistrictId) { Promise.resolve().then(() => setVehicles([])); return }
-    listVehicles({ districtId: selectedDistrictId }).then(setVehicles).catch(() => setVehicles([]))
-  }, [selectedDistrictId])
+    listVehicles().then(setVehicles).catch(() => setVehicles([]))
+  }, [])
 
   useEffect(() => {
     listPlans()
@@ -166,6 +177,23 @@ export default function PlannerDeployment() {
     }
   }
 
+  const [deletingId, setDeletingId] = useState(null)
+  const [confirmDeletePlan, setConfirmDeletePlan] = useState(null)
+
+  async function handleDeletePlan(plan) {
+    setDeletingId(plan.id)
+    try {
+      await deletePlan(plan.id)
+      setPlans((prev) => prev.filter((p) => p.id !== plan.id))
+      showToast('Plan deleted.')
+    } catch (err) {
+      showToast(err?.response?.data?.message ?? 'Could not delete plan — an approved plan must be rejected first.', 'error')
+    } finally {
+      setDeletingId(null)
+      setConfirmDeletePlan(null)
+    }
+  }
+
   return (
     <div className="portal-page flex flex-col gap-4 min-w-[1024px]">
       <PlannerPageHeader
@@ -228,7 +256,7 @@ export default function PlannerDeployment() {
             </div>
 
             <div className="text-[13px] font-semibold mt-2 mb-1">Unit Positioning Instructions</div>
-            <p className="text-[11px] text-(--text-muted) m-0 -mt-1 mb-1">Units shown are from the selected district's real fleet.</p>
+            <p className="text-[11px] text-(--text-muted) m-0 -mt-1 mb-1">Units can be drawn from any district's real fleet — the plan's district above is just where the event takes place.</p>
             {instructions.map((row, idx) => (
               <div key={idx} className="relative rounded-lg p-3 mb-2" style={{ background: 'var(--bg-elevated)' }}>
                 <button
@@ -247,9 +275,16 @@ export default function PlannerDeployment() {
                     onChange={(e) => updateInstruction(idx, 'vehicle_id', e.target.value)}
                   >
                     <option value="">Select unit…</option>
-                    {vehicles.map((v) => (
+                    {vehicles
+                      // A unit already picked on another row stays out of
+                      // every other row's list — one unit can't serve two
+                      // positions on the same plan. It stays selectable on
+                      // ITS OWN row (otherwise re-opening this dropdown on
+                      // the row that already has it would show nothing).
+                      .filter((v) => v.vehicle_id === row.vehicle_id || !instructions.some((r) => r.vehicle_id === v.vehicle_id))
+                      .map((v) => (
                       <option key={v.vehicle_id} value={v.vehicle_id}>
-                        {v.plate_number} · {v.vehicle_type}
+                        {v.plate_number} · {v.vehicle_type} · {v.district_name ?? 'Unknown district'}
                       </option>
                     ))}
                   </select>
@@ -372,6 +407,16 @@ export default function PlannerDeployment() {
                     {openPlanId === plan.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                     Instructions
                   </button>
+                  <button
+                    type="button"
+                    className="dispatcher-btn-icon"
+                    style={{ color: 'var(--status-critical)' }}
+                    title={plan.status === 'APPROVED' ? 'Reject the plan before deleting it' : 'Delete plan'}
+                    disabled={deletingId === plan.id || plan.status === 'APPROVED'}
+                    onClick={() => setConfirmDeletePlan(plan)}
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
                 {openPlanId === plan.id && (
                   <div className="pl-2 -mt-1">
@@ -383,6 +428,40 @@ export default function PlannerDeployment() {
           </div>
         </div>
       </div>
+
+      {confirmDeletePlan && (
+        <div
+          className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+          onClick={() => setConfirmDeletePlan(null)}
+        >
+          <div
+            className="relative w-full max-w-sm rounded-xl border border-(--border) bg-(--bg-surface) p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-[15px] font-bold m-0">Delete plan?</h3>
+            <p className="text-[13px] text-(--text-secondary) mt-2 mb-0">
+              Delete plan "{confirmDeletePlan.plan_name}"? This can't be undone.
+            </p>
+            <div className="flex gap-2 justify-end mt-5">
+              <button type="button" className="dispatcher-btn-ghost" onClick={() => setConfirmDeletePlan(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="dispatcher-btn-primary"
+                style={{ background: 'var(--status-critical)', borderColor: 'var(--status-critical)' }}
+                disabled={deletingId === confirmDeletePlan.id}
+                onClick={() => handleDeletePlan(confirmDeletePlan)}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

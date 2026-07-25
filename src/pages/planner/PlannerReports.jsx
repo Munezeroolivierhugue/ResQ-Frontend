@@ -46,7 +46,8 @@ import StatusBadge from '../../components/dispatcher/StatusBadge'
 import { PLANNER_RECOMMENDATIONS } from '../../data/mockPlannerData'
 import { getCurrentUser } from '../../utils/authSession'
 import { useNotificationsStore } from '../../store/notificationsStore'
-import { generateReport, submitReport, listReports, listPatterns } from '../../api/reporting'
+import { generateReport, submitReport, listPatterns } from '../../api/reporting'
+import { listPlans } from '../../api/planning'
 import { useToastStore } from '../../store/toastStore'
 
 const INSIGHT_ICONS = {
@@ -91,11 +92,17 @@ export default function PlannerReports() {
     const currentUser = getCurrentUser()
     const now = new Date()
     const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    listReports('PLANNER_INSIGHT', currentUser?.district_id ?? null)
-      .then((reports) => {
-        const thisMonth = reports.filter((r) => r.period_start && new Date(r.period_start) >= firstOfMonth)
-        const submitted = thisMonth.filter((r) => r.status !== 'DRAFT').length
-        const approved = thisMonth.filter((r) => r.status === 'APPROVED' || r.status === 'PUBLISHED').length
+    // "Plans submitted/approved" means real deployment plans (created on
+    // Deployment Planning), not PLANNER_INSIGHT written reports — those are a
+    // separate feature (the text analysis saved below on this same page).
+    // Wiring this to listReports('PLANNER_INSIGHT', ...) always read 0/0
+    // unless a written report happened to be published this month, even
+    // when real deployment plans existed.
+    listPlans()
+      .then((plans) => {
+        const thisMonth = plans.filter((p) => p.active_from && new Date(p.active_from) >= firstOfMonth)
+        const submitted = thisMonth.filter((p) => p.status !== 'DRAFT').length
+        const approved = thisMonth.filter((p) => p.status === 'APPROVED' || p.status === 'COMPLETED').length
         setWeeklyStats((s) => ({
           ...s,
           plansSubmitted: submitted,
