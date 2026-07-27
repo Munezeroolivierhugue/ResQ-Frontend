@@ -19,3 +19,22 @@ export async function listStations(params = {}) {
   const { data } = await api.get('/api/stations', { params: mapped })
   return (data.data ?? data).map(transform)
 }
+
+export async function getStation(id) {
+  const { data } = await api.get(`/api/stations/${id}`)
+  return transform(data.data ?? data)
+}
+
+export async function createStation(body) {
+  const { data } = await api.post('/api/stations', body)
+  return transform(data.data ?? data)
+}
+
+export async function updateStation(id, body) {
+  const { data } = await api.put(`/api/stations/${id}`, body)
+  return transform(data.data ?? data)
+}
+
+export async function deleteStation(id) {
+  await api.delete(`/api/stations/${id}`)
+}

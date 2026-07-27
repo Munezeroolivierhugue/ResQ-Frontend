@@ -13,6 +13,7 @@ import {
   X,
   Truck,
   Building2,
+  MapPin,
 } from 'lucide-react'
 import SidebarToggle from './SidebarToggle'
 import { useSidebarClasses } from '../../hooks/useSidebarClasses'
@@ -46,6 +47,7 @@ const SYSTEM = [
   { icon: Users,           label: 'Users', href: '/admin/users' },
   { icon: Truck,           label: 'Units',           href: '/admin/units' },
   { icon: Building2,       label: 'Agencies',        href: '/admin/agencies' },
+  { icon: MapPin,          label: 'Stations',        href: '/admin/stations' },
   { icon: Plug,            label: 'Integrations',    href: '/admin/integrations' },
 ]
 

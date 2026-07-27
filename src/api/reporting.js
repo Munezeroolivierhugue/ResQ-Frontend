@@ -37,7 +37,6 @@ function transformUnitPerf(u) {
     avg_response_time: u.avgResponseTime,
     on_time_rate: u.onTimeRate != null ? u.onTimeRate : (u.performanceScore != null ? u.performanceScore / 100 : null),
     incidents_resolved: u.incidentsResolved ?? u.incidentsHandled ?? null,
-    ai_acceptance_rate: u.aiAcceptanceRate ?? null,
     computed_at: u.computedAt ?? null,
   }
 }
