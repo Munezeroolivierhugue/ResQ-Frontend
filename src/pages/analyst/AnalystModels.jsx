@@ -14,7 +14,6 @@ const ML_SERVICES = [
     algorithm: 'Gradient Boosting Regressor',
     purpose: 'Predict future emergency demand',
     fields: [
-      ['Prediction Window', 'Next 30 minutes'],
       ['Decision Support', 'Enabled'],
     ],
   },
@@ -138,12 +137,6 @@ export default function AnalystModels() {
       <div className="dispatcher-surface overflow-x-auto p-0">
         <div className="p-4 border-b border-(--border)">
           <h3 className="text-[13px] font-semibold m-0">Dispatcher Override Evaluation</h3>
-          <p className="text-[12px] text-(--text-muted) m-0 mt-1">
-            Not a prediction: "AI-Followed Avg Response" is the real average response time from dispatches where the
-            AI recommendation was actually used (not overridden), in the same period — an observed comparison
-            group, not a simulated or hypothetical result for the overridden cases. It's one system-wide figure,
-            so it repeats across reasons by design.
-          </p>
         </div>
         <table className="w-full text-[12px] min-w-[640px]">
           <thead>

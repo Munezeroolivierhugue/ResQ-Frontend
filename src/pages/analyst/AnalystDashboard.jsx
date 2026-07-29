@@ -1,14 +1,12 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { FileBarChart, AlertCircle, Cpu, CalendarCheck, Server, RefreshCw } from 'lucide-react'
+import { FileBarChart, AlertCircle, Cpu, CalendarCheck, Server } from 'lucide-react'
 import AdminStatCard from '../../components/admin/AdminStatCard'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import AnalystPageHeader from '../../components/analyst/AnalystPageHeader'
-import { listDataQuality, runDataQualityCheck, listReports, listModels } from '../../api/reporting'
+import { listDataQuality, listReports, listModels } from '../../api/reporting'
 import { sourceStatusVariant } from '../../data/mockAnalystData'
-
-const CHECKED_SOURCES = ['Incidents', 'Vehicles', 'Dispatches']
 
 function statusOf(record) {
   const score = record.overall_score ?? 0
@@ -48,7 +46,6 @@ export default function AnalystDashboard() {
   const [reports, setReports] = useState([])
   const [models, setModels] = useState([])
   const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
 
   function loadAll() {
     return Promise.allSettled([listDataQuality(), listReports(), listModels()])
@@ -62,18 +59,6 @@ export default function AnalystDashboard() {
   useEffect(() => {
     loadAll().finally(() => setLoading(false))
   }, [])
-
-  async function handleRefresh() {
-    setRefreshing(true)
-    try {
-      for (const source of CHECKED_SOURCES) {
-        await runDataQualityCheck(source).catch(() => {})
-      }
-      await loadAll()
-    } finally {
-      setRefreshing(false)
-    }
-  }
 
   const dateStr = new Date().toLocaleDateString('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
@@ -96,10 +81,6 @@ export default function AnalystDashboard() {
       border: borderOf(status),
     }
   })
-  const lastChecked = latestBySource.length
-    ? timeAgo(latestBySource.map((r) => r.checked_at).sort().reverse()[0])
-    : 'never'
-
   const reportsThisMonth = reports.filter((r) => isThisMonth(r.generated_at)).length
   const reportsSubmittedThisWeek = reports.filter((r) => isThisWeek(r.submitted_at)).length
   const degradedSources = dataSources.filter((s) => s.status !== 'OK')
@@ -136,22 +117,20 @@ export default function AnalystDashboard() {
       <AnalystPageHeader title="Analyst Dashboard" subtitle={`System intelligence overview · ${dateStr}`} badge="Dashboard" />
 
       <div className="portal-grid-4">
-        <AdminStatCard icon={FileBarChart} label="Reports Generated (Month)" value={loading ? '—' : String(reportsThisMonth)} sub="Real reports this calendar month" />
+        <AdminStatCard icon={FileBarChart} label="Reports Generated (Month)" value={loading ? '—' : String(reportsThisMonth)} />
         <AdminStatCard
           icon={AlertCircle}
           label="Data Quality Alerts"
           value={loading ? '—' : String(degradedSources.length)}
-          sub={degradedSources.length > 0 ? 'Source(s) below target' : 'All sources healthy'}
           className={degradedSources.length > 0 ? 'dispatcher-metric-card--alert' : ''}
         />
         <AdminStatCard
           icon={Cpu}
           label="AI Model Alerts"
           value={loading ? '—' : String(flaggedModels.length)}
-          sub={flaggedModels.length > 0 ? 'Model(s) not active' : 'All models active'}
           className={flaggedModels.length > 0 ? 'dispatcher-metric-card--alert' : ''}
         />
-        <AdminStatCard icon={CalendarCheck} label="Reports Submitted (7d)" value={loading ? '—' : String(reportsSubmittedThisWeek)} sub="Real submissions this week" />
+        <AdminStatCard icon={CalendarCheck} label="Reports Submitted (7d)" value={loading ? '—' : String(reportsSubmittedThisWeek)} />
       </div>
 
       <div className="dispatcher-surface p-4">
@@ -159,18 +138,6 @@ export default function AnalystDashboard() {
           <div className="flex items-center gap-2">
             <Server size={16} style={{ color: 'var(--accent)' }} />
             <span className="font-semibold text-[14px]">Data Source Health</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="font-mono text-[11px] text-(--text-muted)">Last checked: {lastChecked}</span>
-            <button
-              type="button"
-              className="dispatcher-btn-ghost text-[11px] h-8 px-2 inline-flex items-center gap-1"
-              onClick={handleRefresh}
-              disabled={refreshing}
-            >
-              <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
-              {refreshing ? 'Checking…' : 'Refresh'}
-            </button>
           </div>
         </div>
         <div className="flex flex-wrap gap-4">

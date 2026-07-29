@@ -9,6 +9,7 @@ function transform(b) {
     priority: b.priority,
     target_area: b.targetArea,
     sent_at: b.sentAt,
+    expires_at: b.expiresAt,
   }
 }
 
@@ -22,6 +23,11 @@ export async function createBroadcast(body) {
     message: body.message,
     priority: body.priority,
     targetArea: body.target_area,
+    durationMinutes: body.duration_minutes,
   })
   return transform(data.data ?? data)
+}
+
+export async function deleteBroadcast(id) {
+  await api.delete(`/api/broadcasts/${id}`)
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Search, FileCheck } from 'lucide-react'
-import AnalystPageHeader from '../../components/analyst/AnalystPageHeader'
+import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import FilterDropdown from '../../components/admin/FilterDropdown'
 import AdminPagination from '../../components/admin/AdminPagination'
@@ -11,8 +11,9 @@ import { useToastStore } from '../../store/toastStore'
 
 const PAGE_SIZE = 10
 
-// 'PLANNER_INSIGHT' -> 'Planner Insight', 'EXECUTIVE' -> 'Executive', already
-// space-separated types (e.g. "Response Time Performance") pass through as-is.
+// 'SYSTEM_AUDIT' -> 'System Audit', 'PLANNER_INSIGHT' -> 'Planner Insight',
+// already space-separated types (e.g. "Response Time Performance") pass
+// through as-is.
 function prettyType(t) {
   if (!t) return 'Report'
   return t.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
@@ -22,7 +23,7 @@ function esc(s) {
   return (s ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-export default function AnalystLibrary() {
+export default function AdminReports() {
   const [reports, setReports] = useState([])
   const [districts, setDistricts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -36,7 +37,9 @@ export default function AnalystLibrary() {
   useEffect(() => {
     Promise.all([listReports(), listDistricts()])
       .then(([r, d]) => {
-        setReports(r)
+        // Admin only reviews reports actually submitted up the chain — drafts
+        // are each author's own working copy, not yet ready for oversight.
+        setReports(r.filter((x) => x.status === 'SUBMITTED'))
         setDistricts(d)
       })
       .finally(() => setLoading(false))
@@ -59,11 +62,9 @@ export default function AnalystLibrary() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const pageReports = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
-  // Renders the exact same official RNP report layout DC Executive Report
-  // and Planner Insight reports already use (utils/pdfExport.js) — the
-  // Library's own report data (fetched fresh, not cached) fills the same
-  // template, so an analyst sees the report the way its author submitted it
-  // instead of a bespoke plain-text summary card.
+  // Same official RNP report layout used across the app (DC Executive
+  // Report, Planner Insight, Analyst Report Library) — one consistent
+  // document format regardless of which portal generated the report.
   function openPreview(reportId) {
     setPreviewingId(reportId)
     getReport(reportId)
@@ -95,10 +96,9 @@ export default function AnalystLibrary() {
 
   return (
     <div className="portal-page flex flex-col gap-4 min-w-[1024px]">
-      <AnalystPageHeader
-        title="Report Library"
-        subtitle="Every generated report, real data only."
-        badge="Report Library"
+      <AdminPageHeader
+        title="Submitted Reports"
+        subtitle="Every report submitted for oversight — executive, planning, and system performance audits."
       />
 
       <div className="flex flex-nowrap items-center gap-2">
@@ -115,7 +115,7 @@ export default function AnalystLibrary() {
           label="All types"
           value={typeFilter}
           onChange={setTypeFilter}
-          options={[{ value: '', label: 'All types' }, ...reportTypes.map((t) => ({ value: t, label: t }))]}
+          options={[{ value: '', label: 'All types' }, ...reportTypes.map((t) => ({ value: t, label: prettyType(t) }))]}
         />
         <FilterDropdown
           label="All districts"
@@ -133,7 +133,7 @@ export default function AnalystLibrary() {
               <th className="text-left p-3">District</th>
               <th className="text-left p-3">Period</th>
               <th className="p-3">Author</th>
-              <th className="p-3">Generated</th>
+              <th className="p-3">Submitted</th>
               <th className="p-3">Status</th>
               <th className="p-3">Actions</th>
             </tr>
@@ -143,17 +143,17 @@ export default function AnalystLibrary() {
               <tr><td colSpan={7} className="p-6 text-center text-(--text-muted)">Loading…</td></tr>
             )}
             {!loading && filtered.length === 0 && (
-              <tr><td colSpan={7} className="p-6 text-center text-(--text-muted)">No reports found.</td></tr>
+              <tr><td colSpan={7} className="p-6 text-center text-(--text-muted)">No submitted reports yet.</td></tr>
             )}
             {pageReports.map((r) => (
               <tr key={r.report_id} className="border-b border-(--border-subtle) dispatcher-table-row">
-                <td className="p-3 font-medium">{r.report_type}</td>
+                <td className="p-3 font-medium">{prettyType(r.report_type)}</td>
                 <td className="p-3">{r.district_name ?? 'All Districts'}</td>
                 <td className="p-3 font-mono">{r.period_start ?? '—'} → {r.period_end ?? '—'}</td>
                 <td className="p-3 text-center">{r.generated_by_name ?? '—'}</td>
-                <td className="p-3 text-center font-mono">{r.generated_at ? new Date(r.generated_at).toLocaleDateString() : '—'}</td>
+                <td className="p-3 text-center font-mono">{r.submitted_at ? new Date(r.submitted_at).toLocaleDateString() : '—'}</td>
                 <td className="p-3 text-center">
-                  <StatusBadge label={r.status} variant={r.status === 'SUBMITTED' ? 'resolved' : 'handover'} />
+                  <StatusBadge label={r.status} variant="resolved" />
                 </td>
                 <td className="p-3 text-center">
                   <button

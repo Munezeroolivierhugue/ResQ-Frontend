@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { Siren, Mail, Lock, Eye, EyeOff } from 'lucide-react'
 import FRAuthShell from '../../components/auth/FRAuthShell'
 import { login } from '../../api/auth'
@@ -7,6 +7,12 @@ import { setSession } from '../../utils/authSession'
 
 export default function FRLogin() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  // Same fix as Login.jsx — FRMfaSetup.jsx sends unauthenticated visitors
+  // here with ?redirect=/fr/mfa-setup so a successful login returns them to
+  // finish MFA setup instead of always landing on shift-start.
+  const redirectTo = searchParams.get('redirect')
+  const safeRedirect = redirectTo && redirectTo.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : null
   const [email, setEmail] = useState(() => sessionStorage.getItem('resq-login-email') || '')
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
@@ -34,7 +40,7 @@ export default function FRLogin() {
         user: result.user ?? null,
       })
       if (remember) sessionStorage.setItem('resq-trusted-device', 'true')
-      navigate('/field-responder/shift-start')
+      navigate(safeRedirect || '/field-responder/shift-start')
     } catch (err) {
       const msg =
         err?.response?.data?.message ||

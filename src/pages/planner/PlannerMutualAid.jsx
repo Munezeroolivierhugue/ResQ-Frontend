@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Sparkles, Send, X, Truck } from 'lucide-react'
+import { Sparkles, Send, X, Truck, ListFilter } from 'lucide-react'
 import PlannerPageHeader from '../../components/planner/PlannerPageHeader'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import { listMutualAidRequests, recommendMutualAidSource, fulfillMutualAid, declineMutualAid } from '../../api/mutualAid'
+import { listVehicles } from '../../api/vehicles'
 import { useToastStore } from '../../store/toastStore'
 
 function timeAgo(isoString) {
@@ -18,6 +19,15 @@ function scoreTone(score) {
   return 'var(--status-critical)'
 }
 
+// Mirrors the backend's exact matchesUnitType() comparison (underscore-
+// insensitive, case-insensitive) so the manual browse list shows exactly the
+// same notion of "matches this request" the AI recommendation itself uses —
+// just without the AI's own ranking/candidate-selection possibly missing one.
+function unitTypeMatches(vehicleType, unitType) {
+  if (!vehicleType || !unitType) return false
+  return vehicleType.replace(/_/g, ' ').toLowerCase() === unitType.replace(/_/g, ' ').toLowerCase()
+}
+
 function RequestCard({ request, onResolved, showToast }) {
   const [recommendation, setRecommendation] = useState(null)
   const [loadingRec, setLoadingRec] = useState(false)
@@ -26,6 +36,31 @@ function RequestCard({ request, onResolved, showToast }) {
   const [declining, setDeclining] = useState(false)
   const [declineReason, setDeclineReason] = useState('')
   const [submittingDecline, setSubmittingDecline] = useState(false)
+  const [browsing, setBrowsing] = useState(false)
+  const [loadingBrowse, setLoadingBrowse] = useState(false)
+  const [browseError, setBrowseError] = useState(null)
+  const [availableUnits, setAvailableUnits] = useState([])
+
+  // Human-decision fallback: every currently AVAILABLE vehicle system-wide
+  // matching this request's unit type, regardless of what the AI recommended
+  // (or failed to recommend) — so a planner can act even when the AI engine
+  // is unreachable, or its ranking missed a real match.
+  const handleBrowse = async () => {
+    setBrowsing(true)
+    setLoadingBrowse(true)
+    setBrowseError(null)
+    try {
+      const vehicles = await listVehicles({ status: 'AVAILABLE' })
+      setAvailableUnits(vehicles.filter((v) =>
+        unitTypeMatches(v.vehicle_type, request.unit_type)
+        && v.district_id !== request.requesting_district_id
+      ))
+    } catch {
+      setBrowseError('Could not load available units — please retry.')
+    } finally {
+      setLoadingBrowse(false)
+    }
+  }
 
   const handleGetRecommendation = async () => {
     setLoadingRec(true)
@@ -82,7 +117,7 @@ function RequestCard({ request, onResolved, showToast }) {
         <StatusBadge label="PENDING" variant="handover" />
       </div>
 
-      {!recommendation && !declining && (
+      {!recommendation && !declining && !browsing && (
         <div className="flex gap-2 mt-4">
           <button
             type="button"
@@ -95,6 +130,15 @@ function RequestCard({ request, onResolved, showToast }) {
           </button>
           <button
             type="button"
+            className="dispatcher-btn-ghost text-[12px] inline-flex items-center gap-1.5"
+            disabled={loadingBrowse}
+            onClick={handleBrowse}
+          >
+            <ListFilter size={14} />
+            {loadingBrowse ? 'Loading units…' : 'Browse Units Manually'}
+          </button>
+          <button
+            type="button"
             className="dispatcher-btn-ghost text-[12px]"
             onClick={() => setDeclining(true)}
           >
@@ -104,6 +148,48 @@ function RequestCard({ request, onResolved, showToast }) {
       )}
 
       {recError && <p className="text-[12px] mt-3" style={{ color: 'var(--status-critical)' }}>{recError}</p>}
+
+      {browsing && !declining && (
+        <div className="mt-4 pt-4 border-t border-(--border-subtle)">
+          <p className="text-[11px] text-(--text-muted) m-0 mb-3">
+            Every currently available {request.unit_type.replace(/_/g, ' ').toLowerCase()} unit outside{' '}
+            {request.requesting_district_name} — a human-decision fallback independent of the AI ranking above.
+          </p>
+          {browseError && <p className="text-[12px] mb-3" style={{ color: 'var(--status-critical)' }}>{browseError}</p>}
+          {!loadingBrowse && availableUnits.length === 0 && !browseError && (
+            <p className="text-[12px] text-(--text-secondary) m-0">No available {request.unit_type.replace(/_/g, ' ').toLowerCase()} unit found in any other district.</p>
+          )}
+          <div className="flex flex-col gap-2">
+            {availableUnits.map((v) => (
+              <div key={v.vehicle_id} className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg" style={{ background: 'var(--bg-elevated)' }}>
+                <div>
+                  <div className="text-[13px] font-semibold flex items-center gap-1.5">
+                    <Truck size={13} />
+                    {v.plate_number} · {v.district_name}
+                  </div>
+                  <div className="text-[11px] text-(--text-secondary)">{v.vehicle_type.replace(/_/g, ' ')} — {v.capability ?? 'no capability listed'}</div>
+                </div>
+                <button
+                  type="button"
+                  className="dispatcher-btn-primary text-[12px] inline-flex items-center gap-1.5"
+                  disabled={actingVehicleId === v.vehicle_id}
+                  onClick={() => handleSend(v.vehicle_id)}
+                >
+                  <Send size={13} />
+                  Send {v.plate_number}
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="dispatcher-btn-ghost text-[12px] mt-3"
+            onClick={() => setBrowsing(false)}
+          >
+            ← Back
+          </button>
+        </div>
+      )}
 
       {recommendation && (
         <div className="mt-4 pt-4 border-t border-(--border-subtle)">

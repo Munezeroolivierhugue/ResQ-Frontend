@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Shield, Mail, ChevronLeft, ChevronRight, Search, Lock, Unlock } from 'lucide-react'
+import { Shield, Mail, ChevronLeft, ChevronRight, Search, Lock, Unlock, KeyRound, UserX } from 'lucide-react'
 
 
 const SESSION_PAGE_SIZE = 10
@@ -14,8 +14,10 @@ import {
   sendMfaReminderAll,
   listLockedUsers,
   unlockUser,
+  listFailedLoginLockedUsers,
+  reactivateLogin,
 } from '../../api/admin'
-import { listUsers } from '../../api/users'
+import { listUsers, updateUser } from '../../api/users'
 import { useToastStore } from '../../store/toastStore'
 
 const ROLE_LABELS = {
@@ -46,6 +48,10 @@ export default function AdminSecurity() {
   const [lockedLoading, setLockedLoading] = useState(true)
   const [unlockId, setUnlockId] = useState(null)
   const [unlocking, setUnlocking] = useState(false)
+  const [failedLoginUsers, setFailedLoginUsers] = useState([])
+  const [failedLoginLoading, setFailedLoginLoading] = useState(true)
+  const [reactivatingId, setReactivatingId] = useState(null)
+  const [suspendingId, setSuspendingId] = useState(null)
 
   function refreshLockedUsers() {
     setLockedLoading(true)
@@ -53,6 +59,14 @@ export default function AdminSecurity() {
       .then((u) => setLockedUsers(u))
       .catch(() => {})
       .finally(() => setLockedLoading(false))
+  }
+
+  function refreshFailedLoginUsers() {
+    setFailedLoginLoading(true)
+    listFailedLoginLockedUsers()
+      .then((u) => setFailedLoginUsers(u))
+      .catch(() => {})
+      .finally(() => setFailedLoginLoading(false))
   }
 
   useEffect(() => {
@@ -69,6 +83,7 @@ export default function AdminSecurity() {
       .catch(() => {})
       .finally(() => setUsersLoading(false))
     Promise.resolve().then(() => refreshLockedUsers())
+    Promise.resolve().then(() => refreshFailedLoginUsers())
   }, [])
 
   const mfaRoles = useMemo(() => {
@@ -150,6 +165,32 @@ export default function AdminSecurity() {
     } finally {
       setUnlocking(false)
       setUnlockId(null)
+    }
+  }
+
+  async function handleReactivateLogin(userId) {
+    setReactivatingId(userId)
+    try {
+      await reactivateLogin(userId)
+      setFailedLoginUsers((prev) => prev.filter((u) => u.user_id !== userId))
+      showToast('Account reactivated — user can log in again immediately')
+    } catch {
+      showToast('Failed to reactivate account — try again', 'error')
+    } finally {
+      setReactivatingId(null)
+    }
+  }
+
+  async function handleSuspendFromFailedLogin(userId) {
+    setSuspendingId(userId)
+    try {
+      await updateUser(userId, { status: 'SUSPENDED' })
+      setFailedLoginUsers((prev) => prev.filter((u) => u.user_id !== userId))
+      showToast('User suspended')
+    } catch {
+      showToast('Failed to suspend user — try again', 'error')
+    } finally {
+      setSuspendingId(null)
     }
   }
 
@@ -364,6 +405,75 @@ export default function AdminSecurity() {
                     >
                       <Unlock size={12} /> Unlock
                     </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="dispatcher-surface p-4">
+        <div className="flex items-center gap-2 mb-4">
+          <KeyRound size={16} style={{ color: 'var(--status-critical)' }} />
+          <span className="font-semibold text-[14px]">
+            Failed Login Attempts{failedLoginLoading ? '' : ` — ${failedLoginUsers.length}`}
+          </span>
+        </div>
+        <p className="text-[11px] text-(--text-muted) m-0 mb-3">
+          Locked out after 5 failed password attempts (15-minute auto-lock). Reactivate to skip the wait, or suspend if this looks malicious.
+        </p>
+        {failedLoginLoading ? (
+          <div className="text-[12px] text-(--text-muted) py-4">Loading failed login attempts…</div>
+        ) : failedLoginUsers.length === 0 ? (
+          <p className="text-[12px] text-center py-4" style={{ color: 'var(--status-low)' }}>
+            ✓ No accounts are currently locked out from failed logins
+          </p>
+        ) : (
+          <table className="w-full text-[12px]">
+            <thead>
+              <tr className="text-[12px] font-medium text-(--text-secondary) border-b border-(--border)">
+                <th className="text-left py-2 font-bold">User</th>
+                <th className="text-left py-2 font-bold">Role</th>
+                <th className="text-left py-2 font-bold">District</th>
+                <th className="py-2 font-bold">Lock Expires</th>
+                <th className="py-2 font-bold">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {failedLoginUsers.map((u) => (
+                <tr key={u.user_id} className="border-b border-(--border-subtle)">
+                  <td className="py-2">
+                    <div className="font-medium">{u.full_name}</div>
+                    <div className="text-[11px] text-(--text-muted)">{u.email}</div>
+                  </td>
+                  <td className="py-2">{ROLE_LABELS[u.role] ?? u.role}</td>
+                  <td className="py-2">{u.district_name ?? '—'}</td>
+                  <td className="py-2 text-center font-mono text-(--text-muted)">
+                    ~{u.lock_remaining_minutes}m
+                  </td>
+                  <td className="py-2">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <button
+                        type="button"
+                        title="Reactivate now — skip the 15-minute wait"
+                        className="dispatcher-btn-icon"
+                        disabled={reactivatingId === u.user_id}
+                        onClick={() => handleReactivateLogin(u.user_id)}
+                      >
+                        <Unlock size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        title="Suspend account"
+                        className="dispatcher-btn-icon"
+                        style={{ color: 'var(--status-critical)' }}
+                        disabled={suspendingId === u.user_id}
+                        onClick={() => handleSuspendFromFailedLogin(u.user_id)}
+                      >
+                        <UserX size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Search, ChevronDown, User, LogOut, Settings, Menu } from 'lucide-react'
+import { Search, ChevronDown, User, LogOut, Settings, Menu, Volume2, VolumeX } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { logout, getRefreshToken } from '../../utils/authSession'
 import { logoutApi } from '../../api/auth'
@@ -9,6 +9,7 @@ import { useNotificationsStore } from '../../store/notificationsStore'
 import AnnouncementPopup from './AnnouncementPopup'
 import ToastStack from './ToastStack'
 import { getMyProfile } from '../../api/users'
+import { isNotificationSoundMuted, setNotificationSoundMuted } from '../../utils/notificationSound'
 
 export default function Navbar({
   user = { name: 'User', role: '' },
@@ -42,6 +43,22 @@ export default function Navbar({
     : user.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
   const [showNotif, setShowNotif] = useState(false)
   const [showUser, setShowUser] = useState(false)
+  // Every portal that renders this shared Navbar already gets live sound
+  // via notificationsStore.subscribeToWs() → playNotificationSound() — but
+  // only Dispatcher (Settings → Audio) and Field Responder (their own top
+  // bar) previously had any control to mute it. District Commander, Ops
+  // Manager, Emergency Planner, Analyst, and Admin got sound with no way to
+  // turn it off. Same real isNotificationSoundMuted/setNotificationSoundMuted
+  // functions those two already use — one shared mute state, not a new one.
+  const [soundMuted, setSoundMuted] = useState(() => isNotificationSoundMuted())
+
+  const toggleSound = () => {
+    setSoundMuted((prev) => {
+      const next = !prev
+      setNotificationSoundMuted(next)
+      return next
+    })
+  }
 
   const handleLogout = () => {
     const refreshToken = getRefreshToken()
@@ -91,6 +108,15 @@ export default function Navbar({
       </div>
 
       <div className="flex items-center gap-0.5 ml-auto">
+        <button
+          type="button"
+          className="p-1.75 rounded-md bg-transparent border-none cursor-pointer flex items-center justify-center text-(--text-secondary) hover:bg-(--bg-elevated) hover:text-(--text-primary) transition-colors"
+          aria-label={soundMuted ? 'Unmute notification sound' : 'Mute notification sound'}
+          title={soundMuted ? 'Unmute notification sound' : 'Mute notification sound'}
+          onClick={toggleSound}
+        >
+          {soundMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+        </button>
         <NotificationsDropdown
           open={showNotif}
           onToggle={() => { setShowNotif((v) => !v); setShowUser(false) }}

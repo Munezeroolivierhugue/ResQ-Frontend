@@ -5,6 +5,7 @@ const UNIT_TYPES = [
   { value: 'AMBULANCE', label: 'Ambulance (ALS/BLS)' },
   { value: 'FIRE_TRUCK', label: 'Fire Engine' },
   { value: 'POLICE_CAR', label: 'Police Unit' },
+  { value: 'TACTICAL', label: 'Tactical / SWAT Unit' },
   { value: 'DISASTER_UNIT', label: 'Heavy Rescue' },
 ]
 

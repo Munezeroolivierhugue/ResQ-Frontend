@@ -87,7 +87,7 @@ export default function AvailableUnitsModal({ isOpen, onClose, onSelectUnit }) {
         addNotification({
           id: `add-unit-${Date.now()}`,
           type: 'unit_request',
-          title: `REQUEST: Additional ${payload.unitType}`,
+          title: `REQUEST: Additional ${payload.unitType.replace(/_/g, ' ')}`,
           time: 'Just now',
           read: false,
           href: '#active-incident',

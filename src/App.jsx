@@ -18,6 +18,7 @@ import DispatcherRoute from './components/layout/DispatcherRoute'
 import AdminSettings from './pages/admin/AdminSettings'
 import AdminRoute from './components/layout/AdminRoute'
 import AdminDashboard from './pages/admin/AdminDashboard'
+import AdminReports from './pages/admin/AdminReports'
 import AdminIntegrations from './pages/admin/AdminIntegrations'
 import AdminAudit from './pages/admin/AdminAudit'
 import AdminSecurity from './pages/admin/AdminSecurity'
@@ -157,7 +158,8 @@ export default function App() {
             <Route path="units" element={<AdminUnits />} />
             <Route path="agencies" element={<AdminAgencies />} />
             <Route path="stations" element={<AdminStations />} />
-            <Route path="system-report" element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="reports" element={<AdminReports />} />
+            <Route path="system-report" element={<Navigate to="/admin/reports" replace />} />
             <Route path="help" element={<AdminHelp />} />
             <Route index element={<Navigate to="/admin/dashboard" replace />} />
           </Route>

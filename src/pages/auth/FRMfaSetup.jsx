@@ -19,9 +19,12 @@ export default function FRMfaSetup() {
   const refs = useRef([])
   const setupStarted = useRef(false)
 
+  // Preserves the original destination via ?redirect= — see MfaSetup.jsx for
+  // why (previously a bare "/fr/login" here always landed a successful
+  // login on shift-start, with no way back to actually finish MFA setup).
   useEffect(() => {
     if (!getAccessToken()) {
-      navigate('/fr/login', { replace: true })
+      navigate('/fr/login?redirect=' + encodeURIComponent('/fr/mfa-setup'), { replace: true })
     }
   }, [navigate])
 

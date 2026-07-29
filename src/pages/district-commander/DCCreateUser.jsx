@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { UserPlus, Send, Check, ArrowLeft } from 'lucide-react'
 import DCPageHeader from '../../components/district-commander/DCPageHeader'
 import { getCurrentUser } from '../../utils/authSession'
 import { getDistrictCommanderDistrict } from '../../utils/districtCommanderSession'
+import { listVehicles } from '../../api/vehicles'
 import api from '../../lib/apiClient'
 
 const ALLOWED_ROLES = [
@@ -25,11 +26,37 @@ export default function DCCreateUser() {
   const districtId   = currentUser?.district_id || null
   const districtName = getDistrictCommanderDistrict() || 'Your District'
 
-  const [form, setForm]     = useState({ fullName: '', email: '', phone: '', role: 'FIELD_RESPONDER' })
+  const [form, setForm]     = useState({ fullName: '', email: '', phone: '', role: 'FIELD_RESPONDER', vehicleId: '' })
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState(null)
   const [serverError, setServerError] = useState(null)
+
+  const showUnitField = form.role === 'FIELD_RESPONDER'
+  const [units, setUnits] = useState([])
+  const [unitsLoading, setUnitsLoading] = useState(false)
+
+  // Same as Admin's invite flow: only load/offer units once a Field
+  // Responder is picked, scoped to this DC's own district + agency.
+  useEffect(() => {
+    if (!showUnitField || !currentUser?.agency_id) { setUnits([]); return }
+    setUnitsLoading(true)
+    listVehicles({ districtId: districtId || undefined, agencyId: currentUser.agency_id })
+      .then(setUnits)
+      .catch(() => setUnits([]))
+      .finally(() => setUnitsLoading(false))
+  }, [showUnitField, districtId, currentUser?.agency_id])
+
+  // Only offer units not already held by another responder — this is a new
+  // user being created, so there's no "own current vehicle" exception to
+  // preserve like the edit form has.
+  const availableUnits = useMemo(
+    () => units.filter((u) =>
+      !u.assigned_responder_id &&
+      (!districtId || !u.district_id || u.district_id === districtId)
+    ),
+    [units, districtId]
+  )
 
   function set(field, value) {
     setForm(f => ({ ...f, [field]: value }))
@@ -51,9 +78,11 @@ export default function DCCreateUser() {
         phone:      form.phone.trim() || null,
         role:       form.role,
         districtId: districtId || undefined,
+        agencyId:   showUnitField ? (currentUser?.agency_id || undefined) : undefined,
+        vehicleId:  showUnitField && form.vehicleId ? form.vehicleId : undefined,
       })
       setSuccess({ name: form.fullName.trim(), email: form.email.trim(), role: form.role })
-      setForm({ fullName: '', email: '', phone: '', role: 'FIELD_RESPONDER' })
+      setForm({ fullName: '', email: '', phone: '', role: 'FIELD_RESPONDER', vehicleId: '' })
     } catch (err) {
       const msg = err?.response?.data?.message
       if (msg?.includes('EMAIL_TAKEN') || msg?.includes('already registered')) {
@@ -137,6 +166,30 @@ export default function DCCreateUser() {
             </select>
             {errors.role && <span className="text-[11px]" style={{ color: 'var(--status-critical)' }}>{errors.role}</span>}
           </div>
+
+          {/* Assigned Vehicle — Field Responder only, same available-only filtering as the edit form */}
+          {showUnitField && (
+            <div className="dispatcher-field">
+              <label className="field-label" htmlFor="dc-vehicle">Assigned Vehicle</label>
+              <select
+                id="dc-vehicle"
+                className="dispatcher-input text-[13px] h-9 px-3"
+                value={form.vehicleId}
+                onChange={e => set('vehicleId', e.target.value)}
+                disabled={unitsLoading}
+              >
+                <option value="">
+                  {unitsLoading ? 'Loading units…' : availableUnits.length === 0 ? 'No available units' : '— No vehicle —'}
+                </option>
+                {availableUnits.map(u => (
+                  <option key={u.vehicle_id} value={u.vehicle_id}>
+                    {u.plate_number} · {u.vehicle_type?.replace(/_/g, ' ')}{u.station_name ? ` (${u.station_name})` : ''}
+                  </option>
+                ))}
+              </select>
+              <span className="text-[11px] text-(--text-muted)">Only units not already assigned to another responder are shown. Can be assigned later too.</span>
+            </div>
+          )}
 
           {/* Full Name */}
           <div className="dispatcher-field">

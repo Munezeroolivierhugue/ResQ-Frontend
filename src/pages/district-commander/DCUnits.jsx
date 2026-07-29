@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react'
-import { AlertTriangle, Car, Gauge, ShieldAlert } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { AlertTriangle, Car, Gauge, ShieldAlert, Search, Printer } from 'lucide-react'
 import AdminStatCard from '../../components/admin/AdminStatCard'
 import DCPageHeader from '../../components/district-commander/DCPageHeader'
+import FilterDropdown from '../../components/admin/FilterDropdown'
 import { getDistrictCommanderDistrict } from '../../utils/districtCommanderSession'
 import { getPerformanceScoreStyle } from '../../data/mockDistrictCommanderData'
 import { listVehicles } from '../../api/vehicles'
 import { computeUnitPerformance } from '../../api/reporting'
 import { getCurrentUser } from '../../utils/authSession'
+import { buildPdfHtml, openPdfWindow, tableHtml } from '../../utils/pdfExport'
 
 function currentPeriod() {
   const now = new Date()
@@ -29,6 +31,36 @@ function scoreFromPerf(perf) {
   return null
 }
 
+function exportUnitsPDF(units, district) {
+  openPdfWindow(buildPdfHtml({
+    title: 'Unit Performance Report',
+    subtitle: district ? `${district} District` : '',
+    reportType: 'UNIT PERFORMANCE',
+    idPrefix: 'UNT',
+    metaItems: [
+      { label: 'District', value: district ?? '—' },
+      { label: 'Total Units', value: String(units.length) },
+    ],
+    sections: [
+      tableHtml(
+        ['Plate', 'Type', 'Agency', 'Incidents', 'Avg Response', 'On-Time Rate', 'Performance', 'Status'],
+        units.map((u) => [
+          u.plate_number,
+          u.vehicle_type,
+          u.agency_name ?? '—',
+          u.perf?.incidents_resolved ?? '—',
+          fmtTime(u.perf?.avg_response_time),
+          fmtPct(u.perf?.on_time_rate),
+          u.score != null ? `${u.score}%` : '—',
+          u.status,
+        ]),
+      ),
+    ],
+    generatedBy: 'District Commander',
+    generatedRole: 'District Commander',
+  }))
+}
+
 export default function DCUnits() {
   const district = getDistrictCommanderDistrict()
   const districtId = getCurrentUser()?.district_id
@@ -36,6 +68,9 @@ export default function DCUnits() {
   const [units, setUnits] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [search, setSearch] = useState('')
+  const [typeFilter, setTypeFilter] = useState('All Types')
+  const [statusFilter, setStatusFilter] = useState('All Statuses')
 
   useEffect(() => {
     if (!districtId) { Promise.resolve().then(() => setLoading(false)); return }
@@ -66,14 +101,77 @@ export default function DCUnits() {
     ? Math.round(units.filter((u) => u.score != null).reduce((a, u) => a + u.score, 0) / units.filter((u) => u.score != null).length)
     : null
 
+  const typeOptions = useMemo(
+    () => ['All Types', ...Array.from(new Set(units.map((u) => u.vehicle_type).filter(Boolean))).sort()],
+    [units]
+  )
+  const statusOptions = useMemo(
+    () => ['All Statuses', ...Array.from(new Set(units.map((u) => u.status).filter(Boolean))).sort()],
+    [units]
+  )
+
+  const filteredUnits = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return units.filter((u) => {
+      if (typeFilter !== 'All Types' && u.vehicle_type !== typeFilter) return false
+      if (statusFilter !== 'All Statuses' && u.status !== statusFilter) return false
+      if (!q) return true
+      return (u.plate_number ?? '').toLowerCase().includes(q) || (u.agency_name ?? '').toLowerCase().includes(q)
+    })
+  }, [units, search, typeFilter, statusFilter])
+
   return (
     <div className="portal-page flex flex-col gap-6">
-      <DCPageHeader title="Unit Performance" eyebrow="District Commander" subtitle={district ? `All units assigned to ${district} District.` : 'All units in your district.'} />
+      <DCPageHeader
+        title="Unit Performance"
+        eyebrow="District Commander"
+        subtitle={district ? `All units assigned to ${district} District.` : 'All units in your district.'}
+        action={
+          <button
+            type="button"
+            className="dispatcher-btn-primary inline-flex items-center gap-2"
+            disabled={filteredUnits.length === 0}
+            onClick={() => exportUnitsPDF(filteredUnits, district)}
+          >
+            <Printer size={16} />
+            Print Report
+          </button>
+        }
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <AdminStatCard icon={Car} label="Total Units" value={loading ? '—' : String(units.length)} />
         <AdminStatCard icon={Gauge} label="Avg Performance Score" value={loading ? '—' : (avgScore != null ? `${avgScore}%` : '—')} />
         <AdminStatCard icon={ShieldAlert} label="Units Needing Attention" value={loading ? '—' : String(attention.length)} />
+      </div>
+
+      <div className="flex flex-nowrap items-center gap-2">
+        <div className="relative w-56 shrink-0">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-(--text-muted)" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by plate or agency…"
+            className="dispatcher-input h-8 w-full rounded-full pl-8 pr-3 text-[11px]"
+            style={{ borderRadius: 9999 }}
+          />
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <FilterDropdown
+            label="All Types"
+            value={typeFilter}
+            onChange={setTypeFilter}
+            options={typeOptions.map((t) => ({ value: t, label: t }))}
+          />
+          <FilterDropdown
+            label="All Statuses"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={statusOptions.map((s) => ({ value: s, label: s }))}
+            align="right"
+          />
+        </div>
       </div>
 
       <div className="dispatcher-surface table-scroll">
@@ -97,10 +195,12 @@ export default function DCUnits() {
             {error && !loading && (
               <tr><td colSpan={8} className="py-6 text-center text-[13px]" style={{ color: 'var(--status-critical)' }}>{error}</td></tr>
             )}
-            {!loading && !error && units.length === 0 && (
-              <tr><td colSpan={8} className="py-6 text-center text-[13px] text-(--text-muted)">No units found for this district.</td></tr>
+            {!loading && !error && filteredUnits.length === 0 && (
+              <tr><td colSpan={8} className="py-6 text-center text-[13px] text-(--text-muted)">
+                {units.length === 0 ? 'No units found for this district.' : 'No units match your search/filters.'}
+              </td></tr>
             )}
-            {!loading && !error && units.map((u) => {
+            {!loading && !error && filteredUnits.map((u) => {
               const scoreStyle = u.score != null ? getPerformanceScoreStyle(u.score) : {}
               return (
                 <tr key={u.vehicle_id} className="border-b border-(--border-subtle) last:border-0">

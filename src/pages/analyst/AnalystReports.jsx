@@ -23,10 +23,13 @@ import {
 import AnalystPageHeader from '../../components/analyst/AnalystPageHeader'
 import { useToastStore } from '../../store/toastStore'
 import { getCurrentUser } from '../../utils/authSession'
-import { listReports, generateReport, submitReport } from '../../api/reporting'
+import { listReports, generateReport, submitReport, listDataQuality, getDistrictBenchmark, listModels, getOverrideAnalysis } from '../../api/reporting'
 import { listIncidents } from '../../api/incidents'
 import { listDistricts } from '../../api/districts'
 import { getResponseTimeTarget } from '../../api/admin'
+import { buildPdfHtml, openPdfWindow, sectionHtml } from '../../utils/pdfExport'
+
+const AUDIT_TYPE = 'System Performance Audit'
 
 const CHART_TYPES = [
   { id: 'line', icon: LineChart, label: 'Line' },
@@ -65,7 +68,9 @@ export default function AnalystReports() {
   const [submitting, setSubmitting] = useState(false)
   const [preview, setPreview] = useState(null) // real generated report + computed breakdown/trend
   const [apiReports, setApiReports] = useState([])
+  const [auditRecommendations, setAuditRecommendations] = useState('')
   const reportNameRef = useRef(null)
+  const isAudit = reportType === AUDIT_TYPE
 
   useEffect(() => {
     listDistricts().then(setDistricts).catch(() => {})
@@ -87,7 +92,83 @@ export default function AnalystReports() {
     pushToast({ variant, title: variant === 'error' ? 'Error' : 'Reports', message: msg })
   }
 
+  // A whole-system audit, not a per-district incident report: pulls real
+  // data-quality scores, cross-district benchmarking, AI model health, and
+  // override-outcome analysis, plus the Emergency Planner's most recent
+  // submitted report — so the analyst's recommendations are explicitly
+  // grounded in what the planner already flagged, not written in isolation.
+  async function generateAuditReport() {
+    if (!auditRecommendations.trim()) {
+      showToast('Add your recommendations before generating the audit.', 'error')
+      return
+    }
+    setGenerating(true)
+    try {
+      const [dq, benchmark, models, overrides, plannerReports] = await Promise.all([
+        listDataQuality(), getDistrictBenchmark(30), listModels(), getOverrideAnalysis(),
+        listReports('PLANNER_INSIGHT'),
+      ])
+
+      const latestBySource = Object.values(
+        dq.reduce((acc, r) => {
+          if (!acc[r.source] || new Date(r.checked_at) > new Date(acc[r.source].checked_at)) acc[r.source] = r
+          return acc
+        }, {})
+      )
+      const latestPlanner = [...plannerReports].sort((a, b) => new Date(b.generated_at ?? 0) - new Date(a.generated_at ?? 0))[0]
+
+      const lines = []
+      lines.push('DATA QUALITY')
+      if (latestBySource.length === 0) lines.push('  No data quality checks recorded.')
+      latestBySource.forEach((s) => lines.push(`  ${s.source}: ${Math.round(s.completeness ?? 0)}% complete, ${Math.round(s.accuracy ?? 0)}% accurate`))
+
+      lines.push('', 'CROSS-DISTRICT BENCHMARKING (last 30 days)')
+      if (benchmark.length === 0) lines.push('  No districts with recorded incidents in this window.')
+      const missed = benchmark.filter((b) => !b.target_met)
+      benchmark.forEach((b) => lines.push(`  ${b.district}: avg response ${b.avg_response ?? '—'}m (${b.target_met ? 'met target' : 'MISSED target'}), coverage ${b.coverage_pct}%`))
+      if (missed.length) lines.push(`  -> ${missed.length} of ${benchmark.length} district(s) missed the response-time target.`)
+
+      lines.push('', 'AI MODEL STATUS')
+      models.forEach((m) => lines.push(`  ${m.modelName}: ${m.status}${m.accuracy != null ? `, accuracy ${Math.round(m.accuracy)}%` : ''}`))
+      const inactive = models.filter((m) => m.status !== 'ACTIVE')
+      if (inactive.length) lines.push(`  -> ${inactive.length} model(s) not active.`)
+
+      lines.push('', 'DISPATCHER OVERRIDE PATTERNS')
+      if (overrides.length === 0) lines.push('  No overridden dispatches recorded.')
+      overrides.forEach((o) => lines.push(`  "${o.reason ?? 'No reason recorded'}": ${o.count} case(s), AI-followed avg ${o.avg_response_baseline ?? '—'}m vs overridden avg ${o.avg_response_overridden ?? '—'}m`))
+
+      lines.push('', 'EMERGENCY PLANNER INPUT')
+      if (latestPlanner) {
+        lines.push(`  Most recent Planner Insight report (${latestPlanner.district_name ?? 'All Districts'}, ${latestPlanner.period_start ?? '—'} to ${latestPlanner.period_end ?? '—'}), by ${latestPlanner.generated_by_name ?? 'Unknown'}:`)
+        lines.push(`  "${(latestPlanner.content ?? 'No narrative content submitted.').trim()}"`)
+      } else {
+        lines.push('  No Emergency Planner report has been submitted yet.')
+      }
+
+      lines.push('', 'ANALYST RECOMMENDATIONS')
+      lines.push(`  ${auditRecommendations.trim()}`)
+
+      const content = lines.join('\n')
+
+      const report = await generateReport({
+        report_type: 'SYSTEM_AUDIT',
+        district_id: null,
+        period_start: dateFrom,
+        period_end: dateTo,
+        content,
+      })
+
+      setPreview({ report, isAudit: true, auditContent: content, plannerRef: latestPlanner, districtBreakdown: [], trend: [], withinTargetPct: null, incidentCount: report.total_incidents ?? 0 })
+      showToast('System performance audit generated from real system data.', 'success')
+    } catch {
+      showToast('Failed to generate audit — please try again.', 'error')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
   async function handleGenerate() {
+    if (isAudit) { await generateAuditReport(); return }
     setGenerating(true)
     try {
       const report = await generateReport({
@@ -205,11 +286,31 @@ export default function AnalystReports() {
 
   function exportPDF() {
     if (!preview) { showToast('Generate a report first.'); return }
-    const { report, districtBreakdown, trend, withinTargetPct } = preview
     const currentUser = getCurrentUser()
-    const reportName = reportNameRef.current?.value || 'RESQ Analytics Report'
     const generatorName = currentUser?.full_name || currentUser?.email || 'RESQ Analyst'
     const generatorRole = currentUser?.role ? currentUser.role.replace(/_/g, ' ') : 'Analyst'
+
+    if (preview.isAudit) {
+      openPdfWindow(buildPdfHtml({
+        title: 'System Performance Audit',
+        subtitle: `${dateFrom} → ${dateTo}`,
+        reportType: 'SYSTEM AUDIT',
+        idPrefix: 'AUD',
+        metaItems: [{ label: 'Scope', value: 'All Rwanda' }],
+        kpis: [
+          { label: 'Total Incidents', value: preview.report.total_incidents ?? '—' },
+          { label: 'Avg Response Time', value: preview.report.avg_response_time != null ? `${preview.report.avg_response_time.toFixed(1)}m` : '—' },
+          { label: 'Dispatch Accuracy', value: preview.report.resolution_rate != null ? `${Math.round(preview.report.resolution_rate)}%` : '—' },
+        ],
+        sections: [sectionHtml('Audit Findings & Recommendations', `<div style="font-size:12px;line-height:1.7;color:#333;white-space:pre-wrap">${preview.auditContent.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`)],
+        generatedBy: generatorName,
+        generatedRole: generatorRole,
+      }))
+      return
+    }
+
+    const { report, districtBreakdown, trend, withinTargetPct } = preview
+    const reportName = reportNameRef.current?.value || 'RESQ Analytics Report'
     const reportId = report.report_id ? report.report_id.slice(0, 8).toUpperCase() : 'RPT-DRAFT'
     const now = new Date()
     const rnpLogoUrl = window.location.origin + '/Rwanda_National_Police.png'
@@ -370,8 +471,16 @@ export default function AnalystReports() {
                   <option>Unit & Officer Performance</option>
                   <option>Cross-District Comparison</option>
                   <option>Executive Summary</option>
+                  <option>{AUDIT_TYPE}</option>
                 </select>
               </label>
+              {isAudit && (
+                <p className="text-[11px] text-(--text-muted) m-0">
+                  Audits real data quality, cross-district benchmarking, AI model health, and override patterns —
+                  and folds in the Emergency Planner's most recent submitted report so your recommendations respond
+                  to what they already flagged.
+                </p>
+              )}
             </div>
 
             <div className="flex flex-col gap-2 pb-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -399,46 +508,61 @@ export default function AnalystReports() {
               </div>
             </div>
 
-            <div className="pb-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-              <label className="dispatcher-field">
-                <span className="text-[12px] font-semibold text-(--text-secondary)">Geographic scope</span>
-                <select
-                  className="dispatcher-input dispatcher-select h-10"
-                  value={scopeDistrictId}
-                  onChange={(e) => setScopeDistrictId(e.target.value)}
-                >
-                  <option value="">All Rwanda</option>
-                  {districts.map((d) => (
-                    <option key={d.district_id} value={d.district_id}>{d.name}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <span className="text-[12px] font-semibold text-(--text-secondary)">Chart type</span>
-              <div className="grid grid-cols-3 gap-2">
-                {CHART_TYPES.map((c) => {
-                  const Icon = c.icon
-                  return (
-                    <button
-                      key={c.id}
-                      type="button"
-                      title={c.label}
-                      className="h-10 rounded-lg border flex items-center justify-center cursor-pointer"
-                      style={{
-                        borderColor: chartType === c.id ? 'var(--accent)' : 'var(--border)',
-                        background: chartType === c.id ? 'var(--accent-ghost)' : 'var(--bg-elevated)',
-                        color: chartType === c.id ? 'var(--accent)' : 'var(--text-secondary)',
-                      }}
-                      onClick={() => setChartType(c.id)}
-                    >
-                      <Icon size={18} />
-                    </button>
-                  )
-                })}
+            {!isAudit && (
+              <div className="pb-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                <label className="dispatcher-field">
+                  <span className="text-[12px] font-semibold text-(--text-secondary)">Geographic scope</span>
+                  <select
+                    className="dispatcher-input dispatcher-select h-10"
+                    value={scopeDistrictId}
+                    onChange={(e) => setScopeDistrictId(e.target.value)}
+                  >
+                    <option value="">All Rwanda</option>
+                    {districts.map((d) => (
+                      <option key={d.district_id} value={d.district_id}>{d.name}</option>
+                    ))}
+                  </select>
+                </label>
               </div>
-            </div>
+            )}
+
+            {isAudit ? (
+              <label className="dispatcher-field">
+                <span className="text-[12px] font-semibold text-(--text-secondary)">Your recommendations</span>
+                <textarea
+                  className="dispatcher-input dispatcher-text-input"
+                  rows={6}
+                  placeholder="What should change, based on the data quality, benchmarking, AI model, and planner findings above?"
+                  value={auditRecommendations}
+                  onChange={(e) => setAuditRecommendations(e.target.value)}
+                />
+              </label>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <span className="text-[12px] font-semibold text-(--text-secondary)">Chart type</span>
+                <div className="grid grid-cols-3 gap-2">
+                  {CHART_TYPES.map((c) => {
+                    const Icon = c.icon
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        title={c.label}
+                        className="h-10 rounded-lg border flex items-center justify-center cursor-pointer"
+                        style={{
+                          borderColor: chartType === c.id ? 'var(--accent)' : 'var(--border)',
+                          background: chartType === c.id ? 'var(--accent-ghost)' : 'var(--bg-elevated)',
+                          color: chartType === c.id ? 'var(--accent)' : 'var(--text-secondary)',
+                        }}
+                        onClick={() => setChartType(c.id)}
+                      >
+                        <Icon size={18} />
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             <button
               type="button"
@@ -482,63 +606,72 @@ export default function AnalystReports() {
                 ))}
               </div>
 
-              <div className="dispatcher-surface p-4 mb-6">
-                <h3 className="text-[13px] font-semibold m-0 mb-3">Response Time Trend</h3>
-                {trend.length === 0 ? (
-                  <p className="text-[12px] text-(--text-muted) m-0">No incidents with a recorded response time in this period.</p>
-                ) : chartType === 'table' ? (
-                  <table className="w-full text-[12px] border-collapse">
-                    <thead><tr className="text-(--text-secondary) font-bold text-left"><th className="p-2">Day</th><th className="p-2">Avg Response</th></tr></thead>
-                    <tbody>{trend.map((t) => <tr key={t.day} className="border-t border-(--border-subtle)"><td className="p-2">{t.day}</td><td className="p-2 font-mono">{t.avg}m</td></tr>)}</tbody>
-                  </table>
-                ) : (
-                  <ResponsiveContainer width="100%" height={240}>
-                    {chartType === 'bar' ? (
-                      <ReBarChart data={trend}>
-                        <CartesianGrid stroke="var(--border-subtle)" />
-                        <XAxis dataKey="day" tick={{ fontSize: 10 }} />
-                        <YAxis tick={{ fontSize: 10 }} unit="m" />
-                        <Tooltip />
-                        <ReferenceLine y={targetMinutes} stroke="var(--status-critical)" strokeDasharray="4 4" label="Target" />
-                        <Bar dataKey="avg" fill="var(--accent)" radius={[2, 2, 0, 0]} />
-                      </ReBarChart>
+              {preview.isAudit ? (
+                <div className="dispatcher-surface p-4 mb-6">
+                  <h3 className="text-[13px] font-semibold m-0 mb-3">Audit Findings</h3>
+                  <pre className="text-[12px] leading-relaxed whitespace-pre-wrap m-0" style={{ fontFamily: 'inherit' }}>{preview.auditContent}</pre>
+                </div>
+              ) : (
+                <>
+                  <div className="dispatcher-surface p-4 mb-6">
+                    <h3 className="text-[13px] font-semibold m-0 mb-3">Response Time Trend</h3>
+                    {trend.length === 0 ? (
+                      <p className="text-[12px] text-(--text-muted) m-0">No incidents with a recorded response time in this period.</p>
+                    ) : chartType === 'table' ? (
+                      <table className="w-full text-[12px] border-collapse">
+                        <thead><tr className="text-(--text-secondary) font-bold text-left"><th className="p-2">Day</th><th className="p-2">Avg Response</th></tr></thead>
+                        <tbody>{trend.map((t) => <tr key={t.day} className="border-t border-(--border-subtle)"><td className="p-2">{t.day}</td><td className="p-2 font-mono">{t.avg}m</td></tr>)}</tbody>
+                      </table>
                     ) : (
-                      <ReLineChart data={trend}>
-                        <CartesianGrid stroke="var(--border-subtle)" />
-                        <XAxis dataKey="day" tick={{ fontSize: 10 }} />
-                        <YAxis tick={{ fontSize: 10 }} unit="m" />
-                        <Tooltip />
-                        <ReferenceLine y={targetMinutes} stroke="var(--status-critical)" strokeDasharray="4 4" label="Target" />
-                        <Line type="monotone" dataKey="avg" stroke="var(--accent)" dot={false} strokeWidth={2} />
-                      </ReLineChart>
+                      <ResponsiveContainer width="100%" height={240}>
+                        {chartType === 'bar' ? (
+                          <ReBarChart data={trend}>
+                            <CartesianGrid stroke="var(--border-subtle)" />
+                            <XAxis dataKey="day" tick={{ fontSize: 10 }} />
+                            <YAxis tick={{ fontSize: 10 }} unit="m" />
+                            <Tooltip />
+                            <ReferenceLine y={targetMinutes} stroke="var(--status-critical)" strokeDasharray="4 4" label="Target" />
+                            <Bar dataKey="avg" fill="var(--accent)" radius={[2, 2, 0, 0]} />
+                          </ReBarChart>
+                        ) : (
+                          <ReLineChart data={trend}>
+                            <CartesianGrid stroke="var(--border-subtle)" />
+                            <XAxis dataKey="day" tick={{ fontSize: 10 }} />
+                            <YAxis tick={{ fontSize: 10 }} unit="m" />
+                            <Tooltip />
+                            <ReferenceLine y={targetMinutes} stroke="var(--status-critical)" strokeDasharray="4 4" label="Target" />
+                            <Line type="monotone" dataKey="avg" stroke="var(--accent)" dot={false} strokeWidth={2} />
+                          </ReLineChart>
+                        )}
+                      </ResponsiveContainer>
                     )}
-                  </ResponsiveContainer>
-                )}
-              </div>
+                  </div>
 
-              <div className="dispatcher-surface overflow-x-auto mb-6">
-                <table className="w-full text-[12px] border-collapse min-w-[420px]">
-                  <thead>
-                    <tr className="border-b border-(--border) text-(--text-secondary) font-bold">
-                      <th className="text-left p-3">District</th>
-                      <th className="text-left p-3">Avg Response</th>
-                      <th className="text-left p-3">Incident Count</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {districtBreakdown.length === 0 && (
-                      <tr><td colSpan={3} className="p-4 text-center text-(--text-muted)">No incidents in this period.</td></tr>
-                    )}
-                    {districtBreakdown.map((row) => (
-                      <tr key={row.district} className="border-b border-(--border-subtle) dispatcher-table-row">
-                        <td className="p-3 font-medium">{row.district}</td>
-                        <td className="p-3 font-mono">{row.avgResponse != null ? `${row.avgResponse.toFixed(1)}m` : '—'}</td>
-                        <td className="p-3 font-mono">{row.count}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  <div className="dispatcher-surface overflow-x-auto mb-6">
+                    <table className="w-full text-[12px] border-collapse min-w-[420px]">
+                      <thead>
+                        <tr className="border-b border-(--border) text-(--text-secondary) font-bold">
+                          <th className="text-left p-3">District</th>
+                          <th className="text-left p-3">Avg Response</th>
+                          <th className="text-left p-3">Incident Count</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {districtBreakdown.length === 0 && (
+                          <tr><td colSpan={3} className="p-4 text-center text-(--text-muted)">No incidents in this period.</td></tr>
+                        )}
+                        {districtBreakdown.map((row) => (
+                          <tr key={row.district} className="border-b border-(--border-subtle) dispatcher-table-row">
+                            <td className="p-3 font-medium">{row.district}</td>
+                            <td className="p-3 font-mono">{row.avgResponse != null ? `${row.avgResponse.toFixed(1)}m` : '—'}</td>
+                            <td className="p-3 font-mono">{row.count}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>

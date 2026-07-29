@@ -14,6 +14,7 @@ import {
   Truck,
   Building2,
   MapPin,
+  FileBarChart,
 } from 'lucide-react'
 import SidebarToggle from './SidebarToggle'
 import { useSidebarClasses } from '../../hooks/useSidebarClasses'
@@ -48,6 +49,7 @@ const SYSTEM = [
   { icon: Truck,           label: 'Units',           href: '/admin/units' },
   { icon: Building2,       label: 'Agencies',        href: '/admin/agencies' },
   { icon: MapPin,          label: 'Stations',        href: '/admin/stations' },
+  { icon: FileBarChart,    label: 'Reports',         href: '/admin/reports' },
   { icon: Plug,            label: 'Integrations',    href: '/admin/integrations' },
 ]
 

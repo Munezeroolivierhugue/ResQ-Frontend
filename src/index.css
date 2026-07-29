@@ -3320,7 +3320,13 @@ a[href*="recover"]:hover {
   z-index: 40;
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border-subtle);
-  display: flex;
+  /* Was flex + an absolutely-positioned, viewport-centered title — that
+     ignored how wide the brand/actions actually were, so on a narrow phone
+     the title could still sit under the officer's name badge. A 3-column
+     grid gives the title its own track that shrinks to fit whatever space
+     is left, so it can never overlap the other two columns by construction. */
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
   padding: 0 1rem;
   border-radius: 40px 40px 0 0;
@@ -3333,10 +3339,12 @@ a[href*="recover"]:hover {
 }
 
 .fr-topbar-brand {
+  grid-column: 1;
   display: flex;
   align-items: center;
   gap: 0.35rem;
   z-index: 1;
+  min-width: 0;
 }
 
 .fr-topbar-logo {
@@ -3347,28 +3355,40 @@ a[href*="recover"]:hover {
 }
 
 .fr-topbar-title {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  grid-column: 2;
+  justify-self: center;
+  min-width: 0;
+  max-width: 100%;
   margin: 0;
   font-weight: 600;
   font-size: 13px;
   color: var(--text-primary);
   pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .fr-topbar-actions {
-  margin-left: auto;
+  grid-column: 3;
   display: flex;
   align-items: center;
   gap: 0.65rem;
   z-index: 1;
+  min-width: 0;
 }
 
 .fr-topbar-badge {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-muted);
+  /* Was unbounded — a longer officer name grew freely leftward, past the
+     absolutely-centered title, causing the overlap this class exists to
+     prevent now. */
+  max-width: 72px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .fr-topbar-bell {
@@ -3402,8 +3422,13 @@ a[href*="recover"]:hover {
   margin-top: auto;
   flex-shrink: 0;
   width: 100%;
-  height: calc(60px + env(safe-area-inset-bottom, 0px));
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  /* env(safe-area-inset-bottom) reports 0 in Chrome's desktop device
+     emulator regardless of the simulated device (a DevTools limitation, not
+     something fixable via CSS alone) — max() keeps a sane floor so the nav
+     never sits flush against the edge there, while still respecting a real,
+     larger inset on an actual notched phone. */
+  height: calc(60px + max(10px, env(safe-area-inset-bottom, 0px)));
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
   z-index: 50;
   background: var(--bg-surface);
   border-top: 1px solid var(--border-subtle);

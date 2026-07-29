@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import AuthSplitLayout from "../../components/auth/AuthSplitLayout";
 import {
@@ -13,6 +13,15 @@ import { login } from "../../api/auth";
 
 export default function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // MfaSetup.jsx sends unauthenticated visitors here with ?redirect=/mfa-setup
+  // (e.g. clicking the "Send Setup Reminder" email while logged out) — without
+  // this, a successful login always landed on the role's default dashboard,
+  // silently dropping the original intent to go set up MFA. Only accept a
+  // same-origin relative path (starts with "/", not "//") to avoid an open
+  // redirect via this param.
+  const redirectTo = searchParams.get("redirect");
+  const safeRedirect = redirectTo && redirectTo.startsWith("/") && !redirectTo.startsWith("//") ? redirectTo : null;
   const [email, setEmail] = useState(
     () => sessionStorage.getItem("resq-login-email") || "",
   );
@@ -63,7 +72,11 @@ export default function Login() {
           SUPER_ADMIN: "super_admin",
         };
         const mapped = roleMap[role] ?? role.toLowerCase();
-        navigatePortal(mapped, navigate);
+        if (safeRedirect) {
+          navigate(safeRedirect, { replace: true });
+        } else {
+          navigatePortal(mapped, navigate);
+        }
       } else {
         navigate("/login/mfa");
       }

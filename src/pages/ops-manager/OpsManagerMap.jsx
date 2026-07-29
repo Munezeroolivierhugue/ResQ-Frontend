@@ -95,6 +95,11 @@ export default function OpsManagerMap() {
   const [broadcastOpen, setBroadcastOpen] = useState(false)
   const [broadcastMsg, setBroadcastMsg] = useState('')
   const [broadcastPriority, setBroadcastPriority] = useState('NORMAL')
+  // Was previously not asked at all — a broadcast stayed visible to field
+  // units forever regardless of how stale the situation got. 4h default is a
+  // reasonable "still relevant today" window without the sender having to
+  // think about it, but it's always an explicit, visible choice now.
+  const [broadcastDuration, setBroadcastDuration] = useState(240)
 
   const toggleLayer = (name) => {
     setLayers((prev) => ({ ...prev, [name]: !prev[name] }))
@@ -116,9 +121,11 @@ export default function OpsManagerMap() {
         message: broadcastMsg,
         priority: broadcastPriority,
         target_area: getCurrentUser()?.district_name ?? 'ALL_UNITS',
+        duration_minutes: broadcastDuration,
       })
       setBroadcastMsg('')
       setBroadcastPriority('NORMAL')
+      setBroadcastDuration(240)
       setBroadcastOpen(false)
     } catch {
       setBroadcastError('Could not send broadcast — check your connection and try again.')
@@ -244,6 +251,21 @@ export default function OpsManagerMap() {
               <option value="NORMAL">Normal</option>
               <option value="URGENT">Urgent</option>
               <option value="EMERGENCY">Emergency</option>
+            </select>
+          </label>
+          <label className="dispatcher-field min-w-[130px]">
+            <span className="field-label">Lasts</span>
+            <select
+              className="dispatcher-input dispatcher-select"
+              value={broadcastDuration}
+              onChange={(e) => setBroadcastDuration(Number(e.target.value))}
+            >
+              <option value={30}>30 minutes</option>
+              <option value={60}>1 hour</option>
+              <option value={240}>4 hours</option>
+              <option value={720}>12 hours</option>
+              <option value={1440}>24 hours</option>
+              <option value={4320}>3 days</option>
             </select>
           </label>
           <label className="dispatcher-field flex-1 min-w-[200px]">

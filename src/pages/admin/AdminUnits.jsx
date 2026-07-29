@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Upload, Download, X, Search } from 'lucide-react'
+import { Plus, Upload, Download, X, Search, Pencil } from 'lucide-react'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import FilterDropdown from '../../components/admin/FilterDropdown'
@@ -395,9 +395,9 @@ export default function AdminUnits() {
                   <span className="ml-1.5 text-(--text-muted)">{u.online ? 'Online' : 'Offline'}</span>
                 </td>
                 <td className="py-3 px-3">
-                  <button type="button" className="dispatcher-btn-ghost text-[11px]"
+                  <button type="button" className="dispatcher-btn-icon" title="Edit unit details"
                     onClick={() => setModal(u)}>
-                    Edit
+                    <Pencil size={14} />
                   </button>
                 </td>
               </tr>

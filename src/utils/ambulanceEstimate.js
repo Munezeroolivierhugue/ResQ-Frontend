@@ -34,18 +34,16 @@ const TYPE_CONFIG = {
     countMap: { '1': 1, '2–3': 3, '4 or more': 4 },
   },
   RTA: {
-    // RTA has no direct "how many people" question — injury severity is the
-    // best available proxy for how many casualties need transport.
-    countQuestion: 'Q_RTA_INJURIES',
-    countMap: { 'Multiple severe': 3, 'One severe': 1, 'Minor only': 1, 'None visible': 0 },
+    countQuestion: 'Q_RTA_PEOPLE',
+    countMap: { '1': 1, '2–3': 3, '4 or more': 4 },
   },
   FIRE: {
-    countQuestion: 'Q_FIR_CASUALTIES',
-    countMap: { 'Multiple': 3, 'One': 1, 'None': 0 },
+    countQuestion: 'Q_FIR_PEOPLE',
+    countMap: { '1': 1, '2–3': 3, '4 or more': 4 },
   },
   SECURITY: {
-    countQuestion: 'Q_SEC_CASUALTIES',
-    countMap: { 'Multiple': 3, 'One': 1, 'None': 0 },
+    countQuestion: 'Q_SEC_PEOPLE',
+    countMap: { '1': 1, '2–3': 3, '4 or more': 4 },
   },
   DISASTER: {
     countQuestion: 'Q_DIS_SCALE',

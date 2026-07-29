@@ -74,6 +74,16 @@ export const useNotificationsStore = create((set, get) => ({
     // connect() is idempotent — safe to call multiple times.
     connect(token)
 
+    // Backend uses Spring's SimpleBroker (in-memory, no queue/replay) — a
+    // push that arrives while this client's WS happens to be disconnected
+    // or reconnecting (tab backgrounded, brief network blip, page still
+    // loading) is dropped permanently with no way to redeliver it. The only
+    // full re-sync with the DB was the one-time fetch on mount, so a missed
+    // push stayed missed until the user manually reloaded the page. This
+    // poll is a self-healing safety net: even if a live push is lost, the
+    // list is never more than ~45s stale without any user action.
+    const pollId = setInterval(() => { get().fetchNotifications() }, 45_000)
+
     const unsub = subscribe('/user/queue/notifications', (payload) => {
       const referenceId = payload.referenceId ?? payload.incidentId ?? null
       get().addNotification({
@@ -95,6 +105,6 @@ export const useNotificationsStore = create((set, get) => ({
       // pre-existing unread notification on page load.
       playNotificationSound(payload.priority)
     })
-    return unsub
+    return () => { clearInterval(pollId); unsub() }
   },
 }))

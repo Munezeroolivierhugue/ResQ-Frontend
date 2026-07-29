@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { MapPin, Plus, Upload, Download, X, Search, Trash2 } from 'lucide-react'
+import { MapPin, Plus, Upload, Download, X, Search, Trash2, Pencil } from 'lucide-react'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import FilterDropdown from '../../components/admin/FilterDropdown'
 import AdminPagination from '../../components/admin/AdminPagination'
@@ -325,19 +325,18 @@ export default function AdminStations() {
               <th className="py-2 px-3 font-bold">Station</th>
               <th className="py-2 px-3 font-bold">District</th>
               <th className="py-2 px-3 font-bold">Agency</th>
-              <th className="py-2 px-3 font-bold">Address</th>
               <th className="py-2 px-3 font-bold">Action</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={5} className="py-8 text-center text-(--text-muted)">Loading stations…</td></tr>
+              <tr><td colSpan={4} className="py-8 text-center text-(--text-muted)">Loading stations…</td></tr>
             )}
             {error && !loading && (
-              <tr><td colSpan={5} className="py-8 text-center" style={{ color: 'var(--status-critical)' }}>{error}</td></tr>
+              <tr><td colSpan={4} className="py-8 text-center" style={{ color: 'var(--status-critical)' }}>{error}</td></tr>
             )}
             {!loading && !error && displayed.length === 0 && (
-              <tr><td colSpan={5} className="py-8 text-center text-(--text-muted)">No stations found.</td></tr>
+              <tr><td colSpan={4} className="py-8 text-center text-(--text-muted)">No stations found.</td></tr>
             )}
             {!loading && !error && displayed.map((s) => (
               <tr key={s.station_id} className="border-b border-(--border-subtle) last:border-0 dispatcher-table-row">
@@ -352,12 +351,11 @@ export default function AdminStations() {
                 </td>
                 <td className="py-3 px-3">{districtName(s.district_id) ?? '—'}</td>
                 <td className="py-3 px-3">{agencyName(s.agency_id) ?? '—'}</td>
-                <td className="py-3 px-3">{s.address ?? '—'}</td>
                 <td className="py-3 px-3">
                   <div className="flex gap-2">
-                    <button type="button" className="dispatcher-btn-ghost text-[11px]"
+                    <button type="button" className="dispatcher-btn-icon" title="Edit station details"
                       onClick={() => setModal(s)}>
-                      Edit
+                      <Pencil size={14} />
                     </button>
                     <button type="button" className="dispatcher-btn-icon" style={{ color: 'var(--status-critical)' }}
                       title="Delete station" onClick={() => setDeleteTarget(s)}>

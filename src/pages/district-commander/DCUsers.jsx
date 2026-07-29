@@ -64,6 +64,18 @@ function EditUserModal({ user, vehicles, onClose, onSaved }) {
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
   const isFR = user.role === 'FIELD_RESPONDER'
 
+  // Same filtering as Admin's field-responder edit form: only offer units
+  // not already held by a different responder — this list previously showed
+  // every vehicle in the district regardless of whether someone else was
+  // already assigned to it. The responder's own current vehicle stays
+  // selectable so re-saving without changing it doesn't silently unassign it.
+  const availableVehicles = useMemo(() =>
+    vehicles.filter((v) =>
+      !v.assigned_responder_id || v.assigned_responder_id === user.user_id || v.vehicle_id === form.vehicleId
+    ),
+    [vehicles, form.vehicleId, user.user_id]
+  )
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!form.fullName.trim()) { setError('Full name is required.'); return }
@@ -132,7 +144,7 @@ function EditUserModal({ user, vehicles, onClose, onSaved }) {
               <select className="dispatcher-input dispatcher-select text-[13px] h-9" value={form.vehicleId}
                 onChange={(e) => set('vehicleId', e.target.value)}>
                 <option value="">— No vehicle —</option>
-                {vehicles.map((v) => (
+                {availableVehicles.map((v) => (
                   <option key={v.vehicle_id} value={v.vehicle_id}>
                     {v.plate_number} · {v.vehicle_type?.replace(/_/g, ' ')}
                   </option>

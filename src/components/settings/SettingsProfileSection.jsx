@@ -45,6 +45,7 @@ export default function SettingsProfileSection({
   stationAdminNote = "Assigned by administrator · contact ops manager to change",
   onUserLoaded,
   showShift = true,
+  showDutyStatus = true,
 }) {
   const sessionUser = getCurrentUser();
   const userId = sessionUser?.user_id;
@@ -286,7 +287,7 @@ export default function SettingsProfileSection({
           </p>
         </div>
         <div className="flex flex-col items-end gap-2 shrink-0">
-          <DutyStatusPill duty={duty} />
+          {showDutyStatus && <DutyStatusPill duty={duty} />}
           <button
             type="button"
             className="dispatcher-btn-ghost text-[12px] flex items-center gap-1.5 py-1.5 px-2.5"

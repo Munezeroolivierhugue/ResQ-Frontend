@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Building2, Plus, Upload, Download, X, Search } from 'lucide-react'
+import { Building2, Plus, Upload, Download, X, Search, Pencil } from 'lucide-react'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
 import FilterDropdown from '../../components/admin/FilterDropdown'
 import AdminPagination from '../../components/admin/AdminPagination'
@@ -266,9 +266,9 @@ export default function AdminAgencies() {
                 <td className="py-3 px-3">{a.email ?? '—'}</td>
                 <td className="py-3 px-3">{a.phone ?? '—'}</td>
                 <td className="py-3 px-3">
-                  <button type="button" className="dispatcher-btn-ghost text-[11px]"
+                  <button type="button" className="dispatcher-btn-icon" title="Edit agency details"
                     onClick={() => setModal(a)}>
-                    Edit
+                    <Pencil size={14} />
                   </button>
                 </td>
               </tr>

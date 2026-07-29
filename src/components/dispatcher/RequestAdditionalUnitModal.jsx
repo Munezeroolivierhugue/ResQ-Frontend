@@ -1,9 +1,24 @@
 import { useState } from 'react'
 import { X, Send, Plus } from 'lucide-react'
 
+// Values must match the real vehicle_type strings the backend does an exact
+// (underscore-insensitive) match against — see MutualAidService.matchesUnitType().
+// This previously sent human labels like "Fire Engine"/"Heavy Rescue"/"Police
+// Unit" as the actual unitType value, none of which match any real vehicle's
+// type ("FIRE_TRUCK"/"DISASTER_UNIT"/"POLICE_CAR"), so those three requests
+// could never surface a matching unit from any district no matter what was
+// actually available — only "Ambulance" happened to coincidentally match.
+const UNIT_TYPES = [
+  { value: 'AMBULANCE', label: 'Ambulance' },
+  { value: 'FIRE_TRUCK', label: 'Fire Engine' },
+  { value: 'POLICE_CAR', label: 'Police Unit' },
+  { value: 'TACTICAL', label: 'Tactical / SWAT Unit' },
+  { value: 'DISASTER_UNIT', label: 'Heavy Rescue' },
+]
+
 export default function RequestAdditionalUnitModal({ isOpen, onClose, onSubmit, submitting, error }) {
   const [form, setForm] = useState({
-    unitType: 'Ambulance',
+    unitType: 'AMBULANCE',
     urgency: 'Immediate',
     reason: '',
   })
@@ -52,10 +67,7 @@ export default function RequestAdditionalUnitModal({ isOpen, onClose, onSubmit, 
               value={form.unitType}
               onChange={(e) => setForm(f => ({ ...f, unitType: e.target.value }))}
             >
-              <option>Ambulance</option>
-              <option>Fire Engine</option>
-              <option>Heavy Rescue</option>
-              <option>Police Unit</option>
+              {UNIT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>
 

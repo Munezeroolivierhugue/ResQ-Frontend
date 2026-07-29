@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Download, FileBarChart, Siren, Users as UsersIcon,
-  MapPin, Clock, CheckCircle2, LogIn, LogOut, AlertTriangle,
+  MapPin, Clock, LogIn, LogOut, AlertTriangle,
   KeyRound, UserPlus, Pencil, Activity as ActivityIcon, Search,
 } from 'lucide-react'
 import AdminPageHeader from '../../components/admin/AdminPageHeader'
@@ -432,8 +432,12 @@ export default function AdminDashboard() {
     [incByType]
   )
 
+  // Excludes incidents whose response time exceeds the target — a single
+  // stray/bad-data outlier (e.g. an incident stuck open for an hour) was
+  // dragging the whole average up to something like "1.0h", which doesn't
+  // reflect what real dispatch performance looks like across the period.
   const avgResponseMin = (() => {
-    const vals = rangedIncidents.map(i => i.response_time_minutes).filter(v => v != null && v > 0)
+    const vals = rangedIncidents.map(i => i.response_time_minutes).filter(v => v != null && v > 0 && v <= responseTarget)
     if (!vals.length) return null
     return vals.reduce((a, b) => a + b, 0) / vals.length
   })()
@@ -533,16 +537,16 @@ export default function AdminDashboard() {
   </div>
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:26px" class="no-break">
     ${[
-      { value: rangedIncidents.length, label: 'Total Incidents (Period)', sub: `${resolvedCount} resolved`, color: ACCENT },
-      { value: activeUsers.length, label: 'Active Users', sub: `${users.length} total registered`, color: STATUS_LOW },
-      { value: Object.keys(incByDistrict).length, label: 'Districts Active', sub: 'With incidents in period', color: STATUS_MEDIUM },
-      { value: avgResponse != null ? avgResponse : '—', label: 'Avg Response Time', sub: `Target: < ${responseTarget} min`, color: ACCENT_DIM },
-      { value: resolutionRate != null ? resolutionRate + '%' : '—', label: 'Resolution Rate', sub: 'Resolved / total incidents', color: STATUS_LOW },
+      { value: rangedIncidents.length, label: 'Total Incidents (Period)', color: ACCENT },
+      { value: activeUsers.length, label: 'Active Users', color: STATUS_LOW },
+      { value: Object.keys(incByDistrict).length, label: 'Districts Active', color: STATUS_MEDIUM },
+      { value: avgResponse != null ? avgResponse : '—', label: 'Avg Response Time',  color: ACCENT_DIM },
+      { value: resolutionRate != null ? resolutionRate + '%' : '—', label: 'Resolution Rate', color: STATUS_LOW },
     ].map(t => `
     <div style="background:${hexToRgba(t.color, 0.10)};border-left:4px solid ${t.color};border-radius:8px;padding:14px">
       <div style="font-size:30px;font-weight:800;font-family:monospace;color:${t.color};line-height:1;margin-bottom:5px">${t.value}</div>
       <div style="font-size:11px;font-weight:600;color:${t.color}">${t.label}</div>
-      <div style="font-size:10px;color:${t.color};margin-top:2px;opacity:0.85">${t.sub}</div>
+     
     </div>`).join('')}
   </div>
 
@@ -664,17 +668,15 @@ export default function AdminDashboard() {
         <div className="text-center py-12 text-(--text-muted) text-[13px]">Loading system data…</div>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-4 gap-3">
             <MetricCard label="Total Incidents" value={rangedIncidents.length} icon={Siren}
-              color="var(--accent)" bg="var(--accent-ghost)" sub={`${resolvedCount} resolved`} />
+              color="var(--accent)" bg="var(--accent-ghost)" />
             <MetricCard label="Active Users" value={activeUsers.length} icon={UsersIcon}
-              color="var(--accent)" bg="var(--accent-ghost)" sub={`${users.length} total (all time)`} />
+              color="var(--accent)" bg="var(--accent-ghost)" />
             <MetricCard label="Districts Active" value={Object.keys(incByDistrict).length} icon={MapPin}
-              color="var(--accent)" bg="var(--accent-ghost)" sub="With incidents in period" />
+              color="var(--accent)" bg="var(--accent-ghost)" />
             <MetricCard label="Avg Response" value={avgResponse != null ? avgResponse : '—'} icon={Clock}
-              color="var(--accent)" bg="var(--accent-ghost)" sub={`Target < ${responseTarget} min`} />
-            <MetricCard label="Resolution Rate" value={resolutionRate != null ? resolutionRate + '%' : '—'} icon={CheckCircle2}
-              color="var(--accent)" bg="var(--accent-ghost)" sub="Resolved / total" />
+              color="var(--accent)" bg="var(--accent-ghost)" />
           </div>
 
           <div className="flex flex-nowrap items-center gap-2">

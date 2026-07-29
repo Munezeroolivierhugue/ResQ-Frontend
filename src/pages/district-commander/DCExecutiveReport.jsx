@@ -1,16 +1,38 @@
 import { useState, useEffect } from 'react'
 import { Download, Send, Check, Siren, Clock, CheckCircle2, Car, MapPin } from 'lucide-react'
-import { buildPdfHtml, openPdfWindow, sectionHtml } from '../../utils/pdfExport'
+import { buildPdfHtml, openPdfWindow, sectionHtml, tableHtml } from '../../utils/pdfExport'
 
-function exportPDF({ periodLabel, periodStart, periodEnd, districtName, draftReport, assessment, recommendations, generatedBy, slaTargetMinutes }) {
+// Incident Analysis and Significant Events were already computed and shown
+// on-screen but never actually made it into the printed report — only the
+// KPI cards and (when filled in) the assessment/recommendations text did.
+function exportPDF({ periodLabel, periodStart, periodEnd, districtName, draftReport, assessment, recommendations, generatedBy, slaTargetMinutes, incidentTypeBreakdown, significantEvents }) {
   const fmtTime = (v) => v != null ? `${Number(v).toFixed(1)} min` : '—'
   const fmtRate = (v) => v != null ? `${Math.round(v * 100)}%` : '—'
+  const esc = (s) => (s ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
   const sections = []
+
+  if (incidentTypeBreakdown?.length) {
+    sections.push(sectionHtml('Incident Analysis', tableHtml(
+      ['Type', 'Count', 'Avg Response', 'Resolution Rate'],
+      incidentTypeBreakdown.map((row) => [row.type, row.count, row.avgResponse, row.resolution]),
+    )))
+  }
+
+  if (significantEvents?.length) {
+    const eventsList = significantEvents.map((ev) =>
+      `<div style="padding:8px 0;border-bottom:1px solid #f1f5f9">
+        <span style="font-family:monospace;font-size:11px;color:${'#879D1F'};margin-right:8px">${esc(ev.date)}</span>
+        <span style="font-size:12px;color:#333">${esc(ev.text)}</span>
+      </div>`
+    ).join('')
+    sections.push(sectionHtml('Significant Events', `<div>${eventsList}</div>`))
+  }
+
   if (assessment?.trim())
-    sections.push(sectionHtml('Strategic Assessment', `<div style="font-size:12px;line-height:1.7;color:#333;white-space:pre-wrap">${assessment.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`))
+    sections.push(sectionHtml('Strategic Assessment', `<div style="font-size:12px;line-height:1.7;color:#333;white-space:pre-wrap">${esc(assessment)}</div>`))
   if (recommendations?.trim())
-    sections.push(sectionHtml('Recommendations', `<div style="font-size:12px;line-height:1.7;color:#333;white-space:pre-wrap">${recommendations.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`))
+    sections.push(sectionHtml('Recommendations', `<div style="font-size:12px;line-height:1.7;color:#333;white-space:pre-wrap">${esc(recommendations)}</div>`))
 
   openPdfWindow(buildPdfHtml({
     title: 'District Executive Report',
@@ -168,9 +190,6 @@ export default function DCExecutiveReport() {
     return { total, avgResponse, resolutionRate }
   })()
 
-  const assessmentOk = assessment.trim().length >= 50
-  const recommendationsOk = recommendations.trim().length >= 50
-
   const handleSubmit = async () => {
     setSubmitting(true)
     try {
@@ -182,6 +201,10 @@ export default function DCExecutiveReport() {
         district_id: districtId,
         period_start: periodStart,
         period_end: periodEnd,
+        // Was written by the DC but previously never actually sent — the
+        // analyst reading this report had no way to see the assessment or
+        // recommendations at all, even after a "successful" submission.
+        content: [assessment.trim(), recommendations.trim()].filter(Boolean).join('\n\n---\n\n'),
       })
       setDraftReport(report)
       await submitReport(report.report_id)
@@ -195,7 +218,7 @@ export default function DCExecutiveReport() {
     }
   }
 
-  const canSubmit = assessmentOk && recommendationsOk && !submitted && !submitting
+  const canSubmit = !submitted && !submitting
 
   return (
     <div className="portal-page">
@@ -252,6 +275,8 @@ export default function DCExecutiveReport() {
                     recommendations,
                     generatedBy: cu?.fullName || 'District Commander',
                     slaTargetMinutes,
+                    incidentTypeBreakdown,
+                    significantEvents,
                   })
                 }}>
                 <Download size={14} />
@@ -338,7 +363,7 @@ export default function DCExecutiveReport() {
 
           <section className="dispatcher-surface p-4">
             <label className="dispatcher-field ">
-              <span className="field-label " style={{ fontSize: '12px', color: 'var(--text-primary)', fontFamily: 'var(--font-body)' }}>Your strategic assessment (required)</span>
+              <span className="field-label " style={{ fontSize: '12px', color: 'var(--text-primary)', fontFamily: 'var(--font-body)' }}>Your strategic assessment</span>
               <textarea
                 className="dispatcher-input dispatcher-textarea"
                 style={{ minHeight: '150px' }}
@@ -369,8 +394,8 @@ export default function DCExecutiveReport() {
             <ul className="text-[12px] text-(--text-muted) m-0 mb-4 space-y-1 list-none p-0">
               <li>{!incidentsLoading ? '✓' : '○'} Performance data auto-populated from live district data</li>
               <li>{!incidentsLoading ? '✓' : '○'} Incident analysis {incidentsLoading ? 'loading…' : 'complete'}</li>
-              <li>{assessmentOk ? '✓' : '○'} District Commander assessment (required)</li>
-              <li>{recommendationsOk ? '✓' : '○'} Recommendations (required)</li>
+              <li>{assessment.trim() ? '✓' : '○'} District Commander assessment</li>
+              <li>{recommendations.trim() ? '✓' : '○'} Recommendations</li>
             </ul>
             <button
               type="button"

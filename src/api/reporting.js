@@ -19,11 +19,13 @@ function transformReport(r) {
     period_end: periodEnd,
     status: r.status,
     generated_by_name: r.createdByName ?? null,
+    generated_by_role: r.creatorRole ?? null,
     generated_at: r.generatedAt ?? r.createdAt ?? null,
     total_incidents: r.totalIncidents,
     avg_response_time: r.avgResponseTime,
     resolution_rate: r.resolutionRate ?? r.dispatchAccuracy ?? null,
     submitted_at: r.submittedAt,
+    content: r.content ?? null,
   }
 }
 
@@ -89,6 +91,11 @@ export async function generateReport(body) {
     period: body.period ?? null,
     periodStart: body.period_start ?? null,
     periodEnd: body.period_end ?? null,
+    // Was silently dropped here — callers (DC Executive Report, Planner
+    // Reports) already built and passed this, but it never made it into the
+    // actual request payload, so the written text was discarded server-side
+    // even though the UI made it look like it had been submitted.
+    content: body.content ?? null,
   }
   const { data } = await api.post('/api/reporting/reports', payload)
   return transformReport(data.data ?? data)

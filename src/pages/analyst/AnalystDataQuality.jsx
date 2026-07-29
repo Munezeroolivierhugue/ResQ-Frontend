@@ -159,15 +159,6 @@ export default function AnalystDataQuality() {
           </>
         )}
       </div>
-
-      <div className="dispatcher-surface p-4">
-        <h3 className="text-[13px] font-semibold m-0 mb-1">Data Lineage &amp; Alert Thresholds</h3>
-        <p className="text-[12px] text-(--text-secondary) m-0">
-          Not available yet. Tracing which sources feed which AI models, and configuring automatic alert thresholds,
-          both require dedicated tracking that doesn't exist in the system yet — there's no real pipeline metadata
-          or alert-threshold storage to back either feature honestly.
-        </p>
-      </div>
     </div>
   )
 }

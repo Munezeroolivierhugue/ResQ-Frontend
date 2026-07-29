@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { Sun, Moon, Palette, Check, ShieldCheck, Monitor, Bell, Languages, UserCircle } from 'lucide-react'
 import { useThemeStore } from '../../store/themeStore'
 import StatusBadge from '../dispatcher/StatusBadge'
@@ -24,17 +24,15 @@ const NAV = [
 ]
 
 const NOTIFICATION_PREFS_KEY = 'resq-admin-notification-prefs'
+// Only categories backed by a real notification the backend actually fires
+// for this role (notificationService.send(..., "ACCOUNT_LOCKED", ...) in
+// AuthService.java) belong here. Every other category previously listed
+// (new user invites, system health, integrations, login anomalies, MFA
+// disabled, audit events) had no corresponding event anywhere in the
+// backend — toggling them changed nothing because there was nothing to
+// gate in the first place, not just "not yet enforced."
 const DEFAULT_TOGGLES = {
-  newUserInvite: true,
-  inviteAccepted: true,
-  systemHealthCritical: true,
-  systemHealthWarning: true,
-  integrationDown: true,
-  integrationRestored: false,
-  securityLoginAnomaly: true,
-  securityMfaDisabled: true,
-  auditHighRisk: true,
-  auditBulkExport: false,
+  accountLocked: true,
 }
 
 function loadStoredToggles() {
@@ -51,8 +49,6 @@ export default function AdminPortalSettingsView() {
   const section = sectionParam || 'profile'
   const { theme, setTheme } = useThemeStore()
   const pushToast = useToastStore((s) => s.pushToast)
-  const navigate = useNavigate()
-  const [mfaEnabled, setMfaEnabled] = useState(false)
   const [language, setLanguage] = useState('en')
   // Persisted to localStorage (same "stored locally" pattern as the theme
   // toggle above) — these were previously plain useState with no persistence
@@ -80,10 +76,7 @@ export default function AdminPortalSettingsView() {
       navItems={NAV}
     >
       {section === 'profile' && (
-        <SettingsProfileSection
-          onUserLoaded={(u) => setMfaEnabled(u.mfa_enabled)}
-          showShift={false}
-        />
+        <SettingsProfileSection showShift={false} showDutyStatus={false} />
       )}
 
       {section === 'appearance' && (
@@ -127,81 +120,15 @@ export default function AdminPortalSettingsView() {
             Control which system events and alerts reach you as Super Admin.
           </p>
           <p className="text-[11px] text-(--text-muted) italic m-0 mb-4">
-            Stored locally on this device — these preferences aren't yet enforced by the backend, so every event above is still delivered regardless of these toggles.
+            Stored locally on this device. This toggle isn't yet enforced by the backend — the alert is still sent regardless — but it is a real, currently-firing event, unlike other notification categories that don't exist in the system yet.
           </p>
-
-          <SettingsGroup title="User Provisioning">
-            <SettingsToggleRow
-              label="New user invitation dispatched"
-              description="When any admin sends an invitation link to a new user"
-              on={toggles.newUserInvite}
-              onChange={(v) => setToggle('newUserInvite', v)}
-            />
-            <SettingsToggleRow
-              label="Invitation accepted"
-              description="When an invited user completes registration and activates their account"
-              on={toggles.inviteAccepted}
-              onChange={(v) => setToggle('inviteAccepted', v)}
-            />
-          </SettingsGroup>
-
-          <SettingsGroup title="System Health">
-            <SettingsToggleRow
-              label="Critical system alerts"
-              description="AI model failures, database issues, or response time SLA breaches"
-              on={toggles.systemHealthCritical}
-              onChange={(v) => setToggle('systemHealthCritical', v)}
-            />
-            <SettingsToggleRow
-              label="Health warnings"
-              description="Coverage drops, dispatch queue overloads, and scheduled job failures"
-              on={toggles.systemHealthWarning}
-              onChange={(v) => setToggle('systemHealthWarning', v)}
-            />
-          </SettingsGroup>
-
-          <SettingsGroup title="Integrations">
-            <SettingsToggleRow
-              label="Integration disconnected"
-              description="When an external service (CAD, GPS, radio) goes offline"
-              on={toggles.integrationDown}
-              onChange={(v) => setToggle('integrationDown', v)}
-            />
-            <SettingsToggleRow
-              label="Integration restored"
-              description="When a disconnected service reconnects successfully"
-              on={toggles.integrationRestored}
-              onChange={(v) => setToggle('integrationRestored', v)}
-            />
-          </SettingsGroup>
 
           <SettingsGroup title="Security Events">
             <SettingsToggleRow
-              label="Anomalous login detected"
-              description="Login from an unrecognized device, location, or at unusual hours"
-              on={toggles.securityLoginAnomaly}
-              onChange={(v) => setToggle('securityLoginAnomaly', v)}
-            />
-            <SettingsToggleRow
-              label="MFA disabled on any account"
-              description="Alert when two-factor authentication is turned off for any user"
-              on={toggles.securityMfaDisabled}
-              onChange={(v) => setToggle('securityMfaDisabled', v)}
-            />
-          </SettingsGroup>
-
-          <SettingsGroup title="Audit Trail">
-            <SettingsToggleRow
-              label="High-risk audit events"
-              description="Role changes, account deletions, and permission escalations"
-              on={toggles.auditHighRisk}
-              onChange={(v) => setToggle('auditHighRisk', v)}
-            />
-            <SettingsToggleRow
-              label="Bulk data exports"
-              description="When any user exports more than 500 records at once"
-              on={toggles.auditBulkExport}
-              onChange={(v) => setToggle('auditBulkExport', v)}
+              label="Account locked"
+              description="When a user account is locked out after repeated failed login attempts"
+              on={toggles.accountLocked}
+              onChange={(v) => setToggle('accountLocked', v)}
             />
           </SettingsGroup>
         </div>
@@ -263,25 +190,6 @@ export default function AdminPortalSettingsView() {
               </div>
             )
           })}
-
-          <div className="mt-8 flex flex-wrap items-center gap-3 p-4 rounded-lg border border-(--border) bg-(--bg-input)">
-            <ShieldCheck size={22} color="var(--accent)" />
-            <div className="flex-1 min-w-[180px]">
-              <div className="font-semibold text-[13px]">Two-factor authentication</div>
-              <p className="text-[12px] text-(--text-secondary) m-0 mt-1">Mandatory for all administration accounts.</p>
-            </div>
-            {mfaEnabled ? (
-              <>
-                <StatusBadge label="ENABLED" variant="resolved" />
-                <button type="button" className="dispatcher-btn-ghost text-[12px]" onClick={() => navigate('/mfa-setup')}>Manage 2FA</button>
-              </>
-            ) : (
-              <>
-                <StatusBadge label="NOT ENABLED" variant="critical" />
-                <button type="button" className="dispatcher-btn-outline text-[12px]" onClick={() => navigate('/mfa-setup')}>Enable 2FA</button>
-              </>
-            )}
-          </div>
         </div>
       )}
     </SettingsNavLayout>

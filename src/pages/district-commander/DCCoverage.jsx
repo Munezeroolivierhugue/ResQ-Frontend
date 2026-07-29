@@ -246,10 +246,12 @@ export default function DCCoverage() {
           </div>
           <div className="dispatcher-surface flex-1 map-panel-full relative overflow-hidden">
             <div className="absolute top-3 left-3 z-[1000] px-3 py-2 rounded-lg border border-(--border) bg-(--bg-surface) text-[10px] space-y-1">
-              <div><span style={{ color: 'var(--status-low)' }}>●</span> On-time ≥85%</div>
-              <div><span style={{ color: 'var(--status-medium)' }}>●</span> On-time 65–84%</div>
-              <div><span style={{ color: 'var(--status-critical)' }}>●</span> On-time &lt;65%</div>
-              <div className="pt-1 border-t border-(--border-subtle)">
+              <div className="font-bold text-(--text-muted) uppercase tracking-wide" style={{ fontSize: '9px' }}>Sector zones — on-time %</div>
+              <div><span style={{ color: 'var(--status-low)' }}>◉</span> On-time ≥85%</div>
+              <div><span style={{ color: 'var(--status-medium)' }}>◉</span> On-time 65–84%</div>
+              <div><span style={{ color: 'var(--status-critical)' }}>◉</span> On-time &lt;65%</div>
+              <div className="pt-1 mt-1 border-t border-(--border-subtle) font-bold text-(--text-muted) uppercase tracking-wide" style={{ fontSize: '9px' }}>Unit dots — dispatch status</div>
+              <div>
                 <span style={{ color: '#3DAA6A' }}>●</span> Available &nbsp;
                 <span style={{ color: '#F07820' }}>●</span> Dispatched
               </div>

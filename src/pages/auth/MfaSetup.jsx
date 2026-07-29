@@ -19,10 +19,15 @@ export default function MfaSetup() {
   const refs = useRef([])
   const setupStarted = useRef(false)
 
-  // Guard: redirect to login if not authenticated
+  // Guard: redirect to login if not authenticated. Preserves the original
+  // destination via ?redirect= — previously a bare "/login" here meant a
+  // successful login always landed on the default portal dashboard, with no
+  // way back to actually finish MFA setup (exactly what happens clicking the
+  // "Send Setup Reminder" email while logged out, or after the session
+  // expired).
   useEffect(() => {
     if (!getAccessToken()) {
-      navigate('/login', { replace: true })
+      navigate('/login?redirect=' + encodeURIComponent('/mfa-setup'), { replace: true })
     }
   }, [navigate])
 

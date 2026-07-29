@@ -135,6 +135,31 @@ export async function unlockUser(userId) {
   return data.data ?? data
 }
 
+// Separate from listLockedUsers/unlockUser above — those cover the
+// unrecognized-IP lock; this covers the 5-failed-attempts rate-limit lock
+// (15-minute Redis lock), a different mechanism with its own admin card.
+function mapFailedLoginUser(u) {
+  return {
+    user_id: u.userId,
+    full_name: u.fullName,
+    email: u.email,
+    role: u.role,
+    district_id: u.districtId,
+    district_name: u.districtName,
+    lock_remaining_minutes: u.lockRemainingMinutes,
+  }
+}
+
+export async function listFailedLoginLockedUsers() {
+  const { data } = await api.get('/api/admin/users/failed-login-locked')
+  return (data.data ?? data).map(mapFailedLoginUser)
+}
+
+export async function reactivateLogin(userId) {
+  const { data } = await api.post(`/api/admin/users/${userId}/reactivate-login`)
+  return data.data ?? data
+}
+
 // District Commander equivalents — scoped server-side to the caller's own district.
 export async function listLockedUsersDc() {
   const { data } = await api.get('/api/dc/users/locked')

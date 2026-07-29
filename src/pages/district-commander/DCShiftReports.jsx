@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, X, Download, FileCheck, Search } from 'lucide-react'
-import { buildPdfHtml, openPdfWindow } from '../../utils/pdfExport'
+import { ChevronLeft, ChevronRight, X, Download, FileCheck, Search, Printer } from 'lucide-react'
+import { buildPdfHtml, openPdfWindow, tableHtml } from '../../utils/pdfExport'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import SectionTitle from '../../components/dispatcher/SectionTitle'
 import DCPageHeader from '../../components/district-commander/DCPageHeader'
@@ -18,9 +18,16 @@ function fmtDateTime(iso) {
   return new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
-// Shifts have no per-record incident stats — compute real ones by
-// time-filtering this district's incidents to each shift's own window,
-// the same approach the dispatcher's and Ops Manager's own shift pages use.
+// Shifts have no per-record incident stats — compute real ones from this
+// district's incidents. For Dispatcher shifts, `incidents` here is already
+// scoped to only the incidents THIS user personally logged (loggedBy filter,
+// same real ownership scoping used on the dispatcher's own Pending
+// Reports/History pages) — previously this scoped by shift TIME WINDOW only,
+// so a shift report actually showed every incident the whole district
+// handled during those hours regardless of who touched it, which is why the
+// average never matched a specific unit's own real number and resolution
+// rate skewed toward 100% (most old incidents are closed by the time anyone
+// looks back at a report, regardless of who worked them).
 function shiftStats(shift, incidents) {
   if (!shift.shift_start) return { total: 0, avgResponse: null, resolutionRate: null }
   const start = new Date(shift.shift_start)
@@ -38,6 +45,18 @@ function shiftStats(shift, incidents) {
     resolutionRate: inShift.length ? closed / inShift.length : null,
   }
 }
+
+// Field Responders and other non-dispatching roles never submit handover
+// notes at all — that's a dispatcher/ops-manager-specific handoff concept —
+// so showing "No notes submitted yet" for their shifts implied they were
+// expected to and simply didn't, which isn't real.
+const HANDOVER_ROLES = new Set(['DISPATCHER', 'OPERATIONS_MANAGER'])
+// role_on_shift casing is inconsistent in the real data (e.g. "field_responder"
+// lowercase next to "OPERATIONS_MANAGER" uppercase) — normalize before any
+// role comparison so these checks work regardless of which casing a given
+// shift record happens to have.
+const isDispatcherRole = (role) => (role ?? '').toUpperCase() === 'DISPATCHER'
+const hasHandoverNotes = (role) => HANDOVER_ROLES.has((role ?? '').toUpperCase())
 
 function exportShiftPDF(shift, stats, slaTargetMinutes) {
   const period = shift.shift_start ? `${fmtDateTime(shift.shift_start)} — ${shift.shift_end ? fmtDateTime(shift.shift_end) : 'Ongoing'}` : '—'
@@ -62,6 +81,35 @@ function exportShiftPDF(shift, stats, slaTargetMinutes) {
       ? [`<div style="margin-top:16px"><h3 style="font-size:13px">Handover Notes</h3><p style="font-size:12px;line-height:1.6;white-space:pre-wrap">${shift.handover_notes}</p></div>`]
       : [],
     generatedBy: shift.user_name ?? 'District Commander',
+    generatedRole: 'District Commander',
+  }))
+}
+
+// Bulk list report — deliberately no "Action" column, since View/Download
+// buttons have no meaning on a printed page.
+function exportShiftListPDF(shifts, districtName) {
+  openPdfWindow(buildPdfHtml({
+    title: 'District Shift Reports',
+    subtitle: districtName ? `${districtName} District` : '',
+    reportType: 'SHIFT REPORTS',
+    idPrefix: 'SHF',
+    metaItems: [
+      { label: 'District', value: districtName ?? '—' },
+      { label: 'Total Shifts', value: String(shifts.length) },
+    ],
+    sections: [
+      tableHtml(
+        ['Officer', 'Role', 'Shift Start', 'Shift End', 'Status'],
+        shifts.map((s) => [
+          s.user_name ?? '—',
+          s.role_on_shift ?? '—',
+          fmtDateTime(s.shift_start),
+          s.shift_end ? fmtDateTime(s.shift_end) : 'Ongoing',
+          s.status ?? '—',
+        ]),
+      ),
+    ],
+    generatedBy: 'District Commander',
     generatedRole: 'District Commander',
   }))
 }
@@ -98,6 +146,12 @@ export default function DCShiftReports() {
 
   const [selectedId, setSelectedId] = useState(null)
   const [slaTargetMinutes, setSlaTargetMinutes] = useState(12)
+  // Lazily fetched only when a Dispatcher shift is opened — scoped to
+  // incidents THIS dispatcher personally logged (see shiftStats comment
+  // above), not fetched for every row up front since that'd be one extra
+  // request per shift in the list for stats nobody may ever open.
+  const [ownedIncidents, setOwnedIncidents] = useState(null)
+  const [ownedLoading, setOwnedLoading] = useState(false)
 
   useEffect(() => {
     getResponseTimeTarget().then(setSlaTargetMinutes).catch(() => {})
@@ -146,7 +200,23 @@ export default function DCShiftReports() {
   useEffect(() => { Promise.resolve().then(() => setPage(1)) }, [statusFilter, roleFilter, dateFrom, dateTo, search])
 
   const selected = shifts.find((s) => s.shift_id === selectedId)
-  const selectedStats = selected ? shiftStats(selected, incidents) : null
+
+  useEffect(() => {
+    if (!selected || !isDispatcherRole(selected.role_on_shift)) { setOwnedIncidents(null); return }
+    setOwnedLoading(true)
+    listIncidents({ districtId, loggedBy: selected.user_id })
+      .then(setOwnedIncidents)
+      .catch(() => setOwnedIncidents(null))
+      .finally(() => setOwnedLoading(false))
+  }, [selected, districtId])
+
+  // Dispatcher shifts use the precisely-scoped "incidents this dispatcher
+  // personally logged" list once it's loaded; every other role falls back
+  // to the district-wide time-window approximation (no per-officer incident
+  // ownership concept exists for those roles yet).
+  const selectedStats = selected
+    ? shiftStats(selected, isDispatcherRole(selected.role_on_shift) ? (ownedIncidents ?? []) : incidents)
+    : null
 
   return (
     <div className="portal-page relative">
@@ -154,6 +224,17 @@ export default function DCShiftReports() {
         title="Shift Reports"
         eyebrow="District Commander"
         subtitle="Real shift records for officers assigned to this district."
+        action={
+          <button
+            type="button"
+            className="dispatcher-btn-primary inline-flex items-center gap-2"
+            disabled={filtered.length === 0}
+            onClick={() => exportShiftListPDF(filtered, filtered[0]?.district_name)}
+          >
+            <Printer size={16} />
+            Print Report
+          </button>
+        }
       />
 
       {error && (
@@ -329,27 +410,38 @@ export default function DCShiftReports() {
             <div className="flex flex-col gap-5 mt-4">
               <div>
                 <SectionTitle title="Key metrics" className="mb-3" />
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    ['Total Incidents', selectedStats.total],
-                    ['Avg Response', selectedStats.avgResponse != null ? `${selectedStats.avgResponse.toFixed(1)}m` : '—'],
-                    ['Resolution Rate', selectedStats.resolutionRate != null ? `${Math.round(selectedStats.resolutionRate * 100)}%` : '—'],
-                    ['District', selected.district_name ?? '—'],
-                  ].map(([label, val]) => (
-                    <div key={label} className="dispatcher-summary-stat">
-                      <div className="field-label mb-0.5">{label}</div>
-                      <div className="text-[14px] font-bold font-mono">{String(val)}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <SectionTitle title="Handover notes" className="mb-3" />
-                <p className="text-[13px] text-(--text-secondary) m-0" style={{ whiteSpace: 'pre-wrap' }}>
-                  {selected.handover_notes || 'No notes submitted for this shift yet.'}
+                {isDispatcherRole(selected.role_on_shift) && ownedLoading ? (
+                  <p className="text-[12px] text-(--text-muted) m-0">Loading this dispatcher's real incidents…</p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      ['Total Incidents', selectedStats.total],
+                      ['Avg Response', selectedStats.avgResponse != null ? `${selectedStats.avgResponse.toFixed(1)}m` : '—'],
+                      ['Resolution Rate', selectedStats.resolutionRate != null ? `${Math.round(selectedStats.resolutionRate * 100)}%` : '—'],
+                      ['District', selected.district_name ?? '—'],
+                    ].map(([label, val]) => (
+                      <div key={label} className="dispatcher-summary-stat">
+                        <div className="field-label mb-0.5">{label}</div>
+                        <div className="text-[14px] font-bold font-mono">{String(val)}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[11px] text-(--text-muted) m-0 mt-2">
+                  {isDispatcherRole(selected.role_on_shift)
+                    ? 'Scoped to incidents this dispatcher personally logged during this shift.'
+                    : 'District-wide incidents during this shift’s time window — no per-officer incident ownership exists yet for this role.'}
                 </p>
               </div>
+
+              {hasHandoverNotes(selected.role_on_shift) && (
+                <div>
+                  <SectionTitle title="Handover notes" className="mb-3" />
+                  <p className="text-[13px] text-(--text-secondary) m-0" style={{ whiteSpace: 'pre-wrap' }}>
+                    {selected.handover_notes || 'No notes submitted for this shift yet.'}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

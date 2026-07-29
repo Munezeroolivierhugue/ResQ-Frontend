@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Phone, PhoneCall, PhoneMissed, Clock, X, CheckCircle } from 'lucide-react'
+import { Phone, PhoneCall, PhoneMissed, X, CheckCircle } from 'lucide-react'
 import { listMissedCalls, callBackMissedCall } from '../../api/missedCalls'
 import { useToastStore } from '../../store/toastStore'
 
@@ -18,23 +18,6 @@ function adaptCall(m) {
     calledAt: m.call_time ? new Date(m.call_time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '—',
     waited: m.wait_duration != null ? `${Math.floor(m.wait_duration / 60)}m ${m.wait_duration % 60}s` : '—',
   }
-}
-
-function WaitChip({ seconds }) {
-  const over90 = seconds > 90
-  return (
-    <span
-      className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded"
-      style={{
-        fontFamily: 'var(--font-display)',
-        background: over90 ? 'var(--status-critical-bg)' : 'var(--status-warning-bg)',
-        color: over90 ? 'var(--status-critical)' : 'var(--status-warning)',
-      }}
-    >
-      <Clock size={10} />
-      {Math.floor(seconds / 60)}m {seconds % 60}s
-    </span>
-  )
 }
 
 function StatusChip({ status }) {
@@ -241,7 +224,7 @@ export default function MissedCalls() {
           <table className="w-full border-collapse min-w-[600px]">
             <thead>
               <tr className="bg-(--bg-base)">
-                {['ID', 'Phone (masked)', 'Called At', 'Wait Time', 'Cascade', 'Status', 'Action'].map(
+                {['ID', 'Phone (masked)', 'Called At', 'Status', 'Action'].map(
                   (col) => (
                     <th
                       key={col}
@@ -279,25 +262,6 @@ export default function MissedCalls() {
                       style={{ fontFamily: 'var(--font-mono)' }}
                     >
                       {call.calledAt}
-                    </td>
-                    <td className="px-4">
-                      <WaitChip seconds={call.wait_duration} />
-                    </td>
-                    <td className="px-4 text-[12px] text-(--text-secondary)">
-                      {call.cascade_count === 0 ? (
-                        <span className="text-(--text-muted)">Direct</span>
-                      ) : (
-                        <span
-                          className="text-[11px] font-bold px-2 py-0.5 rounded"
-                          style={{
-                            background: 'var(--status-info-bg)',
-                            color: 'var(--status-info)',
-                            fontFamily: 'var(--font-display)',
-                          }}
-                        >
-                          +{call.cascade_count} re-route{call.cascade_count !== 1 ? 's' : ''}
-                        </span>
-                      )}
                     </td>
                     <td className="px-4">
                       <StatusChip status={call.status} />

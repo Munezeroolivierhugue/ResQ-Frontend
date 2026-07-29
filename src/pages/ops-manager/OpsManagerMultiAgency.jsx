@@ -1,12 +1,23 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { MapPin } from 'lucide-react'
+import { MapPin, X } from 'lucide-react'
 import StatusBadge from '../../components/dispatcher/StatusBadge'
 import OpsManagerDistrictLabel from '../../components/ops-manager/OpsManagerDistrictLabel'
 import { getCurrentUser } from '../../utils/authSession'
-import { listBroadcasts } from '../../api/broadcasts'
+import { listBroadcasts, deleteBroadcast } from '../../api/broadcasts'
 import { listMutualAidRequests } from '../../api/mutualAid'
 import { listVehicles } from '../../api/vehicles'
+import { useToastStore } from '../../store/toastStore'
+
+function expiryLabel(isoString) {
+  if (!isoString) return null
+  const diffMin = Math.round((new Date(isoString).getTime() - Date.now()) / 60000)
+  if (diffMin <= 0) return 'Expiring now'
+  if (diffMin < 60) return `Expires in ${diffMin}m`
+  const hours = Math.round(diffMin / 60)
+  if (hours < 24) return `Expires in ${hours}h`
+  return `Expires in ${Math.round(hours / 24)}d`
+}
 
 export default function OpsManagerMultiAgency() {
   const districtId = getCurrentUser()?.district_id
@@ -15,6 +26,16 @@ export default function OpsManagerMultiAgency() {
   const [vehicles, setVehicles] = useState([])
   const [loading, setLoading] = useState(true)
   const [feedError, setFeedError] = useState(null)
+  const [deletingId, setDeletingId] = useState(null)
+  const pushToast = useToastStore((s) => s.pushToast)
+
+  function handleDeleteBroadcast(id) {
+    setDeletingId(id)
+    deleteBroadcast(id)
+      .then(() => setApiBroadcasts((prev) => prev.filter((b) => b.broadcast_id !== id)))
+      .catch(() => pushToast({ variant: 'error', title: 'Broadcast', message: 'Could not delete — please retry.' }))
+      .finally(() => setDeletingId(null))
+  }
 
   useEffect(() => {
     if (!districtId) return
@@ -111,8 +132,21 @@ export default function OpsManagerMultiAgency() {
                   </span>
                   <div className="flex-1 min-w-0">
                     <div className="text-(--text-primary) truncate">{b.message}</div>
-                    <div className="text-(--text-muted) text-[11px]">{b.sent_by_name} · {b.target_area}</div>
+                    <div className="text-(--text-muted) text-[11px]">
+                      {b.sent_by_name} · {b.target_area}
+                      {b.expires_at && <> · {expiryLabel(b.expires_at)}</>}
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteBroadcast(b.broadcast_id)}
+                    disabled={deletingId === b.broadcast_id}
+                    aria-label="Delete broadcast"
+                    title="Delete broadcast"
+                    className="shrink-0 p-1 rounded bg-transparent border-none cursor-pointer text-(--text-muted) hover:text-(--status-critical) transition-colors disabled:opacity-40"
+                  >
+                    <X size={13} />
+                  </button>
                 </div>
               ))}
             </div>

@@ -35,7 +35,7 @@ export default function FilterDropdown({ label, value, options, onChange, getLab
       </button>
       {open && (
         <div
-          className={`absolute ${openUp ? 'bottom-[calc(100%+4px)]' : 'top-[calc(100%+4px)]'} ${align === 'right' ? 'right-0' : 'left-0'} z-50 w-56 rounded-lg border border-(--border) bg-(--bg-surface) shadow-lg overflow-hidden`}
+          className={`absolute ${openUp ? 'bottom-[calc(100%+4px)]' : 'top-[calc(100%+4px)]'} ${align === 'right' ? 'right-0' : 'left-0'} z-[1200] w-56 rounded-lg border border-(--border) bg-(--bg-surface) shadow-lg overflow-hidden`}
         >
           <div className="p-2 border-b border-(--border-subtle) flex items-center gap-2">
             <Search size={13} className="text-(--text-muted) shrink-0" />
