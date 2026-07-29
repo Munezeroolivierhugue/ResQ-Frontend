@@ -9,7 +9,7 @@ import { listDistricts } from '../../api/districts'
 import { getCallerByPhone } from '../../api/callers'
 import { recordOutcome as recordCallOutcome } from '../../api/calls'
 import { calculateSeverity } from '../../utils/severityEngine'
-import { estimateAmbulanceNeed } from '../../utils/ambulanceEstimate'
+import { estimateAmbulanceNeed, ambulancesForCount } from '../../utils/ambulanceEstimate'
 import { haversineMeters } from '../../utils/geo'
 import { generateCallerName } from '../../utils/rwandaNames'
 import { useCallAudioStore } from '../../store/callAudioStore'
@@ -149,6 +149,9 @@ export default function NewIncident() {
   const [streetAddress, setStreetAddress]         = useState('')
   const [notes, setNotes]                         = useState('')
   const [duplicates, setDuplicates]               = useState([])
+  // Dispatcher's own headcount, overriding the triage-derived estimate below
+  // when set — null means "use the triage answers as-is".
+  const [manualPeopleCount, setManualPeopleCount] = useState(null)
 
   // ── SessionStorage persistence — survives page refresh ──────────────────────
   // Phase flag so we don't overwrite saved data before we've had a chance to restore it
@@ -172,6 +175,7 @@ export default function NewIncident() {
         if (s.finalSeverity)              setFinalSeverity(s.finalSeverity)
         if (s.severityOverrideActive)     setSeverityOverrideActive(s.severityOverrideActive)
         if (s.overrideReason)             setOverrideReason(s.overrideReason)
+        if (s.manualPeopleCount != null)  setManualPeopleCount(s.manualPeopleCount)
       }
     } catch {}
     setHydrated(true)
@@ -183,12 +187,12 @@ export default function NewIncident() {
       sessionStorage.setItem(intakeKey(callId), JSON.stringify({
         incidentType, triageResponses, district, sector, streetAddress, notes,
         occurrenceTime, location, callerData, finalSeverity,
-        severityOverrideActive, overrideReason,
+        severityOverrideActive, overrideReason, manualPeopleCount,
       }))
     } catch {}
   }, [hydrated, callId, incidentType, triageResponses, district, sector, streetAddress, notes,
       occurrenceTime, location, callerData, finalSeverity,
-      severityOverrideActive, overrideReason])
+      severityOverrideActive, overrideReason, manualPeopleCount])
 
   // ── Districts from backend ───────────────────────────────────────────────────
   useEffect(() => {
@@ -260,10 +264,16 @@ export default function NewIncident() {
   // a duplicate manual "number of people involved" input. Rule: 1 ambulance per
   // critically injured/immobile person; people who can self-transport don't each
   // need one.
-  const { peopleCount, recommendedAmbulances } = useMemo(
+  const triageEstimate = useMemo(
     () => estimateAmbulanceNeed(CATEGORY_TO_TRIAGE_TYPE[incidentType], triageResponses),
     [incidentType, triageResponses]
   )
+  // A dispatcher who has better information than the triage answers allow
+  // (e.g. the caller volunteers an exact count) can type it directly — that
+  // number, not the triage-derived one, then drives both the displayed
+  // ambulance count and the AI recommendation below.
+  const peopleCount = manualPeopleCount != null ? manualPeopleCount : triageEstimate.peopleCount
+  const recommendedAmbulances = manualPeopleCount != null ? ambulancesForCount(manualPeopleCount) : triageEstimate.recommendedAmbulances
 
   // ── AI recommendation ────────────────────────────────────────────────────────
   const aiRecommendation = useMemo(() => {
@@ -271,7 +281,15 @@ export default function NewIncident() {
     const n = peopleCount || 1
     const ambCount   = recommendedAmbulances || 1
     const policeCount = sev === 'critical' ? 3 : n > 10 ? 2 : 1
-    const type = (incidentType ?? '').toUpperCase()
+    // incidentType holds the UI category label ("Accident"), not the triage
+    // type code ("RTA") every branch below actually checks against — every
+    // other consumer in this file (triageTypeCode, estimateAmbulanceNeed,
+    // the submit payload) already converts via CATEGORY_TO_TRIAGE_TYPE
+    // first; this one compared the raw label directly, so type === 'RTA'
+    // (and every other branch) could never match — every incident silently
+    // fell through to the generic "Emergency requiring immediate attention"
+    // recommendation regardless of its real category.
+    const type = (CATEGORY_TO_TRIAGE_TYPE[incidentType] ?? incidentType ?? '').toUpperCase()
 
     let resources, context, reasoning
     if (type === 'RTA') {
@@ -943,18 +961,29 @@ export default function NewIncident() {
               </p>
             )}
 
-            {/* People involved — derived from triage answers, not manually typed.
-                Triage already asks headcount + injury severity, so this is read-only:
-                it shows what the AI is using to compute the ambulance recommendation. */}
+            {/* People involved — defaults to the triage-derived estimate, but a
+                dispatcher can type an exact number (e.g. the caller states it
+                directly) to override it; that number then drives the ambulance
+                recommendation instead. */}
             {incidentType && (
               <IntakePanel className="p-4 md:p-5 shrink-0">
-                <span className="field-label">People involved (from triage)</span>
+                <span className="field-label">People involved</span>
                 <div className="flex items-center gap-4 mt-1.5 flex-wrap">
-                  <div>
-                    <span className="text-[18px] font-bold text-(--text-primary)" style={{ fontFamily: 'var(--font-mono)' }}>
-                      {peopleCount || '—'}
-                    </span>
-                    <span className="text-[11px] text-(--text-muted) ml-1.5">people reported</span>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min="0"
+                      inputMode="numeric"
+                      className="dispatcher-input h-8 text-[16px] font-bold text-center"
+                      style={{ width: '64px', fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}
+                      value={manualPeopleCount != null ? manualPeopleCount : (triageEstimate.peopleCount || '')}
+                      placeholder="—"
+                      onChange={(e) => {
+                        const v = e.target.value
+                        setManualPeopleCount(v === '' ? 0 : Math.max(0, parseInt(v, 10) || 0))
+                      }}
+                    />
+                    <span className="text-[11px] text-(--text-muted)">people reported</span>
                   </div>
                   <div>
                     <span className="text-[18px] font-bold text-(--accent)" style={{ fontFamily: 'var(--font-mono)' }}>
@@ -962,10 +991,22 @@ export default function NewIncident() {
                     </span>
                     <span className="text-[11px] text-(--text-muted) ml-1.5">ambulance{recommendedAmbulances === 1 ? '' : 's'} recommended</span>
                   </div>
+                  {manualPeopleCount != null && (
+                    <button
+                      type="button"
+                      className="text-[11px] font-semibold text-(--accent) bg-transparent border-none cursor-pointer p-0"
+                      onClick={() => setManualPeopleCount(null)}
+                    >
+                      Reset to triage estimate ({triageEstimate.peopleCount || 0})
+                    </button>
+                  )}
                 </div>
                 <p className="m-0 mt-1.5" style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                  Derived from triage answers: 1 ambulance per critically injured / immobile
-                  person. People who can self-transport don&apos;t each need one.
+                  {manualPeopleCount != null
+                    ? 'Manually entered — overrides the triage-derived estimate for this dispatch.'
+                    : 'Defaulted from triage answers — edit the number directly if the caller gives an exact count.'}
+                  {' '}1 ambulance per critically injured / immobile person; people who can
+                  self-transport don&apos;t each need one.
                 </p>
               </IntakePanel>
             )}

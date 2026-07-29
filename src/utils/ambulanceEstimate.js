@@ -19,7 +19,7 @@ const AMBULANCE_THRESHOLDS = [
   { min: 0,   count: 1 },
 ]
 
-function ambulancesForCount(peopleCount) {
+export function ambulancesForCount(peopleCount) {
   if (peopleCount <= 0) return 0
   const tier = AMBULANCE_THRESHOLDS.find((t) => peopleCount >= t.min)
   return tier.count
